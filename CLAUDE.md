@@ -69,6 +69,11 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 
 Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.test.js[x]`); shared setup in [src/test/setup.js](src/test/setup.js). Prefer unit-testing pure logic in `lib/`. CI runs lint + test + build on every push/PR.
 
+## Working Conventions
+
+- **Persist the roadmap to memory by default.** When we make a significant decision, finish a work chunk, or define the next step, save it to project memory so it survives across sessions — keep the relevant roadmap file (e.g. `data-layer-roadmap.md`) current rather than relying on the session todo list (which is ephemeral). Update or prune stale entries instead of duplicating.
+- **Branch → PR workflow.** `main` is protected; land all changes through a PR that passes CI (lint + test + build + CodeQL). Branch prefixes: `feat/`, `fix/`, `chore/`.
+
 ## Tech Stack
 
 | | |
@@ -83,4 +88,4 @@ Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.tes
 
 ## What Doesn't Exist
 
-- No TypeScript, no CSS framework, no backend, no export/import, no undo/redo
+- No TypeScript, no CSS framework, no backend (localStorage only), no undo/redo
