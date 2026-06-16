@@ -1,5 +1,6 @@
 import { breweryEmojis, defSettings } from "../../lib/defaults";
 import { card, hdr, btn, inp } from "../../styles";
+import DataBackup from "./DataBackup";
 
 // Largest logo we'll store. localStorage is small (~5MB) and base64 inflates
 // the file ~33%, so we cap raw uploads well under that.
@@ -94,6 +95,8 @@ export default function SettingsTab({ settings, setSettings }) {
           </button>
         </div>
       </div>
+
+      <DataBackup />
     </div>
   );
 }

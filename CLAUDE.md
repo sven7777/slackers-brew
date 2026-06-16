@@ -36,7 +36,7 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
 - **Inventory** — editable quantity inputs for all ingredients
 - **Recipes** — view/edit ingredient lists per recipe; add/remove ingredients
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
-- **Settings** — brewery identity: name, tagline, and icon (emoji picker or uploaded logo)
+- **Settings** — brewery identity (name, tagline, emoji/logo icon) and data backup (export/import all app data as JSON)
 
 **localStorage** access goes through [src/lib/storage.js](src/lib/storage.js) (`load`/`save`) and the `usePersistentState` hook. Keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
 
@@ -55,6 +55,8 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 ## Key Computed Logic
 
 `computeOrder()` in [src/lib/orderCalc.js](src/lib/orderCalc.js) aggregates selected recipe needs, compares against current inventory, and returns `{malts, hops, yeast, adj}` arrays with `{n, need, have, order}` per ingredient. `maltBags(order)` computes 55 lb bag counts. Both are pure and unit-tested in `orderCalc.test.js`.
+
+[src/lib/backup.js](src/lib/backup.js) handles data export/import: `buildBackup()` serializes all `slackers_brew_*` localStorage into a portable JSON object; `applyBackup()` validates and restores one (clearing existing app keys first). This is also the intended migration tool for the planned hosted backend.
 
 ## Style Conventions
 
