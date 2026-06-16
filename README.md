@@ -1,5 +1,7 @@
 # Slackers Brew
 
+[![CI](https://github.com/sven7777/slackers-brew/actions/workflows/ci.yml/badge.svg)](https://github.com/sven7777/slackers-brew/actions/workflows/ci.yml)
+
 A homebrew inventory and order-management tool for tracking brewery ingredient
 stock and calculating the quantities needed to brew a set of recipes. Built for
 the Slackers brewing group. All data persists to your browser's localStorage —
