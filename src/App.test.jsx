@@ -55,4 +55,12 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: '🏭' }));
     expect(screen.getByRole('heading')).toHaveTextContent('🏭');
   });
+
+  it('shows the data backup controls in Settings', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByText('💾 Data Backup')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export backup/i })).toBeInTheDocument();
+  });
 });
