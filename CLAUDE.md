@@ -12,22 +12,37 @@ npm run dev       # Vite dev server at http://localhost:5173
 npm run build     # production build to dist/
 npm run lint      # ESLint
 npm run preview   # preview production build
+npm test          # Vitest single run (used by CI)
+npm run test:watch # Vitest watch mode
 ```
 
 ## Architecture
 
-**Single component:** All logic and UI live in [src/App.jsx](src/App.jsx). There is no routing, no CSS file, and no state management library — just React hooks with inline style objects.
+[src/App.jsx](src/App.jsx) is a thin shell: it owns all persistent state and renders the header + tab nav. UI and logic are split into modules. There is no routing or state-management library — just React hooks with inline style objects.
 
-**Three tabs:**
+```
+src/
+  components/   # reusable tables: InvTable, RecEditTable
+  features/     # one folder per tab: inventory/, recipes/, order/, settings/
+  hooks/        # usePersistentState (load/save localStorage wrapper)
+  lib/          # pure logic + data: orderCalc.js, defaults.js, storage.js
+  styles.js     # shared inline-style objects
+  App.jsx       # shell: state wiring, settings-driven header, tab routing
+```
+
+When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
+
+**Four tabs:**
 - **Inventory** — editable quantity inputs for all ingredients
 - **Recipes** — view/edit ingredient lists per recipe; add/remove ingredients
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
+- **Settings** — brewery identity: name, tagline, and icon (emoji picker or uploaded logo)
 
-**localStorage keys** are prefixed `slackers_brew_` and JSON-stringified. Keys: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`.
+**localStorage** access goes through [src/lib/storage.js](src/lib/storage.js) (`load`/`save`) and the `usePersistentState` hook. Keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
 
 ## Data Model
 
-Ingredient defaults at the top of [src/App.jsx](src/App.jsx):
+Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 - `defMalts` — 19 malts, quantity in lbs
 - `defHops` — 14 hops, quantity in oz
 - `defYeast` — 8 yeast strains, quantity in packs
@@ -35,16 +50,22 @@ Ingredient defaults at the top of [src/App.jsx](src/App.jsx):
 
 `defRecipes` — 18 preset recipes, each `{n, s, m[], h[], y[], a[]}` (name, style, malts, hops, yeast, adjuncts). Recipe arrays use `[name, quantity]` tuples; adjuncts use `[name, quantity, unit]`.
 
+`defSettings` — brewery identity `{name, tagline, emoji, logo}`. `logo` is a base64 data URL (or `null`); when set it overrides `emoji` in the header.
+
 ## Key Computed Logic
 
-`orderCalc` (useMemo) aggregates selected recipe needs, compares against current inventory, and returns `{malts, hops, yeast, adj}` arrays with `{n, need, have, order}` per ingredient. Malts also include `bags` (ceil(order / 55lbs)).
+`computeOrder()` in [src/lib/orderCalc.js](src/lib/orderCalc.js) aggregates selected recipe needs, compares against current inventory, and returns `{malts, hops, yeast, adj}` arrays with `{n, need, have, order}` per ingredient. `maltBags(order)` computes 55 lb bag counts. Both are pure and unit-tested in `orderCalc.test.js`.
 
 ## Style Conventions
 
-- Inline CSS-in-JS objects only — no CSS file, no Tailwind
+- Inline CSS-in-JS objects only — no CSS file, no Tailwind. Shared objects in [src/styles.js](src/styles.js).
 - Color accent: `#f59e0b` (amber)
 - Neutral grays from Tailwind's slate palette
-- Shared style vars: `cell`, `num`, `inp`, `th`, `btn`, `card`, `hdr`, `badge`, `rmBtn`, `addRow`, `sel`, `addBtn`
+- Shared style vars: `cell`, `num`, `inp`, `th`, `btn`, `card`, `hdr`, `badge`, `rmBtn`, `addRow`, `sel`, `addBtn`, `tabBtn`
+
+## Testing
+
+Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.test.js[x]`); shared setup in [src/test/setup.js](src/test/setup.js). Prefer unit-testing pure logic in `lib/`. CI runs lint + test + build on every push/PR.
 
 ## Tech Stack
 
@@ -54,9 +75,10 @@ Ingredient defaults at the top of [src/App.jsx](src/App.jsx):
 | Build | Vite 8 |
 | Compiler | Oxc (via @vitejs/plugin-react) |
 | Lint | ESLint 9 (flat config) |
+| Test | Vitest + Testing Library (jsdom) |
 | Language | JSX (no TypeScript) |
 | Storage | Browser localStorage |
 
 ## What Doesn't Exist
 
-- No TypeScript, no CSS framework, no tests, no backend, no export/import, no undo/redo
+- No TypeScript, no CSS framework, no backend, no export/import, no undo/redo
