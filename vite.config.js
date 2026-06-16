@@ -7,4 +7,13 @@ export default defineConfig({
   server: {
     open: true,
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    environmentOptions: {
+      jsdom: { url: 'http://localhost' },
+    },
+    setupFiles: './src/test/setup.js',
+    css: false,
+  },
 })

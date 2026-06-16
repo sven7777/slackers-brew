@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { computeOrder, maltBags } from "./lib/orderCalc";
 
 const defMalts = [
   ["Pils",0],["2-Row",0],["Maris Otter",0],["Caramunich I",0],
@@ -47,7 +48,7 @@ const defRecipes = [
 
 const SK = "slackers_brew_";
 function load(k, fb) { try { const r = localStorage.getItem(SK+k); return r ? JSON.parse(r) : fb; } catch { return fb; } }
-function save(k, v) { try { localStorage.setItem(SK+k, JSON.stringify(v)); } catch {} }
+function save(k, v) { try { localStorage.setItem(SK+k, JSON.stringify(v)); } catch { /* ignore write failures (quota, private mode) */ } }
 
 const tabNames = ["Inventory", "Recipes", "Order Calculator"];
 const maltNames = defMalts.map(m=>m[0]);
@@ -172,28 +173,10 @@ export default function App() {
     }
   };
 
-  const orderCalc = useMemo(() => {
-    const need = {malts:{},hops:{},yeast:{},adj:{}};
-    orders.forEach((o,i) => {
-      if (!o.sel) return;
-      const mult = o.dbl?2:1, r = recs[i];
-      r.m.forEach(([n,q])=>{need.malts[n]=(need.malts[n]||0)+q*mult;});
-      r.h.forEach(([n,q])=>{need.hops[n]=(need.hops[n]||0)+q*mult;});
-      r.y.forEach(([n,q])=>{need.yeast[n]=(need.yeast[n]||0)+q*mult;});
-      r.a.forEach(([n,q])=>{need.adj[n]=(need.adj[n]||0)+q*mult;});
-    });
-    const inv = {malts:{},hops:{},yeast:{},adj:{}};
-    malts.forEach(i=>inv.malts[i.n]=i.q);
-    hops.forEach(i=>inv.hops[i.n]=i.q);
-    yeast.forEach(i=>inv.yeast[i.n]=i.q);
-    adj.forEach(i=>inv.adj[i.n]=i.q);
-    const res = {malts:[],hops:[],yeast:[],adj:[]};
-    Object.entries(need.malts).forEach(([n,q])=>{const h=inv.malts[n]||0;res.malts.push({n,need:q,have:h,order:Math.max(0,q-h)});});
-    Object.entries(need.hops).forEach(([n,q])=>{const h=inv.hops[n]||0;res.hops.push({n,need:q,have:h,order:Math.max(0,q-h)});});
-    Object.entries(need.yeast).forEach(([n,q])=>{const h=inv.yeast[n]||0;res.yeast.push({n,need:q,have:h,order:Math.max(0,q-h)});});
-    Object.entries(need.adj).forEach(([n,q])=>{const h=inv.adj[n]||0;const u=adj.find(a=>a.n===n)?.u||'';res.adj.push({n,need:q,have:h,order:Math.max(0,q-h),u});});
-    return res;
-  }, [orders, malts, hops, yeast, adj, recs]);
+  const orderCalc = useMemo(
+    () => computeOrder({ orders, recs, malts, hops, yeast, adj }),
+    [orders, malts, hops, yeast, adj, recs]
+  );
 
   const r = recs[selR];
   const anySel = orders.some(o=>o.sel);
@@ -285,7 +268,7 @@ export default function App() {
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <thead><tr><th style={th}>Ingredient</th><th style={{...th,textAlign:'right'}}>Need (lbs)</th><th style={{...th,textAlign:'right'}}>Have (lbs)</th><th style={{...th,textAlign:'right'}}>Order (lbs)</th><th style={{...th,textAlign:'right'}}>Bags (55lb)</th></tr></thead>
                     <tbody>{orderCalc.malts.map((it,i)=>{
-                      const bags=it.order>0?Math.ceil(it.order/55):0;
+                      const bags=maltBags(it.order);
                       return(<tr key={i} style={{background:it.order>0?'#fff7ed':'transparent'}}>
                         <td style={cell}>{it.n}</td><td style={num}>{it.need}</td><td style={num}>{it.have}</td>
                         <td style={{...num,fontWeight:it.order>0?700:400,color:it.order>0?'#ea580c':'#16a34a'}}>{it.order}</td>
