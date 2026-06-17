@@ -44,6 +44,7 @@ create table if not exists inventory (
   name       text not null,
   qty        numeric not null default 0,
   unit       text,
+  ord        int not null default 0,   -- preserves the curated catalog display order
   updated_at timestamptz not null default now(),
   unique (category, name)
 );
@@ -56,6 +57,7 @@ create table if not exists recipes (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
   style      text,
+  ord        int not null default 0,   -- preserves recipe list order
   created_at timestamptz not null default now()
 );
 
@@ -65,7 +67,8 @@ create table if not exists recipe_ingredients (
   category  text not null check (category in ('malt','hop','yeast','adj')),
   name      text not null,
   qty       numeric not null default 0,
-  unit      text
+  unit      text,
+  ord       int not null default 0    -- preserves ingredient order within a recipe
 );
 
 create index if not exists recipe_ingredients_recipe_id_idx
