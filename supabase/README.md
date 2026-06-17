@@ -16,8 +16,30 @@ data model and row-level-security rationale.
 4. **Auth → URL Configuration:**
    - Site URL: `https://brew.slackersbrewing.com`
    - Redirect URLs: add `https://brew.slackersbrewing.com` and `http://localhost:5173`
-5. **Auth → Providers:** enable **Email (magic link)** to start. Add **Google**
-   later (needs a Google Cloud OAuth client) once the rest is proven.
+5. **Auth → Providers:** enable **Email (magic link)** to start, and **Google**
+   for one-click sign-in without the magic-link email rate limit (see below).
+
+## Google sign-in (roadmap Step 7)
+
+The login screen shows a **Continue with Google** button. It only works once the
+Google provider is enabled in Supabase, backed by a Google Cloud OAuth client.
+The invite-only allowlist still gates entry — signing in with Google does not
+grant access unless the email is in `members`.
+
+1. **Google Cloud Console** ([console.cloud.google.com](https://console.cloud.google.com)):
+   - Create (or pick) a project → **APIs & Services → OAuth consent screen**:
+     User type **External**, fill app name + support email, add yourself as a
+     test user (or publish the app), save.
+   - **APIs & Services → Credentials → Create Credentials → OAuth client ID**,
+     type **Web application**.
+   - **Authorized redirect URI:** the Supabase callback —
+     `https://<project>.supabase.co/auth/v1/callback` (find the exact URL in
+     Supabase → Auth → Providers → Google).
+   - Copy the **Client ID** and **Client secret**.
+2. **Supabase → Auth → Providers → Google:** toggle on, paste the Client ID and
+   Client secret, save.
+3. The app's existing Auth redirect URLs (Site URL + `http://localhost:5173`)
+   already cover where users land after sign-in — no app change needed.
 
 ## Frontend config
 
