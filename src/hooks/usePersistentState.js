@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { load, save } from "../lib/storage";
+import { load, save } from "../lib/repo";
 
 // useState that hydrates from localStorage and persists on every change.
 // `fallback` may be a value or a factory function (use a factory for defaults
