@@ -4,6 +4,7 @@ import { tabBtn } from "./styles";
 import InventoryTab from "./features/inventory/InventoryTab";
 import RecipesTab from "./features/recipes/RecipesTab";
 import OrderTab from "./features/order/OrderTab";
+import BrewDayTab from "./features/brewday/BrewDayTab";
 import SettingsTab from "./features/settings/SettingsTab";
 
 export default function App() {
@@ -35,7 +36,8 @@ export default function App() {
       {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
       {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR}/>}
       {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
-      {tab===3 && <SettingsTab settings={settings} setSettings={setSettings}/>}
+      {tab===3 && <BrewDayTab recs={recs}/>}
+      {tab===4 && <SettingsTab settings={settings} setSettings={setSettings}/>}
     </div>
   );
 }
