@@ -168,8 +168,13 @@ describe("settings", () => {
 
 describe("recipes", () => {
   const recipes = [
-    { n: "All Y'alls", s: "NEIPA", m: [["2-Row", 185], ["White Wheat", 55]], h: [["Cascade", 84]], y: [["K97", 1]], a: [] },
-    { n: "Beachcomber", s: "Belgian Blond", m: [["Pils", 110]], h: [], y: [["BE-134", 1]], a: [["Candi Syrup", 5, "lbs"]] },
+    { n: "All Y'alls", s: "NEIPA", og: 1.05, fg: 1.01, abv: 5.2, mt: 155,
+      m: [["2-Row", 185], ["White Wheat", 55]],
+      h: [["Cascade", 12, "boil", 10], ["Cascade", 48, "dryhop", 0]],
+      y: [["K97", 1]], a: [], sa: [["CaCl2", 100, "mash"], ["CaSo4", 40, "sparge"]] },
+    { n: "Beachcomber", s: "Belgian Blond", og: null, fg: null, abv: null, mt: 152,
+      m: [["Pils", 110]], h: [],
+      y: [["BE-134", 1]], a: [["Candi Syrup", 5, "lbs", "boil", 15]], sa: [] },
   ];
 
   it("round-trips recipes into header + ingredient rows and back", async () => {
@@ -185,17 +190,18 @@ describe("recipes", () => {
     const loaded = await backend.load("recipes", null);
     expect(loaded.map((r) => r.n)).toEqual(["All Y'alls", "Beachcomber"]);
     expect(loaded[0].m).toEqual([["2-Row", 185], ["White Wheat", 55]]);
-    expect(loaded[1].a).toEqual([["Candi Syrup", 5, "lbs"]]);
+    expect(loaded[0].h).toEqual([["Cascade", 12, "boil", 10], ["Cascade", 48, "dryhop", 0]]);
+    expect(loaded[0].sa).toEqual([["CaCl2", 100, "mash"], ["CaSo4", 40, "sparge"]]);
+    expect(loaded[1].a).toEqual([["Candi Syrup", 5, "lbs", "boil", 15]]);
   });
 
   it("save clears prior recipes and their ingredients (cascade)", async () => {
     await backend.save("recipes", recipes);
-    await backend.save("recipes", [{ n: "Solo", s: "Lager", m: [["Pils", 100]], h: [], y: [], a: [] }]);
+    const solo = { n: "Solo", s: "Lager", og: null, fg: null, abv: null, mt: null, m: [["Pils", 100]], h: [], y: [], a: [], sa: [] };
+    await backend.save("recipes", [solo]);
     expect(client.store.recipes).toHaveLength(1);
     expect(client.store.recipe_ingredients.every((ri) => ri.name === "Pils")).toBe(true);
-    expect(await backend.load("recipes", null)).toEqual([
-      { n: "Solo", s: "Lager", m: [["Pils", 100]], h: [], y: [], a: [] },
-    ]);
+    expect(await backend.load("recipes", null)).toEqual([solo]);
   });
 
   it("returns the fallback when there are no recipes", async () => {
