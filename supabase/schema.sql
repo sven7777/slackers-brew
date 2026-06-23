@@ -57,17 +57,26 @@ create table if not exists recipes (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
   style      text,
+  og         numeric,                  -- target original gravity (brew sheet)
+  fg         numeric,                  -- target final gravity
+  abv        numeric,                  -- target ABV %
+  mash_temp  numeric,                  -- single-infusion mash temp (°F)
   ord        int not null default 0,   -- preserves recipe list order
   created_at timestamptz not null default now()
 );
 
+-- Additions carry a stage + time so the brew-day / cellar sheets can place
+-- them; the same hop may appear several times at different stages. `salt`
+-- rows are water-chemistry additions (stage = mash/sparge/boil).
 create table if not exists recipe_ingredients (
   id        uuid primary key default gen_random_uuid(),
   recipe_id uuid not null references recipes(id) on delete cascade,
-  category  text not null check (category in ('malt','hop','yeast','adj')),
+  category  text not null check (category in ('malt','hop','yeast','adj','salt')),
   name      text not null,
   qty       numeric not null default 0,
   unit      text,
+  stage     text,                     -- boil/whirlpool/mash/firstwort/dryhop/...
+  time_min  numeric,                  -- minutes (boil/whirlpool); null for grain
   ord       int not null default 0    -- preserves ingredient order within a recipe
 );
 
