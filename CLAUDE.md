@@ -46,9 +46,12 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 - `defMalts` — 19 malts, quantity in lbs
 - `defHops` — 14 hops, quantity in oz
 - `defYeast` — 8 yeast strains, quantity in packs
-- `defAdj` — 12 adjuncts with per-item units (lbs/oz/ml/each)
+- `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)
+- `defSalts` — water-chemistry salts (names only; amounts live per-recipe)
 
-`defRecipes` — 18 preset recipes, each `{n, s, m[], h[], y[], a[]}` (name, style, malts, hops, yeast, adjuncts). Recipe arrays use `[name, quantity]` tuples; adjuncts use `[name, quantity, unit]`.
+`defRecipes` — 18 preset recipes, each `{n, s, og, fg, abv, mt, m[], h[], y[], a[], sa[]}` (name, style, target OG/FG/ABV, single-infusion mash temp, malts, hops, yeast, adjuncts, water salts). Tuple shapes: malt/yeast `[name, qty]`; hop `[name, qty, stage, time]`; adjunct `[name, qty, unit, stage, time]`; salt `[name, qty, stage]`. Additions carry a **stage** (`brewDayStages`/`cellarStages`/`saltStages` in defaults.js) and may repeat the same name at different stages (e.g. a hop at boil, whirlpool, and dry hop). `computeOrder()` aggregates by name, so it ignores stage/time.
+
+`lib/beersmith.js` parses BeerSmith 3 `.bsmx` files into this recipe model (oz→lb grain, sugar→adjunct routing, name normalization, stage/time), reporting unmapped ingredients. It's the shared parser for the offline migration/seed generator and the (planned) in-app import. Recipe data is normalized into Postgres rows ([supabase/schema.sql](supabase/schema.sql)); schema/data changes ship as files under [supabase/migrations/](supabase/migrations/).
 
 `defSettings` — brewery identity `{name, tagline, emoji, logo}`. `logo` is a base64 data URL (or `null`); when set it overrides `emoji` in the header.
 
