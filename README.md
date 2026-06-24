@@ -4,22 +4,27 @@
 
 A homebrew inventory and order-management tool for tracking brewery ingredient
 stock and calculating the quantities needed to brew a set of recipes. Built for
-the Slackers brewing group. All data persists to your browser's localStorage —
-there is no backend or account required.
+the Slackers brewing group. Data persists through a swappable backend: it runs
+entirely in your browser on localStorage by default, or against a shared
+Supabase backend (with login) when that's configured — the app is the same
+either way.
 
 ## Features
 
 - **Inventory** — track on-hand stock of malts (lbs), hops (oz), yeast (packs),
   and adjuncts (per-item units).
 - **Recipes** — view and edit ingredient lists per recipe; add or remove
-  ingredients across malts, hops, yeast, and adjuncts.
+  ingredients across malts, hops, yeast, and adjuncts; import recipes straight
+  from a BeerSmith `.bsmx` file.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
   order. Malts also roll up into 55 lb bag counts.
+- **Brew Day** — generate a printable brew-day sheet for a recipe, with staged
+  additions, mash details, and water salts.
 
 ## Running Locally
 
-**Prerequisites:** Node.js (v18+) and npm installed.
+**Prerequisites:** Node.js (v20+) and npm installed.
 
 ```bash
 # Install dependencies
@@ -37,21 +42,31 @@ Other useful commands:
 npm run build    # Build for production
 npm run preview  # Preview the production build locally
 npm run lint     # Run ESLint
+npm test         # Run the Vitest suite
 ```
+
+By default the app runs fully local on localStorage with no setup. To use the
+shared Supabase backend, provide `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+in a `.env` file (see [supabase/README.md](supabase/README.md)); without them the
+app stays on localStorage.
 
 ## Tech Stack
 
-- **React 19** with hooks (no state-management library)
+- **React 19** with hooks (no state-management or routing library)
 - **Vite 8** build tooling
 - **ESLint 9** (flat config)
+- **Vitest** + Testing Library for tests
 - Plain JSX — no TypeScript
-- Browser **localStorage** for persistence
+- **localStorage** by default, or **Supabase** (Postgres + Auth) when configured
 
 ## Data & Privacy
 
-All inventory, recipe, and order data lives in your browser's localStorage
-under keys prefixed `slackers_brew_`. Nothing is sent to a server. Clearing your
-browser data will reset the app to its default ingredient and recipe lists.
+In the default localStorage mode, all inventory, recipe, and order data lives in
+your browser under keys prefixed `slackers_brew_` and nothing is sent to a
+server; clearing your browser data resets the app to its default ingredient and
+recipe lists. When the Supabase backend is configured, that data is instead
+stored in a shared Postgres database behind a login, so it syncs across devices
+and brewers.
 
 ## License
 
