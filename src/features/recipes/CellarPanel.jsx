@@ -2,7 +2,8 @@ import { useState } from "react";
 import { buildCellarSheet } from "../../lib/cellarSheet";
 import { card, btn } from "../../styles";
 
-// Cellar Summary tab: pick a recipe, enter a brew date, and the printable cellar
+// Cellar panel (Recipes ▸ Cellar Sheet): for the recipe selected in the Recipes
+// tab, enter a brew date, and the printable cellar
 // log auto-fills every dated box from the recipe's day-offset schedule (cold
 // crash, bung, dry hop, rouse, transfer, keg) plus its yeast / dry-hop / cellar
 // additions. Layout mirrors the paper "Cellar Summary" worksheet 1:1. Print-only
@@ -235,20 +236,15 @@ function CellarSheetPage({ sheet }) {
   );
 }
 
-export default function CellarSummaryTab({ recs }) {
-  const [sel, setSel] = useState(0);
+export default function CellarPanel({ recipe }) {
   const [brewDate, setBrewDate] = useState("");
-  const sheet = buildCellarSheet(recs[sel], brewDate || null);
+  const sheet = buildCellarSheet(recipe, brewDate || null);
 
   return (
     <div>
       <style>{PRINT_CSS}</style>
 
       <div className="no-print" style={{ ...card, display: "flex", gap: 8, alignItems: "center", padding: 10, flexWrap: "wrap" }}>
-        <select value={sel} onChange={(e) => setSel(+e.target.value)}
-          style={{ flex: 1, minWidth: 200, padding: "10px 12px", fontSize: 15, fontWeight: 600, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b" }}>
-          {recs.map((r, i) => <option key={i} value={i}>{r.n} — {r.s}</option>)}
-        </select>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#64748b" }}>
           Brew date
           <input type="date" value={brewDate} onChange={(e) => setBrewDate(e.target.value)}

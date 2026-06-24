@@ -2,9 +2,10 @@ import { useState } from "react";
 import { buildBrewSheet } from "../../lib/brewSheet";
 import { card, btn } from "../../styles";
 
-// Brew Day tab: pick a recipe, choose single/double batch, preview the printable
-// Brew Day sheet on screen, and print it (landscape US Letter). A double batch
-// prints two pages (#1, #2) at single-batch amounts. Print-only — no saved log.
+// Brew Sheet panel (Recipes ▸ Brew Sheet): for the recipe selected in the
+// Recipes tab, choose single/double batch, preview the printable Brew Day sheet
+// on screen, and print it (landscape US Letter). A double batch prints two pages
+// (#1, #2) at single-batch amounts. Print-only — no saved log.
 
 // Measured-reading boxes the brewer fills in by hand. `ref` is the static
 // reference value carried over from the paper template; blank `ref` = write-in.
@@ -173,10 +174,9 @@ function BrewSheetPage({ sheet, batchLabel }) {
   );
 }
 
-export default function BrewDayTab({ recs }) {
-  const [sel, setSel] = useState(0);
+export default function BrewSheetPanel({ recipe }) {
   const [dbl, setDbl] = useState(false);
-  const sheet = buildBrewSheet(recs[sel]);
+  const sheet = buildBrewSheet(recipe);
   const pages = dbl ? [1, 2] : [null];
 
   return (
@@ -184,10 +184,6 @@ export default function BrewDayTab({ recs }) {
       <style>{PRINT_CSS}</style>
 
       <div className="no-print" style={{ ...card, display: "flex", gap: 8, alignItems: "center", padding: 10, flexWrap: "wrap" }}>
-        <select value={sel} onChange={(e) => setSel(+e.target.value)}
-          style={{ flex: 1, minWidth: 200, padding: "10px 12px", fontSize: 15, fontWeight: 600, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b" }}>
-          {recs.map((r, i) => <option key={i} value={i}>{r.n} — {r.s}</option>)}
-        </select>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", background: dbl ? "#fef3c7" : "#f1f5f9", color: dbl ? "#92400e" : "#64748b", padding: "8px 14px", borderRadius: 8 }}>
           <input type="checkbox" checked={dbl} onChange={() => setDbl((v) => !v)} style={{ accentColor: "#f59e0b" }} />
           {dbl ? "Double (2 pages)" : "Single"}

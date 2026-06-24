@@ -23,8 +23,9 @@ npm run test:watch # Vitest watch mode
 ```
 src/
   components/   # reusable tables: InvTable, RecEditTable
-  features/     # one folder per tab: inventory/, recipes/, order/, brewday/,
-                #   cellar/, settings/  — plus auth/ (Supabase session + login gate)
+  features/     # one folder per tab: inventory/, recipes/, order/, settings/
+                #   — plus auth/ (Supabase session + login gate). recipes/ also
+                #   holds the BrewSheetPanel + CellarPanel sub-views.
   hooks/        # usePersistentState (async-aware; routes through repo.js)
   lib/          # pure logic + data + the data-access seam (see below)
   styles.js     # shared inline-style objects
@@ -33,13 +34,16 @@ src/
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
 
-**Six tabs:**
+**Four tabs:**
 - **Inventory** — editable quantity inputs for all ingredients
-- **Recipes** — view/edit ingredient lists per recipe; add/remove ingredients; edit the per-recipe cellar schedule; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx))
+- **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between three views of it:
+  - **Edit** — view/edit ingredient lists per recipe; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only.
+  - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
+  - **Cellar Sheet** — printable post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, keg) plus yeast / dry-hop / cellar additions — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
-- **Brew Day** — printable brew-day sheet for a recipe (staged additions, mash, water salts)
-- **Cellar Summary** — printable post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, keg) plus yeast / dry-hop / cellar additions
 - **Settings** — brewery identity (name, tagline, emoji/logo icon) and data backup (export/import all app data as JSON)
+
+The Brew Sheet / Cellar Sheet panels take the selected `recipe` as a prop (the shared `selR` picker drives all three views); each owns only its print-specific control (batch toggle / brew date).
 
 **Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
 
