@@ -209,7 +209,10 @@ export function parseBeerSmith(xml) {
       n: field(rb, "F_R_NAME"),
       s: field(rb, "F_R_STYLE"),
       mt,
-      og: null, fg: null, abv: null, // BeerSmith targets here are unset defaults
+      // BeerSmith recomputes OG/FG/ABV for display and doesn't persist them, so
+      // leave targets blank rather than import a stored design value that won't
+      // match what BeerSmith shows. The brewer fills these in by hand.
+      og: null, fg: null, abv: null,
       m, h, y, a, sa,
     });
   }
