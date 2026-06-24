@@ -77,7 +77,7 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
         ))}
       </div>
 
-      {view === "brew" && <BrewSheetPanel recipe={r} />}
+      {view === "brew" && <BrewSheetPanel recipe={r} ri={selR} setRecs={setRecs} />}
       {view === "cellar" && <CellarPanel recipe={r} />}
 
       {view === "edit" && <>
