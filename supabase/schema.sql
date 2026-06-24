@@ -83,6 +83,20 @@ create table if not exists recipe_ingredients (
 create index if not exists recipe_ingredients_recipe_id_idx
   on recipe_ingredients (recipe_id);
 
+-- Cellar schedule — one row per scheduled step (day offset from brew day +
+-- action). The Cellar Summary sheet turns these into calendar dates from an
+-- entered brew date. `action` is free text from a curated picker (cellarActions).
+create table if not exists recipe_schedule (
+  id        uuid primary key default gen_random_uuid(),
+  recipe_id uuid not null references recipes(id) on delete cascade,
+  day       int not null default 0,    -- days after brew day
+  action    text not null,
+  ord       int not null default 0     -- preserves edit order within a recipe
+);
+
+create index if not exists recipe_schedule_recipe_id_idx
+  on recipe_schedule (recipe_id);
+
 -- ---------------------------------------------------------------------------
 -- Settings — single shared row (brewery identity).
 -- ---------------------------------------------------------------------------
@@ -103,6 +117,7 @@ alter table members            enable row level security;
 alter table inventory          enable row level security;
 alter table recipes            enable row level security;
 alter table recipe_ingredients enable row level security;
+alter table recipe_schedule    enable row level security;
 alter table settings           enable row level security;
 
 -- Members can see the roster; no insert/update/delete policy means changing it
@@ -119,6 +134,9 @@ create policy recipes_rw on recipes
   for all using (is_member()) with check (is_member());
 
 create policy recipe_ingredients_rw on recipe_ingredients
+  for all using (is_member()) with check (is_member());
+
+create policy recipe_schedule_rw on recipe_schedule
   for all using (is_member()) with check (is_member());
 
 create policy settings_rw on settings

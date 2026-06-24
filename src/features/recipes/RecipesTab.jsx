@@ -1,5 +1,6 @@
 import { useState } from "react";
 import RecEditTable from "../../components/RecEditTable";
+import ScheduleEditTable from "../../components/ScheduleEditTable";
 import ImportBeerSmith from "./ImportBeerSmith";
 import { defRecipes, maltNames, hopNames, yeastNames, adjNames, saltNames } from "../../lib/defaults";
 import { card, hdr, btn, inp } from "../../styles";
@@ -7,7 +8,7 @@ import { card, hdr, btn, inp } from "../../styles";
 // Recipes tab: pick a recipe and edit its targets, mash temp, ingredient lists
 // (with addition stage/time), and water salts; reset to preset; import .bsmx.
 export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
-  const [addSel, setAddSel] = useState({ m: "", h: "", y: "", a: "", sa: "" });
+  const [addSel, setAddSel] = useState({ m: "", h: "", y: "", a: "", sa: "", sc: "" });
   const [importing, setImporting] = useState(false);
   const r = recs[selR];
 
@@ -42,7 +43,7 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
       )}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <select value={selR} onChange={(e) => { setSelR(+e.target.value); setAddSel({ m: "", h: "", y: "", a: "", sa: "" }); }}
+        <select value={selR} onChange={(e) => { setSelR(+e.target.value); setAddSel({ m: "", h: "", y: "", a: "", sa: "", sc: "" }); }}
           style={{ flex: 1, padding: "10px 12px", fontSize: 15, fontWeight: 600, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b" }}>
           {recs.map((rec, i) => <option key={i} value={i}>{rec.n} — {rec.s}</option>)}
         </select>
@@ -74,6 +75,10 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
 
       <div style={{ ...card, marginTop: 12 }}><div style={hdr}>🧂 Water Salts (g)</div>
         <RecEditTable items={r.sa} cat="sa" names={saltNames} unit="g" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />
+      </div>
+
+      <div style={{ ...card, marginTop: 12 }}><div style={hdr}>📅 Cellar Schedule (days from brew)</div>
+        <ScheduleEditTable items={r.sc} ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />
       </div>
     </div>
   );
