@@ -29,6 +29,7 @@ describe("parseBeerSmith", () => {
     expect(recipes).toHaveLength(1);
     expect(r.n).toBe("Test Ale");
     expect(r.mt).toBe(152);
+    // OG/FG/ABV aren't persisted by BeerSmith, so the parser leaves them null.
     expect([r.og, r.fg, r.abv]).toEqual([null, null, null]);
   });
 
