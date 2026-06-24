@@ -135,7 +135,7 @@ function resolveAdj(raw) {
 // --- public API ------------------------------------------------------------
 
 // Parse .bsmx text into { recipes, unmapped }.
-//   recipes  — [{ n, s, mt, og, fg, abv, m, h, y, a, sa }]
+//   recipes  — [{ n, s, mt, ft, og, fg, abv, m, h, y, a, sa }]
 //   unmapped — [{ category, raw }] names that need user mapping (deduped)
 // Tuple shapes match the app model: m=[name,qty]; h=[name,qty,stage,time];
 // y=[name,qty]; a=[name,qty,unit,stage,time]; sa=[name,qty,stage].
@@ -205,10 +205,16 @@ export function parseBeerSmith(xml) {
     const steps = blocks(rb, "MashStep");
     const mt = steps.length ? num(field(steps[0], "F_MS_STEP_TEMP")) : null;
 
+    // Fermentation temp comes from the recipe's aging profile (F_R_AGE). We take
+    // the PRIMARY temp (F_A_PRIM_TEMP); the secondary/tertiary/age temps are also
+    // present but not modeled yet. 0/blank -> null.
+    const ft = num(field(rb, "F_A_PRIM_TEMP")) || null;
+
     recipes.push({
       n: field(rb, "F_R_NAME"),
       s: field(rb, "F_R_STYLE"),
       mt,
+      ft,
       // BeerSmith recomputes OG/FG/ABV for display and doesn't persist them, so
       // leave targets blank rather than import a stored design value that won't
       // match what BeerSmith shows. The brewer fills these in by hand.

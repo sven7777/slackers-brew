@@ -51,7 +51,7 @@ function LabeledRow({ label, value }) {
 }
 
 function CellarSheetPage({ sheet }) {
-  const GRAVITY_ROWS = 12;     // blank gravity-log rows
+  const GRAVITY_ROWS = 5;      // blank gravity-log rows
   const PACKAGING_ROWS = 6;    // blank packaging rows
   return (
     <div className="cellar-page" style={{ width: "100%", maxWidth: 1040, margin: "0 auto", border: "1px solid #cbd5e1", borderRadius: 8, padding: 16, background: "#fff", color: "#000" }}>
@@ -76,7 +76,7 @@ function CellarSheetPage({ sheet }) {
             <div style={sectTitle}>Yeast</div>
             <table style={tbl}><tbody>
               <LabeledRow label="K.O. Temp" />
-              <LabeledRow label="Ferm Temp" />
+              <LabeledRow label="Ferm Temp" value={sheet.fermTemp != null ? `${sheet.fermTemp}°F` : undefined} />
               <LabeledRow label="Time of Pitch" />
               <LabeledRow label="Gen / Type" value={sheet.yeast.length ? sheet.yeast.map((x) => x.name).join(", ") : undefined} />
             </tbody></table>
@@ -84,8 +84,7 @@ function CellarSheetPage({ sheet }) {
           <div style={sheetBox}>
             <div style={sectTitle}>Temp Raising</div>
             <table style={tbl}><tbody>
-              <LabeledRow label="Date" />
-              <LabeledRow label="Rouse" value={sheet.rouse[0] ?? undefined} />
+              <LabeledRow label="Rs. 64" value={sheet.rouse[0] ?? undefined} />
             </tbody></table>
           </div>
           <div style={sheetBox}>
@@ -121,7 +120,7 @@ function CellarSheetPage({ sheet }) {
         {/* Col 2 — Gravity log, Blow Offs, Packaging Summary */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={sheetBox}>
-            <div style={sectTitle}>Gravity / Temp Log</div>
+            <div style={sectTitle}>Gravity Log</div>
             <table style={tbl}>
               <thead><tr>
                 <th style={miniTh}>Date</th><th style={miniTh}>Gravity</th><th style={miniTh}>Temp</th><th style={miniTh}>Initial</th>
@@ -156,7 +155,11 @@ function CellarSheetPage({ sheet }) {
               </tr></thead>
               <tbody>
                 {Array.from({ length: PACKAGING_ROWS }).map((_, i) => (
-                  <tr key={i}><td style={blank}>&nbsp;</td><td style={blank}>&nbsp;</td><td style={blank}>&nbsp;</td><td style={blank}>&nbsp;</td></tr>
+                  <tr key={i}>
+                    {/* First row's date pre-fills from the schedule's "Keg" step. */}
+                    <td style={i === 0 && sheet.keg ? { ...miniTd, fontWeight: 700 } : blank}>{i === 0 && sheet.keg ? sheet.keg : " "}</td>
+                    <td style={blank}>&nbsp;</td><td style={blank}>&nbsp;</td><td style={blank}>&nbsp;</td>
+                  </tr>
                 ))}
               </tbody>
             </table>

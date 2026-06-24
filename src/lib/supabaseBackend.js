@@ -111,7 +111,7 @@ async function saveSettings(client, s) {
 async function loadRecipes(client, fallback) {
   const { data: recs, error: e1 } = await client
     .from("recipes")
-    .select("id,name,style,og,fg,abv,mash_temp,ord")
+    .select("id,name,style,og,fg,abv,mash_temp,ferm_temp,ord")
     .order("ord");
   if (e1) throw e1;
   if (!recs || recs.length === 0) return fallback;
@@ -131,7 +131,7 @@ async function loadRecipes(client, fallback) {
   const byId = new Map(
     recs.map((r) => [r.id, {
       n: r.name, s: r.style,
-      og: r.og, fg: r.fg, abv: r.abv, mt: r.mash_temp,
+      og: r.og, fg: r.fg, abv: r.abv, mt: r.mash_temp, ft: r.ferm_temp,
       m: [], h: [], y: [], a: [], sa: [], sc: [],
     }])
   );
@@ -176,7 +176,8 @@ async function saveRecipes(client, recipes) {
 
   const recRows = recipes.map((r, i) => ({
     name: r.n, style: r.s ?? null,
-    og: r.og ?? null, fg: r.fg ?? null, abv: r.abv ?? null, mash_temp: r.mt ?? null,
+    og: r.og ?? null, fg: r.fg ?? null, abv: r.abv ?? null,
+    mash_temp: r.mt ?? null, ferm_temp: r.ft ?? null,
     ord: i,
   }));
   const { data: inserted, error: e1 } = await client

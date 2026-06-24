@@ -61,6 +61,7 @@ create table if not exists recipes (
   fg         numeric,                  -- target final gravity
   abv        numeric,                  -- target ABV %
   mash_temp  numeric,                  -- single-infusion mash temp (°F)
+  ferm_temp  numeric,                  -- primary fermentation temp (°F, cellar sheet)
   ord        int not null default 0,   -- preserves recipe list order
   created_at timestamptz not null default now()
 );

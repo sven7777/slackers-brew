@@ -84,6 +84,11 @@ describe('buildCellarSheet', () => {
     expect(buildCellarSheet(recipe).yeast).toEqual([{ name: 'K97', qty: 1 }]);
   });
 
+  it('carries the fermentation temp, null when unset', () => {
+    expect(buildCellarSheet({ ...recipe, ft: 68 }).fermTemp).toBe(68);
+    expect(buildCellarSheet(recipe).fermTemp).toBeNull();
+  });
+
   it('keeps only off-brew-day adjuncts as misc additions', () => {
     const s = buildCellarSheet(recipe);
     expect(s.misc).toEqual([{ name: 'Mango Puree', qty: 18, unit: 'lbs' }]);

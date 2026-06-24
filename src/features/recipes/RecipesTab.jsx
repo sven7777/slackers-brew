@@ -86,6 +86,7 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
           {metaInput("Target FG", "fg", 0.001)}
           {metaInput("Target ABV %", "abv", 0.1)}
           {metaInput("Mash Temp °F", "mt", 1)}
+          {metaInput("Ferm Temp °F", "ft", 1)}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

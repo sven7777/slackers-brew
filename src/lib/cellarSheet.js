@@ -8,7 +8,8 @@
 // those dates fan out into the named boxes (cold crash, bung, dry hop, rouse,
 // transfer, keg). Without a brew date the schedule still lists day offsets and
 // every dated box is left blank for hand-entry. The recipe supplies WHAT (yeast,
-// dry-hop varieties + amounts, cellar additions); the schedule supplies WHEN.
+// fermentation temp, dry-hop varieties + amounts, cellar additions); the
+// schedule supplies WHEN.
 
 import { brewDayStages } from "./defaults";
 
@@ -32,7 +33,7 @@ function crashTemp(action) {
 
 export function buildCellarSheet(recipe, brewDate) {
   if (!recipe) return null;
-  const { n, s, h = [], y = [], a = [], sc = [] } = recipe;
+  const { n, s, ft, h = [], y = [], a = [], sc = [] } = recipe;
   const dateFor = (day) => (brewDate ? addDays(brewDate, day) : null);
 
   // Full schedule, ordered by day (stable within a day) with computed dates.
@@ -79,6 +80,7 @@ export function buildCellarSheet(recipe, brewDate) {
     style: s,
     brewDate: brewDate || null,
     dateBrewed: brewDate ? addDays(brewDate, 0) : null,
+    fermTemp: ft ?? null,
     yeast,
     dryHop: { dates: dryHopDates, items: dryHopItems },
     coldCrash,
