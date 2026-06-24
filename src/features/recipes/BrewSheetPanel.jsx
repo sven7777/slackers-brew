@@ -7,19 +7,37 @@ import { card, btn } from "../../styles";
 // on screen, and print it (landscape US Letter). A double batch prints two pages
 // (#1, #2) at single-batch amounts. Print-only — no saved log.
 
-// Measured-reading boxes the brewer fills in by hand. `ref` is the static
-// reference value carried over from the paper template; blank `ref` = write-in.
-const READINGS = [
-  { label: "Strike Temp", ref: "" },
-  { label: "Mash pH", ref: "8.4" },
-  { label: "Final pH", ref: "5.2" },
-  { label: "Pre-Boil Gravity", ref: "" },
-  { label: "Pre-Boil Volume", ref: "" },
-  { label: "OG", ref: "" },
-  { label: "Volume to Fermenter", ref: "" },
-  { label: "Whirlpool", ref: "5 active / 15 not" },
-  { label: "Knockout", ref: "20 / 80" },
+// Process readings carried 1:1 from the paper Brew Day template, grouped by
+// phase and laid out two-up. `ref` is the pre-printed reference value from the
+// template (shown on the line); no `ref` = a blank write-in line. Order matches
+// the paper sheet top-to-bottom.
+const READING_GROUPS = [
+  { title: "Mash", fields: [
+    { label: "Mill Time" }, { label: "Water pH (hot)", ref: "8.4" },
+    { label: "Water Cycled" }, { label: "pH Calibrated" },
+    { label: "Strike Temp" }, { label: "Mash Volume" },
+    { label: "Mash Temp" }, { label: "Sparge Volume" },
+    { label: "Vorlauf Time" }, { label: "pH Vorlauf" },
+    { label: "Runoff Time" },
+  ] },
+  { title: "Boil", fields: [
+    { label: "Pre-Boil (SG)" }, { label: "Pre-Boil Yield" },
+    { label: "pH Mid-Boil" }, { label: "Boil Time" },
+    { label: "Post-Boil (SG)" }, { label: "Post-Boil Yield" },
+  ] },
+  { title: "Whirlpool / Knockout", fields: [
+    { label: "WP Time", ref: "5 active / 15 not" }, { label: "WP Temp" },
+    { label: "Knockout Time", ref: "20" }, { label: "Knockout Temp", ref: "80" },
+    { label: "pH Final", ref: "5.2" },
+  ] },
 ];
+
+// Salt rows the paper template pre-prints for each stage; the recipe's actual
+// amounts fill in where present, the rest stay blank write-ins (matching the
+// form the brewers know). Sparge salts, when a recipe has them, render in their
+// own box from the recipe data.
+const MASH_SALTS = ["Lactic Acid", "CaCl2", "CaSo4", "Epsom", "Chalk", "Baking Soda"];
+const BOIL_SALTS = ["CaCl2", "CaSo4", "Epsom", "Chalk", "Baking Soda"];
 
 // Scoped print rules, injected inline (no CSS file per project convention).
 // visibility trick hides the app chrome and lifts the sheet to the page top.
@@ -39,8 +57,7 @@ const sectTitle = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", l
 const miniTh = { textAlign: "left", fontSize: 9, fontWeight: 700, color: "#475569", borderBottom: "1px solid #000", padding: "2px 4px" };
 const miniTd = { fontSize: 11, padding: "2px 4px", borderBottom: "1px solid #e2e8f0", color: "#000" };
 const fieldInp = { border: "none", borderBottom: "1px solid #94a3b8", fontSize: 12, padding: "1px 2px", width: "100%", background: "transparent", color: "#000" };
-
-const STAGE_LABEL = { mash: "Mash Adds", sparge: "Sparge Adds", boil: "Boil Adds" };
+const tbl = { width: "100%", borderCollapse: "collapse" };
 
 // One labeled header field (write-in on the printout).
 function Field({ label, value }) {
@@ -54,8 +71,57 @@ function Field({ label, value }) {
   );
 }
 
+// One compact reading cell: small caps label over a value/write-in line. A
+// template default value prints on the line; otherwise the line is blank.
+function Reading({ label, value }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: "#64748b", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, borderBottom: "1px solid #94a3b8", minHeight: 16 }}>{value ||" "}</span>
+    </div>
+  );
+}
+
+// A stage's salt additions: the template's pre-printed rows with recipe amounts
+// filled in where present, plus a couple of blank rows for hand-written extras.
+function SaltBox({ title, rows, extraBlanks = 2 }) {
+  return (
+    <div style={sheetBox}>
+      <div style={sectTitle}>{title}</div>
+      <table style={tbl}><tbody>
+        {rows.map((r, i) => (
+          <tr key={i}>
+            <td style={miniTd}>{r.name}</td>
+            <td style={{ ...miniTd, textAlign: "right", fontWeight: 700, width: 50 }}>{r.qty != null ? r.qty : " "}</td>
+          </tr>
+        ))}
+        {Array.from({ length: extraBlanks }).map((_, i) => (
+          <tr key={`b${i}`}><td style={miniTd}>&nbsp;</td><td style={miniTd}>&nbsp;</td></tr>
+        ))}
+      </tbody></table>
+    </div>
+  );
+}
+
 function BrewSheetPage({ sheet, batchLabel }) {
   const target = (v) => (v == null ? "" : v);
+
+  // Pre-print the template's salt rows for a stage, filling amounts the recipe
+  // specifies. Recipe salts not on the template list are appended so nothing is lost.
+  const saltRows = (stage, template) => {
+    const recipeSalts = sheet.saltsByStage.find((g) => g.stage === stage)?.salts ?? [];
+    const byName = new Map(recipeSalts.map((s) => [s.name, s.qty]));
+    const extra = recipeSalts.filter((s) => !template.includes(s.name));
+    return [
+      ...template.map((name) => ({ name, qty: byName.has(name) ? byName.get(name) : null })),
+      ...extra.map((s) => ({ name: s.name, qty: s.qty })),
+    ];
+  };
+  const spargeSalts = sheet.saltsByStage.find((g) => g.stage === "sparge")?.salts ?? [];
+
+  const GRAIN_BLANKS = 3;
+  const HOP_BLANKS = 4;
+
   return (
     <div className="brew-page" style={{ width: "100%", maxWidth: 1040, margin: "0 auto 24px", border: "1px solid #cbd5e1", borderRadius: 8, padding: 16, background: "#fff", color: "#000" }}>
       {/* Header band */}
@@ -78,40 +144,35 @@ function BrewSheetPage({ sheet, batchLabel }) {
         </div>
       </div>
 
-      {/* Three-column body */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 12, alignItems: "start" }}>
-        {/* Col 1 — Water salts by stage */}
-        <div style={{ ...sheetBox, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={sectTitle}>Water Salts (g)</div>
-          {sheet.saltsByStage.length === 0 && <div style={{ fontSize: 11, color: "#94a3b8" }}>None</div>}
-          {sheet.saltsByStage.map((g) => (
-            <div key={g.stage}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", marginBottom: 2 }}>{STAGE_LABEL[g.stage] || g.stage}</div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <tbody>
-                  {g.salts.map((s, i) => (
-                    <tr key={i}>
-                      <td style={miniTd}>{s.name}</td>
-                      <td style={{ ...miniTd, textAlign: "right", fontWeight: 700, width: 50 }}>{s.qty}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
+      {/* Three-column body — mirrors the paper template: adds + notes | grain +
+          hops | the full readings stack. */}
+      <div style={{ display: "grid", gridTemplateColumns: "0.85fr 1.15fr 1.25fr", gap: 12, alignItems: "start" }}>
+        {/* Col 1 — Mash Adds / Sparge Adds / Boil Adds + Notes */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <SaltBox title="Mash Adds (g)" rows={saltRows("mash", MASH_SALTS)} />
+          {spargeSalts.length > 0 && (
+            <SaltBox title="Sparge Adds (g)" rows={spargeSalts.map((s) => ({ name: s.name, qty: s.qty }))} extraBlanks={1} />
+          )}
+          <SaltBox title="Boil Adds (g)" rows={saltRows("boil", BOIL_SALTS)} />
+          <div style={{ ...sheetBox, flex: 1, minHeight: 120 }}>
+            <div style={sectTitle}>Notes</div>
+          </div>
         </div>
 
         {/* Col 2 — Grain bill + hops/additions */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={sheetBox}>
             <div style={sectTitle}>Grain Bill (lbs)</div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={tbl}>
               <tbody>
                 {sheet.grainBill.map((g, i) => (
                   <tr key={i}>
                     <td style={miniTd}>{g.name}</td>
                     <td style={{ ...miniTd, textAlign: "right", fontWeight: 700, width: 60 }}>{g.qty}</td>
                   </tr>
+                ))}
+                {Array.from({ length: GRAIN_BLANKS }).map((_, i) => (
+                  <tr key={`b${i}`}><td style={miniTd}>&nbsp;</td><td style={miniTd}>&nbsp;</td></tr>
                 ))}
                 <tr>
                   <td style={{ ...miniTd, fontWeight: 800, borderBottom: "none" }}>Total</td>
@@ -122,7 +183,7 @@ function BrewSheetPage({ sheet, batchLabel }) {
           </div>
           <div style={sheetBox}>
             <div style={sectTitle}>Hops &amp; Additions</div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={tbl}>
               <thead>
                 <tr>
                   <th style={miniTh}>Item</th>
@@ -140,34 +201,27 @@ function BrewSheetPage({ sheet, batchLabel }) {
                     <td style={{ ...miniTd, textAlign: "right" }}>{a.time}</td>
                   </tr>
                 ))}
-                {sheet.additions.length === 0 && (
-                  <tr><td style={{ ...miniTd, color: "#94a3b8" }} colSpan={4}>None</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Col 3 — Measured readings + notes */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={sheetBox}>
-            <div style={sectTitle}>Measured Readings</div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <tbody>
-                {READINGS.map((r, i) => (
-                  <tr key={i}>
-                    <td style={{ ...miniTd, whiteSpace: "nowrap" }}>
-                      {r.label}{r.ref && <span style={{ color: "#94a3b8", fontWeight: 400 }}> ({r.ref})</span>}
-                    </td>
-                    <td style={{ ...miniTd, width: 70 }}>&nbsp;</td>
+                {Array.from({ length: HOP_BLANKS }).map((_, i) => (
+                  <tr key={`b${i}`}>
+                    <td style={miniTd}>&nbsp;</td><td style={miniTd}>&nbsp;</td><td style={miniTd}>&nbsp;</td><td style={miniTd}>&nbsp;</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div style={{ ...sheetBox, minHeight: 120 }}>
-            <div style={sectTitle}>Notes</div>
-          </div>
+        </div>
+
+        {/* Col 3 — Process readings (Mash / Boil / Whirlpool-Knockout), 1:1 with
+            the paper template, laid out two-up. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {READING_GROUPS.map((group) => (
+            <div key={group.title} style={sheetBox}>
+              <div style={sectTitle}>{group.title}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
+                {group.fields.map((f, i) => <Reading key={i} label={f.label} value={f.ref} />)}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -19,6 +19,7 @@ const XML = `
 <Misc><F_M_NAME>Coriander Seed</F_M_NAME><F_M_TYPE>0</F_M_TYPE><F_M_USE>0</F_M_USE><F_M_AMOUNT>1.0</F_M_AMOUNT><F_M_TIME>5.0</F_M_TIME></Misc>
 <Misc><F_M_NAME>Pixie Dust</F_M_NAME><F_M_TYPE>3</F_M_TYPE><F_M_USE>3</F_M_USE><F_M_AMOUNT>2.0</F_M_AMOUNT><F_M_TIME>0.0</F_M_TIME></Misc>
 <MashStep><F_MS_NAME>Mash In</F_MS_NAME><F_MS_STEP_TEMP>152.0</F_MS_STEP_TEMP></MashStep>
+<F_R_AGE><F_A_PRIM_TEMP>68.0</F_A_PRIM_TEMP><F_A_SEC_TEMP>34.0</F_A_SEC_TEMP></F_R_AGE>
 </Recipe>`;
 
 describe("parseBeerSmith", () => {
@@ -29,8 +30,15 @@ describe("parseBeerSmith", () => {
     expect(recipes).toHaveLength(1);
     expect(r.n).toBe("Test Ale");
     expect(r.mt).toBe(152);
+    // Primary fermentation temp comes from F_A_PRIM_TEMP in the aging profile.
+    expect(r.ft).toBe(68);
     // OG/FG/ABV aren't persisted by BeerSmith, so the parser leaves them null.
     expect([r.og, r.fg, r.abv]).toEqual([null, null, null]);
+  });
+
+  it("leaves ferm temp null when the aging profile is absent", () => {
+    const { recipes: rs } = parseBeerSmith("<Recipe><F_R_NAME>No Age</F_R_NAME></Recipe>");
+    expect(rs[0].ft).toBeNull();
   });
 
   it("converts grain ounces to pounds and routes sugars to adjuncts", () => {

@@ -98,7 +98,7 @@ export function diffRecipes(oldR, newR) {
     };
   }
   const header = [];
-  for (const [k, label] of [["s", "Style"], ["mt", "Mash °F"], ["og", "OG"], ["fg", "FG"], ["abv", "ABV"]]) {
+  for (const [k, label] of [["s", "Style"], ["mt", "Mash °F"], ["ft", "Ferm °F"], ["og", "OG"], ["fg", "FG"], ["abv", "ABV"]]) {
     if ((oldR[k] ?? null) !== (newR[k] ?? null)) header.push({ label, from: oldR[k] ?? null, to: newR[k] ?? null });
   }
   return { fields, header };
