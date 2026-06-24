@@ -76,7 +76,7 @@ export const adjUnits = Object.fromEntries(defAdj.map(([n,,u])=>[n,u]));
 export const saltNames = defSalts;
 
 // Tabs, in display order.
-export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Brew Day", "Cellar Summary", "Settings"];
+export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Settings"];
 
 // Default brewery identity, editable in the Settings tab.
 export const defSettings = { name: "Slackers Brewing", tagline: "Inventory & Order Manager", emoji: "🍺", logo: null };

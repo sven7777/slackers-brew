@@ -13,18 +13,19 @@ either way.
 
 - **Inventory** — track on-hand stock of malts (lbs), hops (oz), yeast (packs),
   and adjuncts (per-item units).
-- **Recipes** — view and edit ingredient lists per recipe; add or remove
-  ingredients across malts, hops, yeast, and adjuncts; edit the per-recipe
-  cellar schedule; import recipes straight from a BeerSmith `.bsmx` file.
+- **Recipes** — pick a recipe once, then switch between three views of it:
+  - **Edit** — view and edit ingredient lists per recipe; add or remove
+    ingredients across malts, hops, yeast, and adjuncts; edit the per-recipe
+    cellar schedule; import recipes straight from a BeerSmith `.bsmx` file.
+  - **Brew Sheet** — generate a printable brew-day sheet, with staged
+    additions, mash details, and water salts (single or double batch).
+  - **Cellar Sheet** — generate a printable post-brew cellar log. Enter a brew
+    date and the recipe's day-offset schedule auto-fills every dated box (cold
+    crash, bung, dry hop, rouse, transfer, keg) alongside its yeast, dry-hop
+    varieties, and cellar additions.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
   order. Malts also roll up into 55 lb bag counts.
-- **Brew Day** — generate a printable brew-day sheet for a recipe, with staged
-  additions, mash details, and water salts.
-- **Cellar Summary** — generate a printable post-brew cellar log for a recipe.
-  Enter a brew date and the recipe's day-offset schedule auto-fills every dated
-  box (cold crash, bung, dry hop, rouse, transfer, keg) alongside its yeast,
-  dry-hop varieties, and cellar additions.
 
 ## Running Locally
 
