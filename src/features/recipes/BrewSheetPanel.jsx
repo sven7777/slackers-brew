@@ -5,30 +5,34 @@ import { card, btn } from "../../styles";
 // Brew Sheet panel (Recipes ▸ Brew Sheet): for the recipe selected in the
 // Recipes tab, choose single/double batch, preview the printable Brew Day sheet
 // on screen, and print it (landscape US Letter). A double batch prints two pages
-// (#1, #2) at single-batch amounts. Print-only — no saved log.
-
-// Process readings carried 1:1 from the paper Brew Day template, grouped by
-// phase and laid out two-up. `ref` is the pre-printed reference value from the
-// template (shown on the line); no `ref` = a blank write-in line. Order matches
-// the paper sheet top-to-bottom.
+// (#1, #2) at single-batch amounts.
+//
+// Process readings (col 3) carried 1:1 from the paper Brew Day template. A field
+// is one of three kinds:
+//   key:    editable + persisted on the recipe's `process` map (planned values
+//           the brewer sets once: strike temp, volumes, timings, pH targets, …).
+//           `def` is the pre-printed default shown until it's overridden.
+//   mirror: read-only, echoes a value already on the recipe (Mash Temp = mt).
+//   plain:  a blank write-in line for measurements taken on brew day (actual
+//           gravities, yields, pH readings) — never stored.
 const READING_GROUPS = [
   { title: "Mash", fields: [
-    { label: "Mill Time" }, { label: "Water pH (hot)", ref: "8.4" },
+    { label: "Mill Time" }, { label: "Water pH (hot)", key: "waterPh", def: "8.4" },
     { label: "Water Cycled" }, { label: "pH Calibrated" },
-    { label: "Strike Temp" }, { label: "Mash Volume" },
-    { label: "Mash Temp" }, { label: "Sparge Volume" },
-    { label: "Vorlauf Time" }, { label: "pH Vorlauf" },
-    { label: "Runoff Time" },
+    { label: "Strike Temp", key: "strikeTemp" }, { label: "Mash Volume", key: "mashVolume" },
+    { label: "Mash Temp", mirror: "mashTemp" }, { label: "Sparge Volume", key: "spargeVolume" },
+    { label: "Vorlauf Time", key: "vorlaufTime" }, { label: "pH Vorlauf", key: "phVorlauf" },
+    { label: "Runoff Time", key: "runoffTime" },
   ] },
   { title: "Boil", fields: [
     { label: "Pre-Boil (SG)" }, { label: "Pre-Boil Yield" },
-    { label: "pH Mid-Boil" }, { label: "Boil Time" },
+    { label: "pH Mid-Boil" }, { label: "Boil Time", key: "boilTime" },
     { label: "Post-Boil (SG)" }, { label: "Post-Boil Yield" },
   ] },
   { title: "Whirlpool / Knockout", fields: [
-    { label: "WP Time", ref: "5 active / 15 not" }, { label: "WP Temp" },
-    { label: "Knockout Time", ref: "20" }, { label: "Knockout Temp", ref: "80" },
-    { label: "pH Final", ref: "5.2" },
+    { label: "WP Time", key: "wpTime" }, { label: "WP Temp", key: "wpTemp" },
+    { label: "Knockout Time", key: "knockoutTime", def: "20" }, { label: "Knockout Temp", key: "knockoutTemp", def: "80" },
+    { label: "pH Final", key: "phFinal", def: "5.2" },
   ] },
 ];
 
@@ -58,6 +62,10 @@ const miniTh = { textAlign: "left", fontSize: 9, fontWeight: 700, color: "#47556
 const miniTd = { fontSize: 11, padding: "2px 4px", borderBottom: "1px solid #e2e8f0", color: "#000" };
 const fieldInp = { border: "none", borderBottom: "1px solid #94a3b8", fontSize: 12, padding: "1px 2px", width: "100%", background: "transparent", color: "#000" };
 const tbl = { width: "100%", borderCollapse: "collapse" };
+const readingLabel = { fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: "#64748b", whiteSpace: "nowrap" };
+// Editable cells share the same underline as a write-in line so the printout is
+// identical to the paper sheet — the input just prints its current value.
+const readingInp = { border: "none", borderBottom: "1px solid #94a3b8", outline: "none", fontSize: 11, fontWeight: 700, padding: "1px 2px", width: "100%", background: "transparent", color: "#000" };
 
 // One labeled header field (write-in on the printout).
 function Field({ label, value }) {
@@ -71,13 +79,24 @@ function Field({ label, value }) {
   );
 }
 
-// One compact reading cell: small caps label over a value/write-in line. A
-// template default value prints on the line; otherwise the line is blank.
+// One compact reading cell: small caps label over a value/write-in line. A value
+// (a mirrored recipe field) prints on the line; otherwise the line is blank.
 function Reading({ label, value }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: "#64748b", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={readingLabel}>{label}</span>
       <span style={{ fontSize: 11, fontWeight: 700, borderBottom: "1px solid #94a3b8", minHeight: 16 }}>{value ||" "}</span>
+    </div>
+  );
+}
+
+// An editable reading cell bound to the recipe's `process` map. Looks identical
+// to a write-in line; typing persists to the recipe and prints next time.
+function ReadingInput({ label, value, placeholder, onChange }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <span style={readingLabel}>{label}</span>
+      <input type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={readingInp} />
     </div>
   );
 }
@@ -103,7 +122,7 @@ function SaltBox({ title, rows, extraBlanks = 2 }) {
   );
 }
 
-function BrewSheetPage({ sheet, batchLabel }) {
+function BrewSheetPage({ sheet, batchLabel, process, onProcess }) {
   const target = (v) => (v == null ? "" : v);
 
   // Pre-print the template's salt rows for a stage, filling amounts the recipe
@@ -218,7 +237,14 @@ function BrewSheetPage({ sheet, batchLabel }) {
             <div key={group.title} style={sheetBox}>
               <div style={sectTitle}>{group.title}</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
-                {group.fields.map((f, i) => <Reading key={i} label={f.label} value={f.ref} />)}
+                {group.fields.map((f, i) => {
+                  if (f.key) {
+                    const cur = f.key in process ? process[f.key] : (f.def ?? "");
+                    return <ReadingInput key={i} label={f.label} value={cur} placeholder={f.def} onChange={(v) => onProcess(f.key, v)} />;
+                  }
+                  if (f.mirror) return <Reading key={i} label={f.label} value={target(sheet[f.mirror])} />;
+                  return <Reading key={i} label={f.label} />;
+                })}
               </div>
             </div>
           ))}
@@ -228,9 +254,13 @@ function BrewSheetPage({ sheet, batchLabel }) {
   );
 }
 
-export default function BrewSheetPanel({ recipe }) {
+export default function BrewSheetPanel({ recipe, ri, setRecs }) {
   const [dbl, setDbl] = useState(false);
   const sheet = buildBrewSheet(recipe);
+  const process = recipe?.process ?? {};
+  // Editable readings persist into the recipe's `process` map (one JSONB column).
+  const onProcess = (key, value) =>
+    setRecs((p) => p.map((rec, i) => (i === ri ? { ...rec, process: { ...(rec.process || {}), [key]: value } } : rec)));
   const pages = dbl ? [1, 2] : [null];
 
   return (
@@ -247,7 +277,7 @@ export default function BrewSheetPanel({ recipe }) {
 
       <div className="brew-print">
         {sheet
-          ? pages.map((b, i) => <BrewSheetPage key={i} sheet={sheet} batchLabel={b} />)
+          ? pages.map((b, i) => <BrewSheetPage key={i} sheet={sheet} batchLabel={b} process={process} onProcess={onProcess} />)
           : <p className="no-print" style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>No recipe selected.</p>}
       </div>
     </div>
