@@ -62,6 +62,9 @@ class Query {
         this.store.recipe_ingredients = this.store.recipe_ingredients.filter(
           (ri) => !ids.has(ri.recipe_id)
         );
+        this.store.recipe_schedule = this.store.recipe_schedule.filter(
+          (s) => !ids.has(s.recipe_id)
+        );
       }
       return { error: null };
     }
@@ -90,6 +93,7 @@ function fakeClient() {
     inventory: [],
     recipes: [],
     recipe_ingredients: [],
+    recipe_schedule: [],
     settings: [],
     _seq: 0,
     _failNext: false,
@@ -171,10 +175,11 @@ describe("recipes", () => {
     { n: "All Y'alls", s: "NEIPA", og: 1.05, fg: 1.01, abv: 5.2, mt: 155,
       m: [["2-Row", 185], ["White Wheat", 55]],
       h: [["Cascade", 12, "boil", 10], ["Cascade", 48, "dryhop", 0]],
-      y: [["K97", 1]], a: [], sa: [["CaCl2", 100, "mash"], ["CaSo4", 40, "sparge"]] },
+      y: [["K97", 1]], a: [], sa: [["CaCl2", 100, "mash"], ["CaSo4", 40, "sparge"]],
+      sc: [[0, "Brew Date"], [12, "Dry Hop"], [20, "Keg"]] },
     { n: "Beachcomber", s: "Belgian Blond", og: null, fg: null, abv: null, mt: 152,
       m: [["Pils", 110]], h: [],
-      y: [["BE-134", 1]], a: [["Candi Syrup", 5, "lbs", "boil", 15]], sa: [] },
+      y: [["BE-134", 1]], a: [["Candi Syrup", 5, "lbs", "boil", 15]], sa: [], sc: [] },
   ];
 
   it("round-trips recipes into header + ingredient rows and back", async () => {
@@ -197,7 +202,7 @@ describe("recipes", () => {
 
   it("save clears prior recipes and their ingredients (cascade)", async () => {
     await backend.save("recipes", recipes);
-    const solo = { n: "Solo", s: "Lager", og: null, fg: null, abv: null, mt: null, m: [["Pils", 100]], h: [], y: [], a: [], sa: [] };
+    const solo = { n: "Solo", s: "Lager", og: null, fg: null, abv: null, mt: null, m: [["Pils", 100]], h: [], y: [], a: [], sa: [], sc: [] };
     await backend.save("recipes", [solo]);
     expect(client.store.recipes).toHaveLength(1);
     expect(client.store.recipe_ingredients.every((ri) => ri.name === "Pils")).toBe(true);

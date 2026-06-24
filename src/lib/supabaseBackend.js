@@ -5,7 +5,7 @@
 // It translates the app's blob-per-key shapes into the per-row schema
 // (supabase/schema.sql) and back:
 //   malts/hops/yeast/adj -> inventory rows (one category each)
-//   recipes              -> recipes + recipe_ingredients rows
+//   recipes              -> recipes + recipe_ingredients + recipe_schedule rows
 //   settings             -> the single settings row (id = 1)
 //   everything else (tab/selR/orders) -> delegated to localStorage: it's
 //     per-device UI state, not shared brewery data.
@@ -122,17 +122,28 @@ async function loadRecipes(client, fallback) {
     .order("ord");
   if (e2) throw e2;
 
+  const { data: sched, error: e3 } = await client
+    .from("recipe_schedule")
+    .select("recipe_id,day,action,ord")
+    .order("ord");
+  if (e3) throw e3;
+
   const byId = new Map(
     recs.map((r) => [r.id, {
       n: r.name, s: r.style,
       og: r.og, fg: r.fg, abv: r.abv, mt: r.mash_temp,
-      m: [], h: [], y: [], a: [], sa: [],
+      m: [], h: [], y: [], a: [], sa: [], sc: [],
     }])
   );
   for (const ing of ings ?? []) {
     const rec = byId.get(ing.recipe_id);
     if (!rec) continue;
     rec[FIELD_BY_CATEGORY[ing.category]].push(ingredientToTuple(ing));
+  }
+  for (const row of sched ?? []) {
+    const rec = byId.get(row.recipe_id);
+    if (!rec) continue;
+    rec.sc.push([row.day, row.action]);
   }
   return recs.map((r) => byId.get(r.id));
 }
@@ -191,5 +202,18 @@ async function saveRecipes(client, recipes) {
   if (ingRows.length) {
     const { error: e2 } = await client.from("recipe_ingredients").insert(ingRows);
     if (e2) throw e2;
+  }
+
+  // Cellar schedule rows (recipe_schedule cascaded away with their parent above).
+  const schedRows = [];
+  recipes.forEach((r, i) => {
+    const recipeId = idByOrd.get(i);
+    (r.sc ?? []).forEach(([day, action], j) => {
+      schedRows.push({ recipe_id: recipeId, day, action, ord: j });
+    });
+  });
+  if (schedRows.length) {
+    const { error: e3 } = await client.from("recipe_schedule").insert(schedRows);
+    if (e3) throw e3;
   }
 }

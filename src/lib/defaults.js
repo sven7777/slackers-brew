@@ -36,8 +36,18 @@ export const brewDayStages = ["mash","firstwort","boil","whirlpool","knockout"];
 export const cellarStages = ["dryhop","primary","secondary","fining","rousing","transfer","keg","bottling"];
 export const saltStages = ["mash","sparge","boil"];
 
+// Cellar Summary schedule actions. A recipe's `sc` list is [[dayOffset, action], …];
+// entering a brew date on the Cellar Summary sheet computes each action's date
+// (brewDate + dayOffset) and routes it to the matching box (cold crash, bung,
+// dry hop, rouse, transfer, keg). Free text is allowed; this is the picker list.
+export const cellarActions = [
+  "Brew Date","Step Crash 55","Step Crash 40","Step Crash 33",
+  "Bung | Pressure","Blow Off","Mini Blow Off","Dry Hop","Rouse",
+  "Transfer","Keg",
+];
+
 export const defRecipes = [
-  {n:"All Y'alls",s:"NEIPA",og:null,fg:null,abv:null,mt:155,m:[["2-Row",185],["White Wheat",55],["Flaked Wheat",35],["Flaked Oat",15]],h:[["Cascade",12,"boil",10],["Amarillo",16,"boil",7.5],["Cascade",12,"boil",5],["Amarillo",12,"whirlpool",20],["Cascade",12,"whirlpool",20],["Chinook",8,"whirlpool",20],["Cascade",48,"dryhop",0],["Mosaic",48,"dryhop",0],["Simcoe",16,"dryhop",0]],y:[["K97",1]],a:[],sa:[["CaCl2",100,"mash"],["CaSo4",40,"mash"],["CaCl2",80,"sparge"],["CaSo4",32,"sparge"]]},
+  {n:"All Y'alls",s:"NEIPA",og:null,fg:null,abv:null,mt:155,m:[["2-Row",185],["White Wheat",55],["Flaked Wheat",35],["Flaked Oat",15]],h:[["Cascade",12,"boil",10],["Amarillo",16,"boil",7.5],["Cascade",12,"boil",5],["Amarillo",12,"whirlpool",20],["Cascade",12,"whirlpool",20],["Chinook",8,"whirlpool",20],["Cascade",48,"dryhop",0],["Mosaic",48,"dryhop",0],["Simcoe",16,"dryhop",0]],y:[["K97",1]],a:[],sa:[["CaCl2",100,"mash"],["CaSo4",40,"mash"],["CaCl2",80,"sparge"],["CaSo4",32,"sparge"]],sc:[[0,"Brew Date"],[11,"Step Crash 55"],[11,"Bung | Pressure"],[12,"Blow Off"],[12,"Dry Hop"],[13,"Mini Blow Off"],[13,"Rouse"],[13,"Step Crash 40"],[14,"Blow Off"],[14,"Step Crash 33"],[19,"Blow Off"],[19,"Transfer"],[20,"Blow Off"],[20,"Keg"]]},
   {n:"Beachcomber",s:"Belgian Blond",og:null,fg:null,abv:null,mt:152,m:[["Pils",110],["White Wheat",55],["Vienna",15],["Flaked Wheat",15],["Carafoam",10]],h:[["Amarillo",15,"boil",60],["Crystal",8,"boil",5]],y:[["BE-134",1]],a:[["Candi Syrup",5,"lbs","boil",15]],sa:[]},
   {n:"Coffee Snout",s:"Baltic Porter",og:null,fg:null,abv:null,mt:154,m:[["Maris Otter",165],["2-Row",110],["Munich",40],["Caramunich I",15],["Chocolate",12],["Roasted Barley",8],["Carafoam",5]],h:[["CTZ",12,"boil",60],["Willamette",12,"boil",5]],y:[["S-04",1]],a:[["Coffee",5,"lbs","secondary",0]],sa:[["CaSo4",60,"mash"],["Baking Soda",50,"mash"],["Salt",7,"mash"],["CaSo4",32,"sparge"],["Baking Soda",30,"sparge"],["Salt",4,"sparge"]]},
   {n:"Hefelump",s:"Weissbier",og:null,fg:null,abv:null,mt:152,m:[["Pils",110],["White Wheat",110],["Caramunich I",15],["Carafoam",10],["Vienna",10]],h:[["Saaz",14,"boil",60],["Saaz",6,"boil",5]],y:[["WB-06",1]],a:[["Orange Peel",3,"oz","boil",15]],sa:[["Chalk",11,"mash"],["Baking Soda",5,"mash"],["Chalk",95,"boil"],["Baking Soda",40,"boil"]]},
@@ -66,7 +76,7 @@ export const adjUnits = Object.fromEntries(defAdj.map(([n,,u])=>[n,u]));
 export const saltNames = defSalts;
 
 // Tabs, in display order.
-export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Brew Day", "Settings"];
+export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Brew Day", "Cellar Summary", "Settings"];
 
 // Default brewery identity, editable in the Settings tab.
 export const defSettings = { name: "Slackers Brewing", tagline: "Inventory & Order Manager", emoji: "🍺", logo: null };

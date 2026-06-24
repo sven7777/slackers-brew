@@ -24,7 +24,7 @@ npm run test:watch # Vitest watch mode
 src/
   components/   # reusable tables: InvTable, RecEditTable
   features/     # one folder per tab: inventory/, recipes/, order/, brewday/,
-                #   settings/  — plus auth/ (Supabase session + login gate)
+                #   cellar/, settings/  — plus auth/ (Supabase session + login gate)
   hooks/        # usePersistentState (async-aware; routes through repo.js)
   lib/          # pure logic + data + the data-access seam (see below)
   styles.js     # shared inline-style objects
@@ -33,11 +33,12 @@ src/
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
 
-**Five tabs:**
+**Six tabs:**
 - **Inventory** — editable quantity inputs for all ingredients
-- **Recipes** — view/edit ingredient lists per recipe; add/remove ingredients; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx))
+- **Recipes** — view/edit ingredient lists per recipe; add/remove ingredients; edit the per-recipe cellar schedule; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx))
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
 - **Brew Day** — printable brew-day sheet for a recipe (staged additions, mash, water salts)
+- **Cellar Summary** — printable post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, keg) plus yeast / dry-hop / cellar additions
 - **Settings** — brewery identity (name, tagline, emoji/logo icon) and data backup (export/import all app data as JSON)
 
 **Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
@@ -51,7 +52,7 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 - `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)
 - `defSalts` — water-chemistry salts (names only; amounts live per-recipe)
 
-`defRecipes` — 18 preset recipes, each `{n, s, og, fg, abv, mt, m[], h[], y[], a[], sa[]}` (name, style, target OG/FG/ABV, single-infusion mash temp, malts, hops, yeast, adjuncts, water salts). Tuple shapes: malt/yeast `[name, qty]`; hop `[name, qty, stage, time]`; adjunct `[name, qty, unit, stage, time]`; salt `[name, qty, stage]`. Additions carry a **stage** (`brewDayStages`/`cellarStages`/`saltStages` in defaults.js) and may repeat the same name at different stages (e.g. a hop at boil, whirlpool, and dry hop). `computeOrder()` aggregates by name, so it ignores stage/time.
+`defRecipes` — 18 preset recipes, each `{n, s, og, fg, abv, mt, m[], h[], y[], a[], sa[], sc[]}` (name, style, target OG/FG/ABV, single-infusion mash temp, malts, hops, yeast, adjuncts, water salts, cellar schedule). Tuple shapes: malt/yeast `[name, qty]`; hop `[name, qty, stage, time]`; adjunct `[name, qty, unit, stage, time]`; salt `[name, qty, stage]`; schedule `[dayOffset, action]`. Additions carry a **stage** (`brewDayStages`/`cellarStages`/`saltStages` in defaults.js) and may repeat the same name at different stages (e.g. a hop at boil, whirlpool, and dry hop). `computeOrder()` aggregates by name, so it ignores stage/time. The cellar `sc` schedule (actions from `cellarActions`) is the spine of the Cellar Summary sheet: entering a brew date computes each step's date (`brewDate + dayOffset`). Only All Y'alls ships with a seeded schedule; other recipes start empty and are filled in the Recipes tab.
 
 `lib/beersmith.js` parses BeerSmith 3 `.bsmx` files into this recipe model (oz→lb grain, sugar→adjunct routing, name normalization, stage/time), reporting unmapped ingredients. It's the shared parser for both the offline seed generator and the in-app import ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx) via [lib/importRecipe.js](src/lib/importRecipe.js)). Note: BeerSmith recomputes OG/FG/ABV for display and never persists them, so the parser leaves recipe `og/fg/abv` null rather than import a stored design value that wouldn't match. When the Supabase backend is active, recipe data is normalized into Postgres rows ([supabase/schema.sql](supabase/schema.sql)); schema/data changes ship as files under [supabase/migrations/](supabase/migrations/).
 
@@ -60,6 +61,8 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 ## Key Computed Logic
 
 `computeOrder()` in [src/lib/orderCalc.js](src/lib/orderCalc.js) aggregates selected recipe needs, compares against current inventory, and returns `{malts, hops, yeast, adj}` arrays with `{n, need, have, order}` per ingredient. `maltBags(order)` computes 55 lb bag counts. Both are pure and unit-tested in `orderCalc.test.js`.
+
+The printable sheets each have a pure recipe→view-model builder, kept out of the React component so the layout + routing are unit-testable: `buildBrewSheet()` ([src/lib/brewSheet.js](src/lib/brewSheet.js)) for Brew Day (brew-day-stage additions, grain bill, salts; excludes cellar stages + yeast) and `buildCellarSheet(recipe, brewDate)` ([src/lib/cellarSheet.js](src/lib/cellarSheet.js)) for Cellar Summary (schedule date math + routing to cold-crash/bung/dry-hop/rouse/transfer/keg boxes + yeast + cellar additions).
 
 [src/lib/backup.js](src/lib/backup.js) handles data export/import: `buildBackup()` serializes all `slackers_brew_*` localStorage into a portable JSON object; `applyBackup()` validates and restores one (clearing existing app keys first). It also served as the localStorage→Supabase migration tool.
 

@@ -460,4 +460,26 @@ from r, (values
     ('adj', 'Orange Peel', 1, 'oz', 'boil', 0, 1)
 ) as v(category, name, qty, unit, stage, time_min, ord);
 
+-- Cellar schedules. Only All Y'alls' schedule is known; other recipes start
+-- empty and get filled in-app (Recipes tab → Cellar Schedule).
+insert into recipe_schedule (recipe_id, day, action, ord)
+select r.id, v.day, v.action, v.ord
+from recipes r, (values
+    (0,  'Brew Date',        0),
+    (11, 'Step Crash 55',    1),
+    (11, 'Bung | Pressure',  2),
+    (12, 'Blow Off',         3),
+    (12, 'Dry Hop',          4),
+    (13, 'Mini Blow Off',    5),
+    (13, 'Rouse',            6),
+    (13, 'Step Crash 40',    7),
+    (14, 'Blow Off',         8),
+    (14, 'Step Crash 33',    9),
+    (19, 'Blow Off',        10),
+    (19, 'Transfer',        11),
+    (20, 'Blow Off',        12),
+    (20, 'Keg',             13)
+) as v(day, action, ord)
+where r.name = 'All Y''alls';
+
 commit;
