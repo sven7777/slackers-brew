@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-React-based homebrew brewery inventory and order management tool for the Slackers brewing group. Tracks ingredient stock (malts, hops, yeast, adjuncts) and calculates order quantities needed for selected recipes. Data persists through a swappable data-access layer: browser localStorage by default, or a shared Supabase (Postgres + Auth) backend when configured — the app code is identical either way.
+React-based brewery inventory and order management tool for Slackers Brewing. Tracks ingredient stock (malts, hops, yeast, adjuncts) and calculates order quantities needed for selected recipes. Data persists through a swappable data-access layer: browser localStorage by default, or a shared Supabase (Postgres + Auth) backend when configured — the app code is identical either way.
 
 ## Dev Commands
 
@@ -93,8 +93,8 @@ Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.tes
 | Framework | React 19 |
 | Build | Vite 8 |
 | Compiler | Oxc (via @vitejs/plugin-react) |
-| Lint | ESLint 9 (flat config) |
-| Test | Vitest + Testing Library (jsdom) |
+| Lint | ESLint 10 (flat config) |
+| Test | Vitest 4 + Testing Library (jsdom) |
 | Language | JSX (no TypeScript) |
 | Storage | localStorage (default) or Supabase Postgres, behind the `repo.js` backend seam |
 | Auth | Supabase Auth (magic link + Google OAuth), only when Supabase is configured |

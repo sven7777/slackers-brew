@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/sven7777/slackers-brew/actions/workflows/ci.yml/badge.svg)](https://github.com/sven7777/slackers-brew/actions/workflows/ci.yml)
 
-A homebrew inventory and order-management tool for tracking brewery ingredient
+A brewery inventory and order-management tool for tracking ingredient
 stock and calculating the quantities needed to brew a set of recipes. Built for
-the Slackers brewing group. Data persists through a swappable backend: it runs
+Slackers Brewing. Data persists through a swappable backend: it runs
 entirely in your browser on localStorage by default, or against a shared
 Supabase backend (with login) when that's configured — the app is the same
 either way.
@@ -59,8 +59,8 @@ app stays on localStorage.
 
 - **React 19** with hooks (no state-management or routing library)
 - **Vite 8** build tooling
-- **ESLint 9** (flat config)
-- **Vitest** + Testing Library for tests
+- **ESLint 10** (flat config)
+- **Vitest 4** + Testing Library for tests
 - Plain JSX — no TypeScript
 - **localStorage** by default, or **Supabase** (Postgres + Auth) when configured
 
