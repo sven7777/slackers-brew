@@ -39,7 +39,7 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
 - **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between three views of it:
   - **Edit** — view/edit ingredient lists per recipe; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only.
   - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
-  - **Cellar Sheet** — printable post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, keg) plus yeast / dry-hop / cellar additions — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
+  - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, keg) plus yeast / dry-hop / cellar additions. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
 - **Settings** — brewery identity (name, tagline, emoji/logo icon) and data backup (export/import all app data as JSON)
 

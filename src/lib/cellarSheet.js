@@ -33,7 +33,7 @@ function crashTemp(action) {
 
 export function buildCellarSheet(recipe, brewDate) {
   if (!recipe) return null;
-  const { n, s, ft, h = [], y = [], a = [], sc = [] } = recipe;
+  const { n, s, og = null, fg = null, ft, h = [], y = [], a = [], sc = [] } = recipe;
   const dateFor = (day) => (brewDate ? addDays(brewDate, day) : null);
 
   // Full schedule, ordered by day (stable within a day) with computed dates.
@@ -78,6 +78,8 @@ export function buildCellarSheet(recipe, brewDate) {
   return {
     name: n,
     style: s,
+    og,
+    fg,
     brewDate: brewDate || null,
     dateBrewed: brewDate ? addDays(brewDate, 0) : null,
     fermTemp: ft ?? null,
