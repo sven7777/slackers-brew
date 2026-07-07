@@ -62,10 +62,16 @@ const miniTh = { textAlign: "left", fontSize: 9, fontWeight: 700, color: "#47556
 const miniTd = { fontSize: 11, padding: "2px 4px", borderBottom: "1px solid #e2e8f0", color: "#000" };
 const fieldInp = { border: "none", borderBottom: "1px solid #94a3b8", fontSize: 12, padding: "1px 2px", width: "100%", background: "transparent", color: "#000" };
 const tbl = { width: "100%", borderCollapse: "collapse" };
-const readingLabel = { fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: "#64748b", whiteSpace: "nowrap" };
-// Editable cells share the same underline as a write-in line so the printout is
-// identical to the paper sheet — the input just prints its current value.
-const readingInp = { border: "none", borderBottom: "1px solid #94a3b8", outline: "none", fontSize: 11, fontWeight: 700, padding: "1px 2px", width: "100%", background: "transparent", color: "#000" };
+// Reading rows are a 3-col table: label | Target | Actual. Target is prefilled
+// from the recipe where known (editable+persisted for planned values, a mirror
+// for Mash Temp); Actual is always a blank write-in for the brew-day measurement.
+const taTh = { textAlign: "center", fontSize: 8, fontWeight: 700, color: "#475569", borderBottom: "1px solid #000", padding: "2px 4px", textTransform: "uppercase", letterSpacing: "0.03em" };
+const taLabelTd = { fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em", color: "#64748b", whiteSpace: "nowrap", padding: "2px 8px 2px 0" };
+const taCell = { padding: "2px 4px", borderLeft: "1px solid #e2e8f0", verticalAlign: "bottom" };
+// Editable/value cells share the same underline as a write-in line so the
+// printout is identical to the paper sheet.
+const taVal = { display: "block", fontSize: 11, fontWeight: 700, borderBottom: "1px solid #94a3b8", minHeight: 15, color: "#000" };
+const taInp = { border: "none", borderBottom: "1px solid #94a3b8", outline: "none", fontSize: 11, fontWeight: 700, padding: "0 2px", width: "100%", background: "transparent", color: "#000", boxSizing: "border-box" };
 
 // One labeled header field (write-in on the printout).
 function Field({ label, value }) {
@@ -79,25 +85,20 @@ function Field({ label, value }) {
   );
 }
 
-// One compact reading cell: small caps label over a value/write-in line. A value
-// (a mirrored recipe field) prints on the line; otherwise the line is blank.
-function Reading({ label, value }) {
+// One reading row: label + Target cell + Actual cell. `editable` binds the
+// Target to the recipe's `process` map (persists, prints next time); otherwise
+// Target shows a static value (a mirror) or a blank line. Actual is always blank.
+function ReadingRow({ label, editable, value, placeholder, onChange }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <span style={readingLabel}>{label}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, borderBottom: "1px solid #94a3b8", minHeight: 16 }}>{value ||" "}</span>
-    </div>
-  );
-}
-
-// An editable reading cell bound to the recipe's `process` map. Looks identical
-// to a write-in line; typing persists to the recipe and prints next time.
-function ReadingInput({ label, value, placeholder, onChange }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <span style={readingLabel}>{label}</span>
-      <input type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={readingInp} />
-    </div>
+    <tr>
+      <td style={taLabelTd}>{label}</td>
+      <td style={taCell}>
+        {editable
+          ? <input type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={taInp} />
+          : <span style={taVal}>{value || " "}</span>}
+      </td>
+      <td style={taCell}><span style={taVal}>&nbsp;</span></td>
+    </tr>
   );
 }
 
@@ -145,41 +146,49 @@ function BrewSheetPage({ sheet, batchLabel, process, onProcess }) {
     <div className="brew-page" style={{ width: "100%", maxWidth: 1040, margin: "0 auto 24px", border: "1px solid #cbd5e1", borderRadius: 8, padding: 16, background: "#fff", color: "#000" }}>
       {/* Header band */}
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 10 }}>
-        <div style={{ flex: 2 }}>
+        <div style={{ flex: "0 1 auto", maxWidth: 260 }}>
           <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{sheet.name}</div>
           <div style={{ fontSize: 13, color: "#475569", fontWeight: 600 }}>{sheet.style}</div>
         </div>
-        <div style={{ flex: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Field label="Serial" />
-          <Field label="Batch" value={batchLabel ?? undefined} />
-          <Field label="Date" />
-          <Field label="Brewer" />
-        </div>
-        <div style={{ flex: 2, display: "flex", gap: 10 }}>
-          <Field label="Target OG" value={target(sheet.og)} />
-          <Field label="Target FG" value={target(sheet.fg)} />
-          <Field label="ABV %" value={target(sheet.abv)} />
-          <Field label="Mash °F" value={target(sheet.mashTemp)} />
+        <div style={{ flex: 1, display: "flex", gap: 20, alignItems: "flex-start" }}>
+          {/* Date / Brewer */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+            <Field label="Date" />
+            <Field label="Brewer(s)" />
+          </div>
+          {/* Serial / Batch */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+            <Field label="Serial" />
+            <Field label="Batch" value={batchLabel ?? undefined} />
+          </div>
+          {/* Right-aligned 2×2: OG · FG / Mash · ABV */}
+          <div style={{ marginLeft: "auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
+            <Field label="Target OG" value={target(sheet.og)} />
+            <Field label="Target FG" value={target(sheet.fg)} />
+            <Field label="Mash °F" value={target(sheet.mashTemp)} />
+            <Field label="ABV %" value={target(sheet.abv)} />
+          </div>
         </div>
       </div>
 
-      {/* Three-column body — mirrors the paper template: adds + notes | grain +
-          hops | the full readings stack. */}
-      <div style={{ display: "grid", gridTemplateColumns: "0.85fr 1.15fr 1.25fr", gap: 12, alignItems: "start" }}>
-        {/* Col 1 — Mash Adds / Sparge Adds / Boil Adds + Notes */}
+      {/* Body — a left region (adds | grain + hops, with a Notes box spanning
+          both along the bottom) beside the full readings stack. */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1.25fr", gap: 12, alignItems: "stretch" }}>
+        {/* Left region — two columns up top, full-width Notes below (fills the
+            dead space under the shorter column). */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "0.85fr 1.15fr", gap: 12, alignItems: "start" }}>
+            {/* Col 1 — Mash Adds / Sparge Adds / Boil Adds */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <SaltBox title="Mash Adds (g)" rows={saltRows("mash", MASH_SALTS)} />
           {spargeSalts.length > 0 && (
             <SaltBox title="Sparge Adds (g)" rows={spargeSalts.map((s) => ({ name: s.name, qty: s.qty }))} extraBlanks={1} />
           )}
           <SaltBox title="Boil Adds (g)" rows={saltRows("boil", BOIL_SALTS)} />
-          <div style={{ ...sheetBox, flex: 1, minHeight: 120 }}>
-            <div style={sectTitle}>Notes</div>
-          </div>
-        </div>
+            </div>
 
-        {/* Col 2 — Grain bill + hops/additions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Col 2 — Grain bill + hops/additions */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={sheetBox}>
             <div style={sectTitle}>Grain Bill (lbs)</div>
             <table style={tbl}>
@@ -206,18 +215,18 @@ function BrewSheetPage({ sheet, batchLabel, process, onProcess }) {
               <thead>
                 <tr>
                   <th style={miniTh}>Item</th>
-                  <th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
                   <th style={miniTh}>Stage</th>
                   <th style={{ ...miniTh, textAlign: "right" }}>Min</th>
+                  <th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
                 </tr>
               </thead>
               <tbody>
                 {sheet.additions.map((a, i) => (
                   <tr key={i}>
                     <td style={miniTd}>{a.name}</td>
-                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700 }}>{a.qty} {a.unit}</td>
                     <td style={{ ...miniTd, textTransform: "capitalize" }}>{a.stage}</td>
                     <td style={{ ...miniTd, textAlign: "right" }}>{a.time}</td>
+                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700 }}>{a.qty} {a.unit}</td>
                   </tr>
                 ))}
                 {Array.from({ length: HOP_BLANKS }).map((_, i) => (
@@ -228,24 +237,46 @@ function BrewSheetPage({ sheet, batchLabel, process, onProcess }) {
               </tbody>
             </table>
           </div>
+            </div>
+          </div>
+          {/* Notes — spans both columns of the left region, growing to fill the
+              height left under the shorter column. */}
+          <div style={{ ...sheetBox, flex: 1, minHeight: 120 }}>
+            <div style={sectTitle}>Notes</div>
+          </div>
         </div>
 
         {/* Col 3 — Process readings (Mash / Boil / Whirlpool-Knockout), 1:1 with
-            the paper template, laid out two-up. */}
+            the paper template. Each reading is a Target (planned, pre-filled from
+            the recipe where known) + Actual (blank, filled on brew day) pair. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {READING_GROUPS.map((group) => (
             <div key={group.title} style={sheetBox}>
               <div style={sectTitle}>{group.title}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
-                {group.fields.map((f, i) => {
-                  if (f.key) {
-                    const cur = f.key in process ? process[f.key] : (f.def ?? "");
-                    return <ReadingInput key={i} label={f.label} value={cur} placeholder={f.def} onChange={(v) => onProcess(f.key, v)} />;
-                  }
-                  if (f.mirror) return <Reading key={i} label={f.label} value={target(sheet[f.mirror])} />;
-                  return <Reading key={i} label={f.label} />;
-                })}
-              </div>
+              <table style={{ ...tbl, tableLayout: "fixed" }}>
+                <colgroup>
+                  <col />
+                  <col style={{ width: 66 }} />
+                  <col style={{ width: 66 }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={{ ...taTh, textAlign: "left" }} />
+                    <th style={taTh}>Target</th>
+                    <th style={taTh}>Actual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.fields.map((f, i) => {
+                    if (f.key) {
+                      const cur = f.key in process ? process[f.key] : (f.def ?? "");
+                      return <ReadingRow key={i} label={f.label} editable value={cur} placeholder={f.def} onChange={(v) => onProcess(f.key, v)} />;
+                    }
+                    if (f.mirror) return <ReadingRow key={i} label={f.label} value={target(sheet[f.mirror])} />;
+                    return <ReadingRow key={i} label={f.label} />;
+                  })}
+                </tbody>
+              </table>
             </div>
           ))}
         </div>
