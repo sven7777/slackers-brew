@@ -12,6 +12,7 @@
 // schedule supplies WHEN.
 
 import { brewDayStages } from "./defaults";
+import { fmtGravity } from "./gravity";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -78,8 +79,8 @@ export function buildCellarSheet(recipe, brewDate) {
   return {
     name: n,
     style: s,
-    og,
-    fg,
+    og: fmtGravity(og),
+    fg: fmtGravity(fg),
     brewDate: brewDate || null,
     dateBrewed: brewDate ? addDays(brewDate, 0) : null,
     fermTemp: ft ?? null,
