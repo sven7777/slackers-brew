@@ -85,6 +85,7 @@ Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.tes
 
 - **Persist the roadmap to memory by default.** When we make a significant decision, finish a work chunk, or define the next step, save it to project memory so it survives across sessions — keep the relevant roadmap file (e.g. `data-layer-roadmap.md`) current rather than relying on the session todo list (which is ephemeral). Update or prune stale entries instead of duplicating.
 - **Branch → PR workflow.** `main` is protected; land all changes through a PR that passes CI (lint + test + build + CodeQL). Branch prefixes: `feat/`, `fix/`, `chore/`.
+- **Nightly DB backups.** [.github/workflows/backup.yml](.github/workflows/backup.yml) dumps the live Supabase DB every night into the private `slackers-brew-backups` repo (commit-on-change, so its git log is a daily changelog of the data; restore notes in that repo's README). The free tier has no built-in backups — this is the safety net for prod data.
 - **Merge = migrated + deployed.** [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs on every push to `main`: it applies any new Supabase migrations (`supabase db push`; no-op when none), then builds the SPA and sftp-uploads `dist/` to DreamHost (brew.slackersbrewing.com). No manual SQL Editor runs or hand deploys. Secrets it uses: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `DREAMHOST_SSH_KEY` (see [supabase/README.md](supabase/README.md)).
 
 ## Tech Stack
