@@ -40,6 +40,19 @@ and were hand-run in the SQL Editor, so the workflow was first run manually
 (workflow_dispatch) with `repair_baseline: true`, which marks them as applied
 in the history table without re-running them.
 
+## Backups
+
+The Supabase free tier has no built-in backups, so
+[.github/workflows/backup.yml](../.github/workflows/backup.yml) dumps the live
+database nightly (`supabase db dump`: roles, schema, and data) and commits the
+result to the **private** [slackers-brew-backups](https://github.com/sven7777/slackers-brew-backups)
+repo — commits only land on nights something changed, so its history is a
+daily changelog of the DB, and restoring means checking out the last good
+commit (restore procedure in that repo's README). Uses the same
+`SUPABASE_ACCESS_TOKEN`/`SUPABASE_DB_PASSWORD` secrets plus
+`BACKUP_DEPLOY_KEY` (write deploy key for the backups repo). Runs can also be
+triggered manually from the Actions tab.
+
 ## Google sign-in (roadmap Step 7)
 
 The login screen shows a **Continue with Google** button. It only works once the
