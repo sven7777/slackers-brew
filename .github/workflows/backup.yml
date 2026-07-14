@@ -26,7 +26,7 @@ jobs:
           ssh-key: ${{ secrets.BACKUP_DEPLOY_KEY }}
           path: backup
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
 
