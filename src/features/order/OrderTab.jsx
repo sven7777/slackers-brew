@@ -10,7 +10,14 @@ export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, 
     [orders, malts, hops, yeast, adj, recs]
   );
 
-  const toggleOrd = (i,f) => setOrders(p=>p.map((o,idx)=>idx===i?{...o,[f]:!o[f]}:o));
+  // orders is device-local and aligned to recs by index, so it can be shorter
+  // than the shared recipe list (e.g. after an import added a recipe). Read
+  // through ord() and pad on write instead of crashing on a missing entry.
+  const ord = (i) => orders[i] ?? {sel:false,dbl:false};
+  const toggleOrd = (i,f) => setOrders(p=>recs.map((_,idx)=>{
+    const o = p[idx] ?? {sel:false,dbl:false};
+    return idx===i?{...o,[f]:!o[f]}:o;
+  }));
   const anySel = orders.some(o=>o.sel);
   const needOrd = its => its.some(i=>i.order>0);
 
@@ -24,12 +31,12 @@ export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, 
         <div style={{padding:8}}>
           {recs.map((r,i)=>(
             <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'6px 8px',borderBottom:'1px solid #f1f5f9'}}>
-              <input type="checkbox" checked={orders[i].sel} onChange={()=>toggleOrd(i,'sel')} style={{width:18,height:18,accentColor:'#f59e0b'}}/>
-              <span style={{flex:1,fontSize:14,fontWeight:orders[i].sel?600:400}}>{r.n} <span style={{color:'#94a3b8',fontSize:12}}>({r.s})</span></span>
-              {orders[i].sel && (
-                <label style={{display:'flex',alignItems:'center',gap:4,fontSize:12,cursor:'pointer',background:orders[i].dbl?'#fef3c7':'#f1f5f9',padding:'3px 10px',borderRadius:12,fontWeight:600,color:orders[i].dbl?'#92400e':'#64748b'}}>
-                  <input type="checkbox" checked={orders[i].dbl} onChange={()=>toggleOrd(i,'dbl')} style={{accentColor:'#f59e0b'}}/>
-                  {orders[i].dbl?'Double':'Single'}
+              <input type="checkbox" checked={ord(i).sel} onChange={()=>toggleOrd(i,'sel')} style={{width:18,height:18,accentColor:'#f59e0b'}}/>
+              <span style={{flex:1,fontSize:14,fontWeight:ord(i).sel?600:400}}>{r.n} <span style={{color:'#94a3b8',fontSize:12}}>({r.s})</span></span>
+              {ord(i).sel && (
+                <label style={{display:'flex',alignItems:'center',gap:4,fontSize:12,cursor:'pointer',background:ord(i).dbl?'#fef3c7':'#f1f5f9',padding:'3px 10px',borderRadius:12,fontWeight:600,color:ord(i).dbl?'#92400e':'#64748b'}}>
+                  <input type="checkbox" checked={ord(i).dbl} onChange={()=>toggleOrd(i,'dbl')} style={{accentColor:'#f59e0b'}}/>
+                  {ord(i).dbl?'Double':'Single'}
                 </label>
               )}
             </div>
