@@ -39,6 +39,12 @@ jobs:
           supabase db dump -f backup/schema.sql
           supabase db dump -f backup/data.sql --data-only --use-copy
 
+      # pg_dump >= 17.6 stamps each dump with a random "-- \restrict <token>"
+      # comment pair, so no two dumps are byte-identical and commit-on-change
+      # would commit every night. The lines are inert comments — drop them.
+      - name: Strip nondeterministic dump lines
+        run: sed -i -E '/^-- \\(un)?restrict /d' backup/*.sql
+
       - name: Commit and push if changed
         run: |
           cd backup
