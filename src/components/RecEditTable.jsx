@@ -34,13 +34,14 @@ const newRow = (cat, name) => {
 };
 const addItem = (setRecs, ri, cat, name) => {
   if (!name) return;
-  setRecs((p) => p.map((r, i) => (i !== ri ? r : { ...r, [cat]: [...r[cat], newRow(cat, name)] })));
+  setRecs((p) => p.map((r, i) => (i !== ri ? r : { ...r, [cat]: [...(r[cat] ?? []), newRow(cat, name)] })));
 };
 
 // Editable ingredient table for one recipe category. Hops/adjuncts/salts gain
 // Stage (and, for hops/adjuncts, Time) columns; staged categories allow the
-// same ingredient to be added multiple times.
-export default function RecEditTable({ items, cat, names, unit, ri, showUnit, setRecs, addSel, setAddSel }) {
+// same ingredient to be added multiple times. A recipe saved before a category
+// existed (stale localStorage) has no array for it at all, so default to empty.
+export default function RecEditTable({ items = [], cat, names, unit, ri, showUnit, setRecs, addSel, setAddSel }) {
   const cfg = CFG[cat];
   const used = new Set(items.map((x) => x[0]));
   const avail = cfg.dups ? names : names.filter((n) => !used.has(n));

@@ -1,0 +1,59 @@
+name: Backup
+
+# Nightly dump of the live Supabase database, committed to the private
+# sven7777/slackers-brew-backups repo. A commit only lands when something
+# changed, so that repo's history reads as a daily changelog of the DB.
+# The Supabase free tier has no built-in backups — this is the backup.
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # ~3am Central, nightly
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out backups repo
+        uses: actions/checkout@v7
+        with:
+          repository: sven7777/slackers-brew-backups
+          ssh-key: ${{ secrets.BACKUP_DEPLOY_KEY }}
+          path: backup
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref oqmalafznazxqtzbapnu
+
+      - name: Dump database
+        run: |
+          supabase db dump -f backup/roles.sql --role-only
+          supabase db dump -f backup/schema.sql
+          supabase db dump -f backup/data.sql --data-only --use-copy
+
+      # pg_dump >= 17.6 stamps each dump with a random "-- \restrict <token>"
+      # comment pair, so no two dumps are byte-identical and commit-on-change
+      # would commit every night. The lines are inert comments — drop them.
+      - name: Strip nondeterministic dump lines
+        run: sed -i -E '/^-- \\(un)?restrict /d' backup/*.sql
+
+      - name: Commit and push if changed
+        run: |
+          cd backup
+          git config user.name "slackers-brew-ci"
+          git config user.email "ci@slackersbrewing.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No database changes since last backup."
+            exit 0
+          fi
+          git commit -m "Backup $(date -u +%Y-%m-%d\ %H:%MZ)"
+          git push
