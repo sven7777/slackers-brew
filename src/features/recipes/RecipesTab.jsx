@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import RecEditTable from "../../components/RecEditTable";
 import ScheduleEditTable from "../../components/ScheduleEditTable";
 import ImportBeerSmith from "./ImportBeerSmith";
@@ -31,6 +31,15 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState("edit");
   const r = recs[selR];
+
+  // selR is device-local while recs is shared, so a stale index can point past
+  // the list (e.g. the recipe list shrank, or shared data hasn't loaded yet).
+  // Render nothing for that frame and snap the selection back to the first
+  // recipe instead of crashing on r.og below.
+  useEffect(() => {
+    if (!r && recs.length) setSelR(0);
+  }, [r, recs.length, setSelR]);
+  if (!r) return null;
 
   const resetRec = (ri) => {
     if (window.confirm(`Reset "${recs[ri].n}" to original recipe?`)) {
