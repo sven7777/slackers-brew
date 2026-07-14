@@ -21,7 +21,7 @@ either way.
     additions, mash details, and water salts (single or double batch).
   - **Cellar Sheet** — generate a printable post-brew cellar log. Enter a brew
     date and the recipe's day-offset schedule auto-fills every dated box (cold
-    crash, bung, dry hop, rouse, transfer, keg) alongside its yeast, dry-hop
+    crash, bung, dry hop, rouse, transfer, carb, keg) alongside its yeast, dry-hop
     varieties, and cellar additions.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
