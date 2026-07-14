@@ -163,10 +163,8 @@ function CellarSheetPage({ sheet }) {
             </table>
           </div>
 
-          <TABox title="Rousing"
-            rows={sheet.rouse.length
-              ? sheet.rouse.map((d) => ({ label: "Rouse", target: d }))
-              : [{ label: "Rouse", target: null }]} />
+          <TABox title="Rousing" empty="No rouse."
+            rows={sheet.rouse.map((d) => ({ label: "Rouse", target: d }))} />
 
           <div style={sheetBox}>
             <div style={sectTitle}>Misc. Additions</div>
