@@ -19,6 +19,27 @@ data model and row-level-security rationale.
 5. **Auth → Providers:** enable **Email (magic link)** to start, and **Google**
    for one-click sign-in without the magic-link email rate limit (see below).
 
+## Migrations
+
+Schema/data changes after the initial `schema.sql` live in
+[migrations/](migrations/) as ordered `NNNN_name.sql` files. They are applied
+to the live database **automatically by CI**: merging to `main` runs the
+`migrate` job in [.github/workflows/deploy.yml](../.github/workflows/deploy.yml)
+(`supabase link` + `supabase db push`). The CLI keeps a migration-history table
+on the remote, so only unseen files run — merges with no new migration are a
+no-op. Keep migrations additive and idempotent where possible, since they run
+unattended against production.
+
+Secrets the workflow needs (repo → Settings → Secrets and variables → Actions):
+`SUPABASE_ACCESS_TOKEN` (personal access token), `SUPABASE_DB_PASSWORD`,
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `DREAMHOST_SSH_KEY`
+(deploy key for the sftp upload).
+
+One-time bootstrap (already done): migrations 0001–0005 predate this workflow
+and were hand-run in the SQL Editor, so the workflow was first run manually
+(workflow_dispatch) with `repair_baseline: true`, which marks them as applied
+in the history table without re-running them.
+
 ## Google sign-in (roadmap Step 7)
 
 The login screen shows a **Continue with Google** button. It only works once the
