@@ -5,7 +5,7 @@ import { card, btn } from "../../styles";
 // Cellar panel (Recipes ▸ Cellar Sheet): for the recipe selected in the Recipes
 // tab, enter a brew date, and the printable cellar log auto-fills every dated box
 // from the recipe's day-offset schedule (cold crash, bung, dry hop, rouse,
-// transfer, keg) plus its yeast / dry-hop / cellar additions. This sheet hangs on
+// transfer, carb, keg) plus its yeast / dry-hop / cellar additions. This sheet hangs on
 // a clipboard on the fermenter, so it prints PORTRAIT US Letter.
 //
 // Every scheduled step follows the Brew Day sheet's Target/Actual convention: the
@@ -233,6 +233,7 @@ function CellarSheetPage({ sheet }) {
               <thead><tr><th style={{ ...taTh, textAlign: "left" }} /><th style={taTh}>Target</th><th style={taTh}>Actual</th></tr></thead>
               <tbody>
                 <TARow label="Transfer" target={sheet.transfer} />
+                <TARow label="Carb Date" target={sheet.carb} />
                 <TARow label="Carb Level" target={null} />
                 <TARow label="Carb Time" target={null} />
                 <TARow label="Finished Beer" target={null} />

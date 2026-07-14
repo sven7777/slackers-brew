@@ -39,11 +39,11 @@ export const saltStages = ["mash","sparge","boil"];
 // Cellar Summary schedule actions. A recipe's `sc` list is [[dayOffset, action], …];
 // entering a brew date on the Cellar Summary sheet computes each action's date
 // (brewDate + dayOffset) and routes it to the matching box (cold crash, bung,
-// dry hop, rouse, transfer, keg). Free text is allowed; this is the picker list.
+// dry hop, rouse, transfer, carb, keg). Free text is allowed; this is the picker list.
 export const cellarActions = [
   "Brew Date","Step Crash 55","Step Crash 40","Step Crash 33",
   "Bung | Pressure","Blow Off","Mini Blow Off","Dry Hop","Rouse",
-  "Transfer","Keg",
+  "Transfer","Carb","Keg",
 ];
 
 export const defRecipes = [

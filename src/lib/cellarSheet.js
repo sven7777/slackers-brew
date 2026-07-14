@@ -6,7 +6,7 @@
 // The recipe's per-day SCHEDULE (`sc`: [[day, action], …]) is the spine of the
 // sheet: given a brew date, every action's calendar date is brewDate + day, and
 // those dates fan out into the named boxes (cold crash, bung, dry hop, rouse,
-// transfer, keg). Without a brew date the schedule still lists day offsets and
+// transfer, carb, keg). Without a brew date the schedule still lists day offsets and
 // every dated box is left blank for hand-entry. The recipe supplies WHAT (yeast,
 // fermentation temp, dry-hop varieties + amounts, cellar additions); the
 // schedule supplies WHEN.
@@ -68,6 +68,7 @@ export function buildCellarSheet(recipe, brewDate) {
   const rouse = datesOf(is("rouse"));
   const bung = firstDate((act) => act.toLowerCase().startsWith("bung"));
   const transfer = firstDate(is("transfer"));
+  const carb = firstDate(is("carb"));
   const keg = firstDate(is("keg"));
 
   // Misc cellar additions = adjuncts added off brew day (fermentation, secondary,
@@ -91,6 +92,7 @@ export function buildCellarSheet(recipe, brewDate) {
     rouse,
     bung,
     transfer,
+    carb,
     keg,
     misc,
     schedule,

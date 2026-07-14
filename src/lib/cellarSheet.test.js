@@ -104,6 +104,12 @@ describe('buildCellarSheet', () => {
     expect(buildCellarSheet(recipe, '2026-07-01').rouse).toEqual(['Tue 7/14']); // day 13
   });
 
+  it('routes the carb date, null when unscheduled', () => {
+    const withCarb = { ...recipe, sc: [...recipe.sc, [21, 'Carb']] };
+    expect(buildCellarSheet(withCarb, '2026-07-01').carb).toBe('Wed 7/22'); // day 21
+    expect(buildCellarSheet(recipe, '2026-07-01').carb).toBeNull();
+  });
+
   it('handles a recipe with an empty schedule', () => {
     const s = buildCellarSheet({ n: 'X', s: 'Y', m: [], h: [], y: [], a: [], sc: [] }, '2026-07-01');
     expect(s.schedule).toEqual([]);
