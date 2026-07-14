@@ -31,9 +31,19 @@ describe('buildBrewSheet', () => {
     expect(buildBrewSheet(undefined)).toBeNull();
   });
 
-  it('passes header targets and mash temp through', () => {
+  it('formats header gravities to 3 decimals and passes mash temp through', () => {
     const s = buildBrewSheet(recipe);
-    expect(s).toMatchObject({ name: 'Test IPA', style: 'American IPA', og: 1.06, fg: 1.012, abv: 6.3, mashTemp: 152 });
+    expect(s).toMatchObject({ name: 'Test IPA', style: 'American IPA', og: '1.060', fg: '1.012', mashTemp: 152 });
+  });
+
+  it('computes ABV from the target gravities, ignoring a stale stored abv', () => {
+    expect(buildBrewSheet(recipe).abv).toBe(6.3); // (1.060 − 1.012) × 131.25
+    expect(buildBrewSheet({ ...recipe, abv: 9.9 }).abv).toBe(6.3);
+  });
+
+  it('falls back to the stored abv when gravities are missing', () => {
+    expect(buildBrewSheet({ ...recipe, og: null }).abv).toBe(6.3);
+    expect(buildBrewSheet({ ...recipe, og: null, abv: 7.1 }).abv).toBe(7.1);
   });
 
   it('coerces missing targets to null', () => {
