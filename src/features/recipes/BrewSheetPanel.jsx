@@ -8,17 +8,19 @@ import { card, btn } from "../../styles";
 // (#1, #2) at single-batch amounts.
 //
 // Process readings (col 3) carried 1:1 from the paper Brew Day template. A field
-// is one of three kinds:
+// is one of four kinds:
 //   key:    editable + persisted on the recipe's `process` map (planned values
 //           the brewer sets once: strike temp, volumes, timings, pH targets, …).
 //           `def` is the pre-printed default shown until it's overridden.
 //   mirror: read-only, echoes a value already on the recipe (Mash Temp = mt).
+//   check:  a prep step done on brew day (water cycled, pH meter calibrated) —
+//           prints an empty checkbox to tick by pen; never stored.
 //   plain:  a blank write-in line for measurements taken on brew day (actual
 //           gravities, yields, pH readings) — never stored.
 const READING_GROUPS = [
   { title: "Mash", fields: [
-    { label: "Mill Time" }, { label: "Water pH (hot)", key: "waterPh", def: "8.4" },
-    { label: "Water Cycled" }, { label: "pH Calibrated" },
+    { label: "Mill Time", key: "millTime" }, { label: "Water pH (hot)", key: "waterPh", def: "8.4" },
+    { label: "Water Cycled", check: true }, { label: "pH Calibrated", check: true },
     { label: "Strike Temp", key: "strikeTemp" }, { label: "Mash Volume", key: "mashVolume" },
     { label: "Mash Temp", mirror: "mashTemp" }, { label: "Sparge Volume", key: "spargeVolume" },
     { label: "Vorlauf Time", key: "vorlaufTime" }, { label: "pH Vorlauf", key: "phVorlauf" },
@@ -98,6 +100,20 @@ function ReadingRow({ label, editable, value, placeholder, onChange }) {
           : <span style={taVal}>{value || " "}</span>}
       </td>
       <td style={taCell}><span style={taVal}>&nbsp;</span></td>
+    </tr>
+  );
+}
+
+// A brew-day prep step: label + an empty checkbox in the Actual column, ticked
+// by pen on the printed sheet (like the blank write-in lines, never stored).
+function CheckRow({ label }) {
+  return (
+    <tr>
+      <td style={taLabelTd}>{label}</td>
+      <td style={taCell} />
+      <td style={{ ...taCell, textAlign: "center", verticalAlign: "middle" }}>
+        <span style={{ display: "inline-block", width: 11, height: 11, border: "1.5px solid #000", borderRadius: 2 }} />
+      </td>
     </tr>
   );
 }
@@ -273,6 +289,7 @@ function BrewSheetPage({ sheet, batchLabel, process, onProcess }) {
                       return <ReadingRow key={i} label={f.label} editable value={cur} placeholder={f.def} onChange={(v) => onProcess(f.key, v)} />;
                     }
                     if (f.mirror) return <ReadingRow key={i} label={f.label} value={target(sheet[f.mirror])} />;
+                    if (f.check) return <CheckRow key={i} label={f.label} />;
                     return <ReadingRow key={i} label={f.label} />;
                   })}
                 </tbody>
