@@ -7,6 +7,7 @@
 // Yeast never prints on the Brew Day sheet (it belongs on the Cellar Summary).
 
 import { brewDayStages, saltStages } from "./defaults";
+import { fmtGravity, computeAbv } from "./gravity";
 
 // Stage display order for the additions schedule. Only brew-day stages print
 // here; cellar-stage additions (dry hop, fermentation, secondary, …) route to
@@ -41,9 +42,11 @@ export function buildBrewSheet(recipe) {
   return {
     name: n,
     style: s,
-    og: og ?? null,
-    fg: fg ?? null,
-    abv: abv ?? null,
+    og: fmtGravity(og),
+    fg: fmtGravity(fg),
+    // ABV is derived from the target gravities when both are set; a stored
+    // recipe abv only fills in when they aren't (e.g. hand-entered presets).
+    abv: computeAbv(og, fg) ?? abv ?? null,
     mashTemp: mt ?? null,
     grainBill,
     totalGrain,

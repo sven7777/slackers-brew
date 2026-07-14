@@ -37,6 +37,12 @@ describe('buildCellarSheet', () => {
     expect(s.schedule.every((row) => row.date === null)).toBe(true);
   });
 
+  it('formats target gravities to 3 decimals, null when unset', () => {
+    const s = buildCellarSheet({ ...recipe, og: 1.06, fg: 1.01 });
+    expect(s).toMatchObject({ og: '1.060', fg: '1.010' });
+    expect(buildCellarSheet(recipe)).toMatchObject({ og: null, fg: null });
+  });
+
   it('orders the schedule by day, stable within a day', () => {
     const s = buildCellarSheet(recipe);
     expect(s.schedule.slice(0, 3).map((r) => [r.day, r.action])).toEqual([
