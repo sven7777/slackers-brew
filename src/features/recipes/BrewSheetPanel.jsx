@@ -8,15 +8,15 @@ import { card, btn } from "../../styles";
 // (#1, #2) at single-batch amounts.
 //
 // Process readings (col 3) carried 1:1 from the paper Brew Day template. A field
-// is one of four kinds:
-//   key:    editable + persisted on the recipe's `process` map (planned values
-//           the brewer sets once: strike temp, volumes, timings, pH targets, …).
-//           `def` is the pre-printed default shown until it's overridden.
+// is one of three kinds:
+//   key:    editable + persisted on the recipe's `process` map (planned Target
+//           values the brewer sets once: strike temp, volumes, timings, pH and
+//           gravity/yield targets, …). `def` is the pre-printed default shown
+//           until it's overridden. The Actual column stays a blank write-in for
+//           the brew-day measurement.
 //   mirror: read-only, echoes a value already on the recipe (Mash Temp = mt).
 //   check:  a prep step done on brew day (water cycled, pH meter calibrated) —
 //           prints an empty checkbox to tick by pen; never stored.
-//   plain:  a blank write-in line for measurements taken on brew day (actual
-//           gravities, yields, pH readings) — never stored.
 const READING_GROUPS = [
   { title: "Mash", fields: [
     { label: "Mill Time", key: "millTime" }, { label: "Water pH (hot)", key: "waterPh", def: "8.4" },
@@ -27,9 +27,9 @@ const READING_GROUPS = [
     { label: "Runoff Time", key: "runoffTime" },
   ] },
   { title: "Boil", fields: [
-    { label: "Pre-Boil (SG)" }, { label: "Pre-Boil Yield" },
-    { label: "pH Mid-Boil" }, { label: "Boil Time", key: "boilTime" },
-    { label: "Post-Boil (SG)" }, { label: "Post-Boil Yield" },
+    { label: "Pre-Boil (SG)", key: "preBoilSg" }, { label: "Pre-Boil Yield", key: "preBoilYield" },
+    { label: "pH Mid-Boil", key: "phMidBoil" }, { label: "Boil Time", key: "boilTime" },
+    { label: "Post-Boil (SG)", key: "postBoilSg" }, { label: "Post-Boil Yield", key: "postBoilYield" },
   ] },
   { title: "Whirlpool / Knockout", fields: [
     { label: "WP Time", key: "wpTime" }, { label: "WP Temp", key: "wpTemp" },
