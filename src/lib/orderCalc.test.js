@@ -62,6 +62,16 @@ describe('computeOrder', () => {
     const res = calc([{ sel: true, dbl: false }, { sel: false, dbl: false }], inv);
     expect(res.adj[0]).toEqual({ n: 'Lactose', need: 5, have: 2, order: 3, u: 'lbs' });
   });
+
+  it('ignores a selected entry past the recipe list (stale device-local orders)', () => {
+    // orders is per-device and aligned by index, so it can outlive a shrunken
+    // shared recipe list (e.g. after the duplicate-recipe cleanup).
+    const res = calc([
+      { sel: false, dbl: false }, { sel: true, dbl: false },
+      { sel: true, dbl: true }, // no recs[2] — must be skipped, not crash
+    ]);
+    expect(res.malts).toEqual([{ n: '2-Row', need: 50, have: 0, order: 50 }]);
+  });
 });
 
 describe('maltBags', () => {

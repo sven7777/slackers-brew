@@ -40,11 +40,27 @@ export function usePersistentState(key, fallback) {
   // Persist on change. Skip while a load is still in flight or errored (don't
   // clobber stored data with the fallback), and skip the first settled run so
   // the freshly-hydrated value isn't written straight back.
+  //
+  // Saves are chained, never concurrent: an async backend save is a
+  // delete-then-insert, so two overlapping saves can interleave their phases
+  // and duplicate every row (2026-07-14 incident: two saves 17 ms apart
+  // doubled the recipe catalog). Each save waits for the previous one, and
+  // queued-up changes coalesce so only the newest value is written.
   const skipSave = useRef(true);
+  const queue = useRef({ chain: Promise.resolve(), next: null, dirty: false });
   useEffect(() => {
     if (state.loading || state.error) return;
     if (skipSave.current) { skipSave.current = false; return; }
-    save(key, state.val);
+    const q = queue.current;
+    q.next = state.val;
+    q.dirty = true;
+    q.chain = q.chain
+      .then(() => {
+        if (!q.dirty) return; // a later link already saved a newer value
+        q.dirty = false;
+        return save(key, q.next);
+      })
+      .catch((e) => console.error(`Failed to save "${key}"`, e));
   }, [key, state.val, state.loading, state.error]);
 
   const setVal = (updater) =>
