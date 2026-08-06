@@ -1,6 +1,8 @@
 import { usePersistentState } from "./hooks/usePersistentState";
 import { defMalts, defHops, defYeast, defAdj, defRecipes, defSettings, tabNames } from "./lib/defaults";
 import { tabBtn } from "./styles";
+import ErrorBoundary from "./components/ErrorBoundary";
+import SaveErrorBanner from "./components/SaveErrorBanner";
 import InventoryTab from "./features/inventory/InventoryTab";
 import RecipesTab from "./features/recipes/RecipesTab";
 import OrderTab from "./features/order/OrderTab";
@@ -32,10 +34,16 @@ export default function App() {
         {tabNames.map((t,i)=><button key={i} style={tabBtn(tab===i)} onClick={()=>setTab(i)}>{t}</button>)}
       </div>
 
-      {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
-      {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR}/>}
-      {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
-      {tab===3 && <SettingsTab settings={settings} setSettings={setSettings}/>}
+      <SaveErrorBanner/>
+
+      {/* Keyed by tab so switching tabs clears a crashed panel — the nav stays
+          outside the boundary, so a broken tab is always escapable. */}
+      <ErrorBoundary key={tab}>
+        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
+        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR}/>}
+        {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
+        {tab===3 && <SettingsTab settings={settings} setSettings={setSettings}/>}
+      </ErrorBoundary>
     </div>
   );
 }
