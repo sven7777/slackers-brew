@@ -50,7 +50,8 @@ The Brew Sheet / Cellar Sheet panels take the selected `recipe` as a prop (the s
 ## Data Model
 
 Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
-- `defMalts` — 19 malts, quantity in lbs
+- `defMalts` — 20 malts, quantity in lbs (Carafa III and Carafa Special III are
+  distinct entries — "Special" is the dehusked malt; don't collapse them)
 - `defHops` — 14 hops, quantity in oz
 - `defYeast` — 8 yeast strains, quantity in packs
 - `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)
