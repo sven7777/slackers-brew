@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import LoginGate from './features/auth/LoginGate.jsx'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { setBackend } from './lib/repo'
@@ -16,8 +17,12 @@ if (isSupabaseConfigured) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <LoginGate>
-      <App />
-    </LoginGate>
+    {/* Outer net for anything above the tab panel — login, the header, a
+        failed backend init. App has its own per-tab boundary inside this. */}
+    <ErrorBoundary hint="Reload the page to start over.">
+      <LoginGate>
+        <App />
+      </LoginGate>
+    </ErrorBoundary>
   </React.StrictMode>,
 )

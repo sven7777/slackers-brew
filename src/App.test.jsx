@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
+import { reportFailure, resetFailures } from './lib/saveStatus';
 
 describe('App', () => {
   it('renders the header and all four tabs', () => {
@@ -62,5 +63,24 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     expect(screen.getByText('💾 Data Backup')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Export backup/i })).toBeInTheDocument();
+  });
+});
+
+// SaveErrorBanner is mounted by the shell, so testing the component alone
+// would still pass if App never rendered it.
+describe('App save-failure surface', () => {
+  beforeEach(() => act(() => resetFailures()));
+
+  it('shows no banner while saves are healthy', () => {
+    render(<App />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('surfaces a failed save without disturbing the tabs', async () => {
+    render(<App />);
+    act(() => reportFailure('recipes', new Error('duplicate key'), vi.fn()));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByText(/Recipes didn’t save/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Inventory' })).toBeInTheDocument();
   });
 });

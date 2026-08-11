@@ -16,10 +16,14 @@
 // state, which suppresses the save.
 //
 // KNOWN LIMITATION: the app saves a whole array per change, so save() replaces
-// every row for that key (delete-then-insert). Two brewers editing different
-// ingredients in the same window can still clobber each other — eliminating
-// that needs per-field writes at the app layer, a later step. Rows (not one
-// JSON blob) are the prerequisite for that; this lays the groundwork.
+// every row for that key (delete-then-insert). Same-client saves are
+// serialized by usePersistentState (two in flight at once interleaved their
+// delete/insert phases and doubled the recipes on 2026-07-14; a unique index
+// on recipes.ord now makes that fail loudly instead). Two brewers editing
+// different ingredients in the same window can still clobber each other —
+// eliminating that needs per-field writes at the app layer, a later step.
+// Rows (not one JSON blob) are the prerequisite for that; this lays the
+// groundwork.
 
 import { localStorageBackend } from "./storage";
 

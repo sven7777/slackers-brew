@@ -14,7 +14,9 @@ export function computeOrder({ orders, recs, malts, hops, yeast, adj }) {
   const need = { malts: {}, hops: {}, yeast: {}, adj: {} };
   orders.forEach((o, i) => {
     if (!o.sel) return;
-    const mult = o.dbl ? 2 : 1, r = recs[i];
+    const r = recs[i];
+    if (!r) return; // stale device-local selection past the shared recipe list
+    const mult = o.dbl ? 2 : 1;
     r.m.forEach(([n, q]) => { need.malts[n] = (need.malts[n] || 0) + q * mult; });
     r.h.forEach(([n, q]) => { need.hops[n] = (need.hops[n] || 0) + q * mult; });
     r.y.forEach(([n, q]) => { need.yeast[n] = (need.yeast[n] || 0) + q * mult; });
