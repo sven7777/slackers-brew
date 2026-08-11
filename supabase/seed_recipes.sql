@@ -186,7 +186,7 @@ insert into recipe_ingredients (recipe_id, category, name, qty, unit, stage, tim
 select r.id, v.category, v.name, v.qty::numeric, v.unit::text, v.stage::text, v.time_min::numeric, v.ord
 from r, (values
     ('malt', 'Pils', 185, null, null, null, 0),
-    ('malt', 'Carafe III', 15, null, null, null, 1),
+    ('malt', 'Carafa Special III', 15, null, null, null, 1),
     ('malt', 'Carafoam', 8, null, null, null, 2),
     ('malt', 'Caramunich I', 8, null, null, null, 3),
     ('hop', 'Centennial', 16, null, 'boil', 60, 0),

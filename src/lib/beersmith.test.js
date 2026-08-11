@@ -63,6 +63,19 @@ describe("parseBeerSmith", () => {
     expect(r.a).toContainEqual(["Coriander", 1, "oz", "boil", 5]);
   });
 
+  // Carafa III (husked) and Carafa Special III (dehusked) are different malts
+  // and both are catalog entries, so each must pass through as itself — an
+  // alias collapsing one onto the other would silently swap the grain bill.
+  it("keeps the two Carafa malts distinct", () => {
+    const { recipes: rs, unmapped: u } = parseBeerSmith(`
+<Recipe><F_R_NAME>Carafa</F_R_NAME>
+<Grain><F_G_NAME>Carafa III</F_G_NAME><F_G_TYPE>0</F_G_TYPE><F_G_AMOUNT>160.0</F_G_AMOUNT></Grain>
+<Grain><F_G_NAME>Carafa Special III</F_G_NAME><F_G_TYPE>0</F_G_TYPE><F_G_AMOUNT>240.0</F_G_AMOUNT></Grain>
+</Recipe>`);
+    expect(rs[0].m).toEqual([["Carafa III", 10], ["Carafa Special III", 15]]);
+    expect(u).toHaveLength(0);
+  });
+
   it("flags ingredients with no catalog match for user mapping", () => {
     expect(unmapped).toContainEqual({ category: "malt", raw: "Mystery Malt" });
     expect(unmapped).toContainEqual({ category: "adj", raw: "Pixie Dust" });
