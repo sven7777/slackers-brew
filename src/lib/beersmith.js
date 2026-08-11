@@ -23,12 +23,16 @@ import { maltNames, hopNames, yeastNames, adjNames, adjUnits, saltNames } from "
 // --- name normalization (BeerSmith -> app catalog) -------------------------
 // Only non-identity mappings are listed; a raw name that already equals an app
 // catalog entry passes through unchanged. Keys are trimmed before lookup.
+//
+// Do not alias "Carafa III" and "Carafa Special III" onto each other: Special
+// is the dehusked malt, and they are separate catalog entries. (The catalog
+// once misspelled the dehusked one "Carafe III" and this map papered over it;
+// migration 0007 split them.)
 
 const ALIAS_MALT = {
   "Aromatic Malt": "Aromatic",
   "Black (Patent) Malt": "Black Patent",
   "Cara-Pils/Dextrine": "Carafoam",
-  "Carafa III": "Carafe III",
   "Caramunich Type 1": "Caramunich I",
   "Chocolate Malt": "Chocolate",
   "Corn, Flaked": "Flaked Corn",
