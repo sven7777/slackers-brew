@@ -5,8 +5,8 @@ export const defMalts = [
   ["Pils",0],["2-Row",0],["Maris Otter",0],["Caramunich I",0],
   ["Carafoam",0],["Chocolate",0],["Black Patent",0],["Roasted Barley",0],
   ["White Wheat",0],["Aromatic",0],["Flaked Wheat",0],["Flaked Corn",0],
-  ["Vienna",0],["Munich",0],["Carafe III",0],["Biscuit Malt",0],
-  ["Crystal 80",0],["Flaked Oat",0],["Midnight Wheat",0]
+  ["Vienna",0],["Munich",0],["Carafa III",0],["Carafa Special III",0],
+  ["Biscuit Malt",0],["Crystal 80",0],["Flaked Oat",0],["Midnight Wheat",0]
 ];
 export const defHops = [
   ["Pink Boots 2025",0],["Saaz",0],["CTZ",0],["Willamette",0],
@@ -54,7 +54,7 @@ export const defRecipes = [
   {n:"James",s:"American Brown",og:null,fg:null,abv:null,mt:154,m:[["2-Row",110],["Maris Otter",110],["Caramunich I",35],["Chocolate",15],["Carafoam",10]],h:[["CTZ",10,"boil",60],["Willamette",4,"boil",15]],y:[["S-04",1]],a:[["Clarity Ferm",125,"ml","fermentation",0]],sa:[["Lactic Acid",50,"mash"],["CaSo4",48,"mash"],["Baking Soda",42,"mash"],["Chalk",10,"mash"],["Salt",6,"mash"],["CaSo4",42,"boil"],["Baking Soda",35,"boil"],["Chalk",6,"boil"],["Salt",5,"boil"]]},
   {n:"Leder Jörtsen",s:"Festbier",og:null,fg:null,abv:null,mt:152,m:[["Munich",110],["Pils",110],["Vienna",15],["Carafoam",10],["Caramunich I",10]],h:[["Amarillo",18,"boil",60],["Saaz",8,"boil",20],["Saaz",10,"boil",5]],y:[["K97",1]],a:[["Clarity Ferm",125,"ml","fermentation",0]],sa:[["Chalk",58,"mash"],["Baking Soda",24,"mash"],["Chalk",73,"boil"],["Baking Soda",30,"boil"]]},
   {n:"Mango Unchained",s:"Double IPA",og:null,fg:null,abv:null,mt:152,m:[["2-Row",330],["Flaked Wheat",20],["Carafoam",20],["Caramunich I",20]],h:[["CTZ",36,"boil",60],["Cascade",10,"boil",10],["Amarillo",12,"whirlpool",15],["Cascade",12,"whirlpool",15],["Amarillo",48,"dryhop",0],["Cascade",48,"dryhop",0]],y:[["K97",1]],a:[["Lactose",15,"lbs","boil",5],["Mango Puree",18,"lbs","secondary",0]],sa:[]},
-  {n:"Night Jörts",s:"Czech Dark Lager",og:null,fg:null,abv:null,mt:152,m:[["Pils",185],["Carafe III",15],["Carafoam",8],["Caramunich I",8]],h:[["Centennial",16,"boil",60],["Centennial",6,"boil",5]],y:[["K97",1]],a:[["Clarity Ferm",125,"ml","fermentation",0]],sa:[["CaCl2",27,"mash"],["CaSo4",7,"mash"]]},
+  {n:"Night Jörts",s:"Czech Dark Lager",og:null,fg:null,abv:null,mt:152,m:[["Pils",185],["Carafa Special III",15],["Carafoam",8],["Caramunich I",8]],h:[["Centennial",16,"boil",60],["Centennial",6,"boil",5]],y:[["K97",1]],a:[["Clarity Ferm",125,"ml","fermentation",0]],sa:[["CaCl2",27,"mash"],["CaSo4",7,"mash"]]},
   {n:"Pinkety Drinkety",s:"Cream Ale",og:null,fg:null,abv:null,mt:148,m:[["Pils",165],["Flaked Corn",20],["Carafoam",5]],h:[["CTZ",5,"boil",60],["Saaz",5,"boil",5]],y:[["K97",10]],a:[["Straw/Rhubarb",62,"oz","secondary",0],["Clarity Ferm",125,"ml","fermentation",0]],sa:[]},
   {n:"Red Panda",s:"Belgian Tripel",og:null,fg:null,abv:null,mt:152,m:[["Pils",300],["Caramunich I",20],["Aromatic",15],["Carafoam",12],["Roasted Barley",2]],h:[["CTZ",14,"boil",60],["Saaz",8,"boil",5]],y:[["BE-256",1]],a:[["Honey",18,"lbs","boil",60],["Whirlfloc",12,"each","boil",15]],sa:[["CaSo4",51.87,"mash"],["Chalk",42,"mash"],["CaCl2",20,"mash"],["Salt",15,"mash"],["CaSo4",12,"boil"],["Chalk",10,"boil"],["CaCl2",5,"boil"],["Salt",4,"boil"]]},
   {n:"Scarlett",s:"Red IPA",og:null,fg:null,abv:null,mt:154,m:[["2-Row",110],["Maris Otter",110],["Munich",55],["Caramunich I",30],["Roasted Barley",4]],h:[["Chinook",18,"boil",60],["Centennial",18,"boil",15],["Cascade",18,"boil",10],["Centennial",42,"whirlpool",60],["Cascade",36,"dryhop",0]],y:[["DA-16",1]],a:[],sa:[["CaSo4",68,"mash"],["CaCl2",35,"mash"],["CaSo4",33,"boil"],["CaCl2",18,"boil"]]},

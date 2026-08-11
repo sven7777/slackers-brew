@@ -1,5 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import { load, save } from "../lib/repo";
+import { reportFailure, clearFailure } from "../lib/saveStatus";
+
+// Run one save attempt at the end of the key's chain. Retries go through here
+// too, so a retry can never run alongside a queued save — that overlap is the
+// exact shape of the 2026-07-14 incident described below. Always writes
+// `q.next` (the newest value), so a retry after further edits stores the
+// current state rather than resurrecting the value that failed.
+const flush = (key, q) => {
+  q.chain = q.chain.then(async () => {
+    if (!q.dirty) return; // a later link already saved a newer value
+    q.dirty = false;
+    try {
+      await save(key, q.next);
+      clearFailure(key);
+    } catch (e) {
+      console.error(`Failed to save "${key}"`, e);
+      reportFailure(key, e, () => {
+        q.dirty = true;
+        return flush(key, q);
+      });
+    }
+  });
+  return q.chain;
+};
 
 // useState that hydrates from the data-access layer and persists on every
 // change. `fallback` may be a value or a factory function (use a factory for
@@ -45,7 +69,9 @@ export function usePersistentState(key, fallback) {
   // delete-then-insert, so two overlapping saves can interleave their phases
   // and duplicate every row (2026-07-14 incident: two saves 17 ms apart
   // doubled the recipe catalog). Each save waits for the previous one, and
-  // queued-up changes coalesce so only the newest value is written.
+  // queued-up changes coalesce so only the newest value is written. A failed
+  // save is reported to lib/saveStatus (and surfaced by SaveErrorBanner) —
+  // silently dropping it would leave an unsaved edit looking saved on screen.
   const skipSave = useRef(true);
   const queue = useRef({ chain: Promise.resolve(), next: null, dirty: false });
   useEffect(() => {
@@ -54,13 +80,7 @@ export function usePersistentState(key, fallback) {
     const q = queue.current;
     q.next = state.val;
     q.dirty = true;
-    q.chain = q.chain
-      .then(() => {
-        if (!q.dirty) return; // a later link already saved a newer value
-        q.dirty = false;
-        return save(key, q.next);
-      })
-      .catch((e) => console.error(`Failed to save "${key}"`, e));
+    flush(key, q);
   }, [key, state.val, state.loading, state.error]);
 
   const setVal = (updater) =>

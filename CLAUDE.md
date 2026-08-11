@@ -22,7 +22,8 @@ npm run test:watch # Vitest watch mode
 
 ```
 src/
-  components/   # reusable tables: InvTable, RecEditTable
+  components/   # reusable tables: InvTable, RecEditTable, ScheduleEditTable
+                #   — plus the two failure surfaces: ErrorBoundary, SaveErrorBanner
   features/     # one folder per tab: inventory/, recipes/, order/, settings/
                 #   — plus auth/ (Supabase session + login gate). recipes/ also
                 #   holds the BrewSheetPanel + CellarPanel sub-views.
@@ -45,12 +46,15 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
 
 The Brew Sheet / Cellar Sheet panels take the selected `recipe` as a prop (the shared `selR` picker drives all three views); each owns only its print-specific control (batch toggle / brew date).
 
-**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
+**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
+
+**Crash containment.** [ErrorBoundary](src/components/ErrorBoundary.jsx) wraps the tab panel in App.jsx (keyed by `tab`, so switching tabs clears a crashed panel and the nav — which sits outside it — is always usable) and the whole tree in main.jsx. Three white screens have shipped, each a *different* unguarded read (a missing recipe array, a column prod hadn't migrated yet, a stale `selR` indexing past the end of the list), so the guard is deliberately generic rather than another targeted null check. Keep it that way: prefer fixing the class of failure over adding the next specific check.
 
 ## Data Model
 
 Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
-- `defMalts` — 19 malts, quantity in lbs
+- `defMalts` — 20 malts, quantity in lbs (Carafa III and Carafa Special III are
+  distinct entries — "Special" is the dehusked malt; don't collapse them)
 - `defHops` — 14 hops, quantity in oz
 - `defYeast` — 8 yeast strains, quantity in packs
 - `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)

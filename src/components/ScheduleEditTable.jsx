@@ -4,14 +4,22 @@ import { cell, num, th, inp, rmBtn, addRow, sel, addBtn } from "../styles";
 // Editable cellar schedule for one recipe. A row is [dayOffset, action]; the
 // Cellar Summary sheet turns each into a calendar date (brewDate + day) and
 // routes it to the matching box. Duplicate actions are expected (e.g. several
-// "Blow Off" days), so there is no de-dup. Rows are stored in edit order; the
-// sheet sorts them by day at render time.
+// "Blow Off" days), so there is no de-dup. Rows re-sort by day when a day
+// input is committed (blur, not keystroke, so rows don't jump mid-typing);
+// same-day rows keep their edit order.
 
 const setField = (setRecs, ri, ii, idx, val) =>
   setRecs((p) => p.map((r, i) => {
     if (i !== ri) return r;
     return { ...r, sc: r.sc.map((row, j) => (j !== ii ? row : row.map((v, k) => (k === idx ? val : v)))) };
   }));
+
+const sortRows = (setRecs, ri) =>
+  setRecs((p) => {
+    const sc = [...p[ri].sc].sort((a, b) => a[0] - b[0]);
+    if (!sc.some((row, j) => row !== p[ri].sc[j])) return p; // already in order
+    return p.map((r, i) => (i !== ri ? r : { ...r, sc }));
+  });
 
 const rmRow = (setRecs, ri, ii) =>
   setRecs((p) => p.map((r, i) => (i !== ri ? r : { ...r, sc: r.sc.filter((_, j) => j !== ii) })));
@@ -37,7 +45,8 @@ export default function ScheduleEditTable({ items = [], ri, setRecs, addSel, set
             <tr key={i}>
               <td style={num}>
                 <input type="number" step={1} value={it[0]}
-                  onChange={(e) => setField(setRecs, ri, i, 0, parseInt(e.target.value, 10) || 0)} style={inp} />
+                  onChange={(e) => setField(setRecs, ri, i, 0, parseInt(e.target.value, 10) || 0)}
+                  onBlur={() => sortRows(setRecs, ri)} style={inp} />
               </td>
               <td style={cell}>
                 <select value={it[1]} style={{ ...sel, width: "100%" }}
