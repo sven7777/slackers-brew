@@ -21,6 +21,8 @@ const CATS = [
   { key: "adj", label: "🧪 Adjuncts" },
 ];
 
+// Values arrive from computeRecipeCost() already rounded up to the cent, so
+// toFixed(2) is exact rather than a second rounding.
 const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
 // The cost/unit input is bound to the STORED value, unrounded. Displaying a
 // rounded price here would both disagree with the extended cost beside it
@@ -75,7 +77,7 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
         </div>
         <div style={statBox}>
           <div style={statLabel}>Cost / pint</div>
-          <div style={statValue}>{r.costPerPint == null ? "—" : `$${r.costPerPint.toFixed(3)}`}</div>
+          <div style={statValue}>{money(r.costPerPint)}</div>
         </div>
         <div style={{ ...statBox, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>

@@ -13,7 +13,7 @@
 //
 //   2. Only ONE volume is stored. A half-barrel keg is exactly ½ bbl and a 16 oz
 //      pint exactly 1/248 of one, so cost/keg and cost/pint are derived from
-//      cost/bbl rather than tracked separately — they can never drift apart.
+//      that single volume rather than tracked separately.
 //
 // Water salts (`recipe.sa`) are deliberately excluded: there's no price source,
 // they're dosed in grams, and they come to pennies. The Cost view states that
@@ -25,6 +25,16 @@ const KEGS_PER_BBL = 2; // a half-barrel keg is 15.5 gal
 // of PACKAGED beer — it does not model taproom pour loss (foam, line purge,
 // tasters), so the cost of a pint actually sold is somewhat higher.
 const PINTS_PER_BBL = GAL_PER_BBL * 8;
+
+// Every money figure is rounded UP to the cent. Costing should never come in
+// under what a batch actually costs, so a fraction of a cent always rounds
+// against us.
+//
+// The toFixed(6) is not cosmetic: 185 × 0.724 lands on 133.94000000000003 in
+// binary floating point, and a naive ceil would turn that into $133.95. Kill
+// the float noise first, then ceil.
+export const ceilCents = (n) =>
+  Number.isFinite(n) ? Math.ceil(Number((n * 100).toFixed(6))) / 100 : null;
 
 // Recipe tuple shapes, by category: malt/yeast [name, qty]; hop
 // [name, qty, stage, time]; adjunct [name, qty, unit, stage, time]. Adjuncts
@@ -97,13 +107,15 @@ export function computeRecipeCost({ recipe, priceMap, postBoilGal, lossPct = 0, 
         lines.push({ category: key, name, qty, unit: u, costPerUnit: null, cost: null });
         continue;
       }
-      const cost = qty * cpu;
-      byCategory[key] += cost;
+      // Round the line, then build the totals from rounded lines, so the
+      // column on screen adds up to the total on screen.
+      const cost = ceilCents(qty * cpu);
+      byCategory[key] = ceilCents(byCategory[key] + cost);
       lines.push({ category: key, name, qty, unit: u, costPerUnit: cpu, cost });
     }
   }
 
-  const total = byCategory.malt + byCategory.hop + byCategory.yeast + byCategory.adj;
+  const total = ceilCents(byCategory.malt + byCategory.hop + byCategory.yeast + byCategory.adj);
 
   const kettleGal = Number.isFinite(postBoilGal) && postBoilGal > 0 ? postBoilGal * mult : null;
   const keep = 1 - (Number.isFinite(lossPct) ? lossPct : 0) / 100;
@@ -113,10 +125,15 @@ export function computeRecipeCost({ recipe, priceMap, postBoilGal, lossPct = 0, 
 
   // Without a usable volume there is no per-bbl figure. Null, not Infinity or
   // NaN, so the UI has one thing to check.
-  const costPerBbl = packagedBbl != null && packagedBbl > 0 ? total / packagedBbl : null;
-  const costPerKeg = costPerBbl != null ? costPerBbl / KEGS_PER_BBL : null;
-  const costPerPint = costPerBbl != null ? costPerBbl / PINTS_PER_BBL : null;
   const pints = packagedBbl != null ? packagedBbl * PINTS_PER_BBL : null;
+  const priced = packagedBbl != null && packagedBbl > 0;
+  // Each derived from the same total and its own volume, then rounded up
+  // independently — so at the cent they can sit a penny off exact halving.
+  // That's the cost of every figure being a true ceiling; the underlying
+  // quantities are still one volume apart.
+  const costPerBbl = priced ? ceilCents(total / packagedBbl) : null;
+  const costPerKeg = priced ? ceilCents(total / kegs) : null;
+  const costPerPint = priced ? ceilCents(total / pints) : null;
 
   return {
     lines, byCategory, total, missing,

@@ -38,9 +38,9 @@ describe("CostPanel", () => {
     expect(stat("Batch total")).toBe("$190.00");
     // 150 gal less 33% = 100.5 gal = 3.2419 bbl → 190 / 3.2419 = $58.61
     expect(stat("Cost / bbl")).toBe("$58.61");
-    expect(stat("Cost / keg")).toBe("$29.30");
-    // $190 over 100.5 gal = 804 pints
-    expect(stat("Cost / pint")).toBe("$0.236");
+    expect(stat("Cost / keg")).toBe("$29.31");   // raw 29.3036, rounded up
+    // $190 over 804 pints = 0.2363, rounded up
+    expect(stat("Cost / pint")).toBe("$0.24");
   });
 
   it("shows the derived keg count so a wrong loss % is visible", () => {
@@ -127,7 +127,7 @@ describe("CostPanel", () => {
 
     it("prefers the recipe's own post-boil yield over the brewery default", () => {
       renderPanel({ recipe: { ...recipe, process: { postBoilYield: "300 gal" } } });
-      expect(stat("Cost / bbl")).toBe("$29.30"); // twice the volume, half the cost/bbl
+      expect(stat("Cost / bbl")).toBe("$29.31"); // twice the volume, half the cost/bbl
     });
   });
 
