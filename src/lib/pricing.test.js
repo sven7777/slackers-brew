@@ -59,6 +59,12 @@ describe("unitsPerPack", () => {
     expect(unitsPerPack(whirlfloc, "each")).toBeCloseTo(907.18, 1);
   });
 
+  // Ghost peppers: bought and used as a pack, never weighed. A pack already
+  // counted in "each" needs no mass — only a pack sold by weight does.
+  it("passes through a pack already counted in each", () => {
+    expect(unitsPerPack({ packQty: 1, packUnit: "each" }, "each")).toBe(1);
+  });
+
   it("refuses to invent a count without a unit mass", () => {
     expect(unitsPerPack({ packQty: 5, packUnit: "lb" }, "each")).toBeNull();
   });

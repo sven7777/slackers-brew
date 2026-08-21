@@ -31,17 +31,16 @@
 export const products = [
   // ---- Malts (quoted $/lb, ship in 55 lb sacks) -----------------------------
   { sku: "MRAH1102", vendor: "Rahr",      name: "Rahr Standard 2-Row",                        packQty: 1, packUnit: "lb", orderPack: "55 lb" },
-  { sku: "MWEY1003", vendor: "Weyermann", name: "Weyermann® Pilsner Malt",                    packQty: 1, packUnit: "lb", orderPack: "55 lb" },
+  { sku: "MRAH1105", vendor: "Rahr",      name: "Rahr Premium Pilsner",                       packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MCRI1001", vendor: "Crisp",     name: "Crisp Finest Maris Otter®",                  packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1031", vendor: "Weyermann", name: "Weyermann® CARAMUNICH® Type 1",              packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1056", vendor: "Weyermann", name: "Weyermann® CARAFOAM®",                       packQty: 1, packUnit: "lb", orderPack: "55 lb" },
-  { sku: "MDIN1004", vendor: "Dingemans", name: "Dingemans Chocolate",                        packQty: 1, packUnit: "lb", orderPack: "55 lb" },
-  { sku: "MSIM1052", vendor: "Simpsons",  name: "Simpsons Black Malt",                        packQty: 1, packUnit: "lb", orderPack: "55 lb" },
+  { sku: "MSIM1051", vendor: "Simpsons",  name: "Simpsons Chocolate Malt",                     packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MSIM1053", vendor: "Simpsons",  name: "Simpsons Roasted Barley",                    packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MRAH1108", vendor: "Rahr",      name: "Rahr White Wheat",                           packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MDIN1001", vendor: "Dingemans", name: "Dingemans Aromatic Malt",                    packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1016", vendor: "Weyermann", name: "Weyermann® Vienna Malt",                     packQty: 1, packUnit: "lb", orderPack: "55 lb" },
-  { sku: "MWEY1017", vendor: "Weyermann", name: "Weyermann® Munich Malt Type 1",              packQty: 1, packUnit: "lb", orderPack: "55 lb" },
+  { sku: "MGAM1016", vendor: "Gambrinus", name: "Gambrinus Munich Light",                      packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1053", vendor: "Weyermann", name: "Weyermann® CARAFA® Type 3",                  packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1067", vendor: "Weyermann", name: "Weyermann® CARAFA® Special Type 3 (Dehusked)", packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MDIN1003", vendor: "Dingemans", name: "Dingemans Biscuit®",                         packQty: 1, packUnit: "lb", orderPack: "55 lb" },
@@ -86,28 +85,26 @@ export const products = [
   { sku: "AZZZ1808", vendor: "BSG",    name: "Coriander Powder - 2 lb",         packQty: 2,    packUnit: "lb", orderPack: "2 lb" },
   { sku: "AZZZ1801", vendor: "BSG",    name: "Orange Peel Sweet VP - 2 lb",     packQty: 2,    packUnit: "lb", orderPack: "2 lb" },
   { sku: "AZZZ1811", vendor: "BSG",    name: "Lemon Peel - 2 lb",               packQty: 2,    packUnit: "lb", orderPack: "2 lb" },
-  // Sold by volume, used by weight: 1 gal of honey ≈ 12 lb, so 5 gal ≈ 60 lb.
-  // That density assumption is the only unit conversion here that isn't exact.
-  { sku: "AZZZ4101", vendor: "BSG",    name: "Honey - Clover (USA) - 5 gal",   packQty: 60,   packUnit: "lb", orderPack: "5 gal" },
+  { sku: "HNY-WALK", vendor: "Walker's Farm", name: "Walker's Farm Honey",          packQty: 1,    packUnit: "lb", orderPack: "lb" },
   // Whirlfloc T is the tablet form (G is granular). unitMass is what makes a
   // 5 lb tub divisible into the "each" the recipes count in.
   { sku: "BZZZ1672", vendor: "BSG", name: "Whirlfloc® T - 5 lb", packQty: 5, packUnit: "lb", orderPack: "5 lb", unitMass: { qty: 2.5, unit: "g" } },
   { sku: "CLF-1L",   vendor: "White Labs", name: "White Labs Clarity Ferm - 1 L", packQty: 1, packUnit: "L", orderPack: "1 L" },
+  { sku: "PUR-STRW", vendor: "Amoretti", name: "Amoretti Strawberry/Rhubarb Puree - 9 lb", packQty: 9, packUnit: "lb", orderPack: "9 lb" },
+  { sku: "COF-CB",   vendor: "Local roaster", name: "Cold brew coffee beans - 5 lb",  packQty: 5, packUnit: "lb", orderPack: "5 lb" },
+  // Bought and used a pack at a time: one 10-pepper pack goes into one batch, so
+  // a recipe "each" is one pack, not one pepper. See defaultProductMap.adj.
+  { sku: "PEP-GHST", vendor: "Local",    name: "Ghost Peppers - pack of 10",     packQty: 1, packUnit: "each", orderPack: "pack of 10" },
 
 ];
 
 export const productsBySku = Object.fromEntries(products.map(p => [p.sku, p]));
 
-// Ingredients with no vendor product at all — BSG carries none of these; they
-// come from a roaster, a produce supplier, and a lab. They map to null rather
-// than to a priceless placeholder, so the Cost view reports them as unpriced
-// instead of costing them at $0. Three of the four are used in live recipes.
-export const UNPRICEABLE = [
-  "adj/Brewzyme D",
-  "adj/Coffee",
-  "adj/Ghost Peppers",
-  "adj/Straw/Rhubarb",
-];
+// Ingredients with no vendor product at all. They map to null rather than to a
+// priceless placeholder, so the Cost view reports them as unpriced instead of
+// costing them at $0. Brewzyme D is the only one left and no recipe uses it, so
+// every ingredient in every current recipe is priceable.
+export const UNPRICEABLE = ["adj/Brewzyme D"];
 
 // Default generic name → product SKU, per category. This is the editable
 // judgment layer: "our 2-Row is Rahr Standard 2-Row". Two names may point at one
@@ -115,20 +112,20 @@ export const UNPRICEABLE = [
 // distinct in inventory and merge only when computing an order.
 export const defaultProductMap = {
   malt: {
-    "Pils": "MWEY1003",
+    "Pils": "MRAH1105",
     "2-Row": "MRAH1102",
     "Maris Otter": "MCRI1001",
     "Caramunich I": "MWEY1031",
     "Carafoam": "MWEY1056",
-    "Chocolate": "MDIN1004",
-    "Black Patent": "MSIM1052",
+    "Chocolate": "MSIM1051",
+    "Black Patent": "MWEY1067",
     "Roasted Barley": "MSIM1053",
     "White Wheat": "MRAH1108",
     "Aromatic": "MDIN1001",
     "Flaked Wheat": "AZZZ1304",
     "Flaked Corn": "AZZZ1302",
     "Vienna": "MWEY1016",
-    "Munich": "MWEY1017",
+    "Munich": "MGAM1016",
     "Carafa III": "MWEY1053",
     "Carafa Special III": "MWEY1067",
     "Biscuit Malt": "MDIN1003",
@@ -165,11 +162,11 @@ export const defaultProductMap = {
   adj: {
     "Candi Syrup": "AZZZ1772",
     "Lactose": "BZZZ1203",
-    "Ghost Peppers": null,
-    "Straw/Rhubarb": null,
+    "Ghost Peppers": "PEP-GHST",
+    "Straw/Rhubarb": "PUR-STRW",
     "Orange Peel": "AZZZ1801",
-    "Coffee": null,
-    "Honey": "AZZZ4101",
+    "Coffee": "COF-CB",
+    "Honey": "HNY-WALK",
     "Lemon": "AZZZ1811",
     "Coriander": "AZZZ1808",
     "Mango Puree": "AZZZ2901",

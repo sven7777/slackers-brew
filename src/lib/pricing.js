@@ -74,6 +74,11 @@ export function unitsPerPack(product, recipeUnit) {
   const target = normalizeUnit(recipeUnit);
   if (target == null || !Number.isFinite(packQty)) return null;
 
+  // A pack already counted in "each" (a pack of 10 peppers bought and used as a
+  // unit) needs no mass at all — only a pack sold by weight does.
+  const direct = convert(packQty, packUnit, target);
+  if (direct != null) return direct;
+
   if (target === "each") {
     if (!unitMass) return null;
     const packG = convert(packQty, packUnit, "g");
@@ -81,7 +86,7 @@ export function unitsPerPack(product, recipeUnit) {
     if (packG == null || oneG == null || oneG <= 0) return null;
     return packG / oneG;
   }
-  return convert(packQty, packUnit, target);
+  return null;
 }
 
 // Price of one recipe unit. Null when the product has no price yet (the four
