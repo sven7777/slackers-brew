@@ -50,9 +50,12 @@ create table if not exists products (
 -- buried in a formula, and lets a brewer override a price by hand.
 -- ---------------------------------------------------------------------------
 
-alter table inventory add column if not exists product_sku   text;
-alter table inventory add column if not exists vendor        text;
-alter table inventory add column if not exists cost_per_unit numeric;
+alter table inventory add column if not exists product_sku     text;
+alter table inventory add column if not exists vendor          text;
+alter table inventory add column if not exists cost_per_unit   numeric;
+-- When the price was quoted, so the Cost view can show "prices as of ..." and a
+-- year-old COGS is visibly stale rather than quietly wrong.
+alter table inventory add column if not exists price_effective date;
 
 -- ---------------------------------------------------------------------------
 -- Row-level security: same rule as every other brewery table.

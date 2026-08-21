@@ -79,7 +79,10 @@ export const saltNames = defSalts;
 export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Settings"];
 
 // Default brewery identity, editable in the Settings tab.
-export const defSettings = { name: "Slackers Brewing", tagline: "Inventory & Order Manager", emoji: "🍺", logo: null };
+// `postBoilYield` (gal off the kettle) and `lossPct` (kettle → packaged: trub,
+// yeast, dry-hop absorption, transfer) drive cost per bbl / per keg. The defaults
+// are Slackers' measured numbers: 150 gal post-boil packages out at ~6.5 kegs.
+export const defSettings = { name: "Slackers Brewing", tagline: "Inventory & Order Manager", emoji: "🍺", logo: null, postBoilYield: 150, lossPct: 33 };
 
 // Curated brewery-relevant emojis offered in the Settings icon picker.
 export const breweryEmojis = ["🍺","🍻","🏭","🌾","🍷","🥂","🛢️","⚗️","🔥","🧪","🌿","🦫"];

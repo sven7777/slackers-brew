@@ -61,14 +61,26 @@ export function createSupabaseBackend(client, localBackend = localStorageBackend
 async function loadInventory(client, category, withUnit, fallback) {
   const { data, error } = await client
     .from("inventory")
-    .select("name,qty,unit,ord")
+    .select("name,qty,unit,ord,cost_per_unit,product_sku,vendor,price_effective")
     .eq("category", category)
     .order("ord");
   if (error) throw error;
   if (!data || data.length === 0) return fallback;
-  return data.map((r) =>
-    withUnit ? { n: r.name, q: r.qty, u: r.unit } : { n: r.name, q: r.qty }
-  );
+  // Pricing fields must round-trip: save() replaces every row for the category,
+  // so anything not loaded here would be wiped by the next inventory edit. They
+  // are attached only when the row actually carries a price, keeping an
+  // unpriced row the plain {n, q} the rest of the app has always seen.
+  return data.map((r) => ({
+    n: r.name,
+    q: r.qty,
+    ...(withUnit ? { u: r.unit } : null),
+    ...(r.cost_per_unit == null && r.product_sku == null ? null : {
+      cpu: r.cost_per_unit,
+      sku: r.product_sku,
+      vendor: r.vendor,
+      pricedAt: r.price_effective,
+    }),
+  }));
 }
 
 async function saveInventory(client, category, items) {
@@ -81,6 +93,10 @@ async function saveInventory(client, category, items) {
     qty: it.q,
     unit: it.u ?? null,
     ord: i,
+    cost_per_unit: it.cpu ?? null,
+    product_sku: it.sku ?? null,
+    vendor: it.vendor ?? null,
+    price_effective: it.pricedAt ?? null,
   }));
   const { error } = await client.from("inventory").insert(rows);
   if (error) throw error;
