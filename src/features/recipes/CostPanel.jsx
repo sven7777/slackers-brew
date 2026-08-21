@@ -3,8 +3,8 @@ import { computeRecipeCost, parseVolume, priceMapFrom } from "../../lib/cogs";
 import { card, hdr, cell, num, th, inp } from "../../styles";
 
 // Cost panel (Recipes ▸ Cost): ingredient COGS for the selected recipe — batch
-// total, cost per barrel, cost per keg — with each ingredient's cost per unit
-// editable inline.
+// total, cost per barrel, per keg, and per 16 oz pint — with each ingredient's
+// cost per unit editable inline.
 //
 // Prices are GLOBAL, not per-recipe: they live on inventory rows, so editing
 // Citra here changes it everywhere. The panel says so, because an input sitting
@@ -71,6 +71,10 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
           <div style={statLabel}>Cost / keg</div>
           <div style={statValue}>{money(r.costPerKeg)}</div>
         </div>
+        <div style={statBox}>
+          <div style={statLabel}>Cost / pint</div>
+          <div style={statValue}>{r.costPerPint == null ? "—" : `$${r.costPerPint.toFixed(3)}`}</div>
+        </div>
         <div style={{ ...statBox, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
             <input type="checkbox" checked={!!dbl} onChange={e => setDbl(e.target.checked)} />
@@ -78,7 +82,7 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
           </label>
           <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
             {r.packagedBbl != null
-              ? `${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs`
+              ? `${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs ≈ ${Math.round(r.pints)} pints`
               : "no batch volume set"}
           </div>
         </div>
@@ -150,7 +154,9 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
       <div style={{ ...card, marginBottom: 8 }}>
         <div style={noteStyle}>
           Ingredient cost only — no packaging, labor, or utilities. Water salts are excluded
-          (dosed in grams, pennies per batch). Editing a cost here changes it for{" "}
+          (dosed in grams, pennies per batch). Cost per pint is a 16 oz pour of{" "}
+          <strong>packaged</strong> beer — it doesn't account for taproom pour loss (foam, line
+          purge, tasters), so a pint actually sold costs a little more. Editing a cost here changes it for{" "}
           <strong>every</strong> recipe, since prices live on the ingredient, not the recipe.
           {asOf && <> Prices as of <strong>{asOf}</strong>.</>}
         </div>

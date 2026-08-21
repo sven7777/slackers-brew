@@ -84,13 +84,25 @@ describe("computeRecipeCost", () => {
     expect(run().lines.some(l => l.name === "CaCl2")).toBe(false);
   });
 
-  it("derives packaged volume, kegs, and per-unit costs", () => {
+  it("derives packaged volume, kegs, pints, and per-unit costs", () => {
     const r = run();
     expect(r.packagedGal).toBeCloseTo(100.5, 6);   // 150 × 0.67
     expect(r.packagedBbl).toBeCloseTo(3.2419, 4);
     expect(r.kegs).toBeCloseTo(6.484, 3);          // matches the measured ~6.5
+    expect(r.pints).toBeCloseTo(804, 6);           // 100.5 gal × 8 pints
     expect(r.costPerBbl).toBeCloseTo(TOTAL / 3.24193, 3);
     expect(r.costPerKeg).toBeCloseTo(r.costPerBbl / 2, 10);
+    expect(r.costPerPint).toBeCloseTo(TOTAL / 804, 6);
+  });
+
+  // Derived from one volume, so they must stay exactly consistent: 2 kegs to a
+  // barrel, 124 pints to a keg, 248 to a barrel.
+  it("keeps keg and pint costs consistent with cost per bbl", () => {
+    const r = run();
+    expect(r.costPerBbl / r.costPerKeg).toBeCloseTo(2, 10);
+    expect(r.costPerKeg / r.costPerPint).toBeCloseTo(124, 10);
+    expect(r.costPerBbl / r.costPerPint).toBeCloseTo(248, 10);
+    expect(r.total / r.pints).toBeCloseTo(r.costPerPint, 10);
   });
 
   it("doubles the total for a double batch but leaves cost per bbl alone", () => {
@@ -99,6 +111,7 @@ describe("computeRecipeCost", () => {
     expect(double.total).toBe(single.total * 2);
     expect(double.kegs).toBeCloseTo(single.kegs * 2, 10);
     expect(double.costPerBbl).toBeCloseTo(single.costPerBbl, 10);
+    expect(double.costPerPint).toBeCloseTo(single.costPerPint, 10);
   });
 
   // The core contract: an unpriced ingredient must not be costed at $0.
@@ -132,7 +145,9 @@ describe("computeRecipeCost", () => {
         expect(r.total).toBe(TOTAL);
         expect(r.costPerBbl).toBeNull();
         expect(r.costPerKeg).toBeNull();
+        expect(r.costPerPint).toBeNull();
         expect(r.kegs).toBeNull();
+        expect(r.pints).toBeNull();
       }
     });
 
