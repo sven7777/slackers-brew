@@ -11,9 +11,9 @@
 //      instead of quietly reporting a number that's too low. A confidently
 //      wrong COGS is worse than an obviously incomplete one.
 //
-//   2. Only ONE volume is stored. A half-barrel keg is exactly ½ bbl, so
-//      cost/keg is always cost/bbl ÷ 2 — deriving it rather than tracking a
-//      second number means the two can never drift apart.
+//   2. Only ONE volume is stored. A half-barrel keg is exactly ½ bbl and a 16 oz
+//      pint exactly 1/248 of one, so cost/keg and cost/pint are derived from
+//      cost/bbl rather than tracked separately — they can never drift apart.
 //
 // Water salts (`recipe.sa`) are deliberately excluded: there's no price source,
 // they're dosed in grams, and they come to pennies. The Cost view states that
@@ -21,6 +21,10 @@
 
 const GAL_PER_BBL = 31;
 const KEGS_PER_BBL = 2; // a half-barrel keg is 15.5 gal
+// A 16 oz pint, so 8 to the gallon and 248 to the barrel. This is cost per pint
+// of PACKAGED beer — it does not model taproom pour loss (foam, line purge,
+// tasters), so the cost of a pint actually sold is somewhat higher.
+const PINTS_PER_BBL = GAL_PER_BBL * 8;
 
 // Recipe tuple shapes, by category: malt/yeast [name, qty]; hop
 // [name, qty, stage, time]; adjunct [name, qty, unit, stage, time]. Adjuncts
@@ -111,6 +115,12 @@ export function computeRecipeCost({ recipe, priceMap, postBoilGal, lossPct = 0, 
   // NaN, so the UI has one thing to check.
   const costPerBbl = packagedBbl != null && packagedBbl > 0 ? total / packagedBbl : null;
   const costPerKeg = costPerBbl != null ? costPerBbl / KEGS_PER_BBL : null;
+  const costPerPint = costPerBbl != null ? costPerBbl / PINTS_PER_BBL : null;
+  const pints = packagedBbl != null ? packagedBbl * PINTS_PER_BBL : null;
 
-  return { lines, byCategory, total, missing, packagedGal, packagedBbl, kegs, costPerBbl, costPerKeg };
+  return {
+    lines, byCategory, total, missing,
+    packagedGal, packagedBbl, kegs, pints,
+    costPerBbl, costPerKeg, costPerPint,
+  };
 }

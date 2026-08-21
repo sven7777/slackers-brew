@@ -3,8 +3,8 @@ import { computeRecipeCost, parseVolume, priceMapFrom } from "../../lib/cogs";
 import { card, hdr, cell, num, th, inp } from "../../styles";
 
 // Cost panel (Recipes ▸ Cost): ingredient COGS for the selected recipe — batch
-// total, cost per barrel, cost per keg — with each ingredient's cost per unit
-// editable inline.
+// total, cost per barrel, per keg, and per 16 oz pint — with each ingredient's
+// cost per unit editable inline.
 //
 // Prices are GLOBAL, not per-recipe: they live on inventory rows, so editing
 // Citra here changes it everywhere. The panel says so, because an input sitting
@@ -22,9 +22,11 @@ const CATS = [
 ];
 
 const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
-// Per-unit costs span four orders of magnitude (Clarity Ferm at $0.067/ml,
-// yeast at $74/pack), so let the small ones keep their significant digits.
-const perUnit = (n) => n == null ? "" : n < 0.1 ? n.toFixed(4) : n.toFixed(2);
+// The cost/unit input is bound to the STORED value, unrounded. Displaying a
+// rounded price here would both disagree with the extended cost beside it
+// (2-Row is $0.724/lb, not $0.72) and, worse, silently overwrite the real
+// price with the truncated one the moment anyone edited the field.
+const perUnit = (n) => n == null ? "" : String(n);
 
 const statBox = { flex: 1, minWidth: 130, padding: "12px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 };
 const statLabel = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" };
@@ -71,6 +73,10 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
           <div style={statLabel}>Cost / keg</div>
           <div style={statValue}>{money(r.costPerKeg)}</div>
         </div>
+        <div style={statBox}>
+          <div style={statLabel}>Cost / pint</div>
+          <div style={statValue}>{r.costPerPint == null ? "—" : `$${r.costPerPint.toFixed(3)}`}</div>
+        </div>
         <div style={{ ...statBox, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
             <input type="checkbox" checked={!!dbl} onChange={e => setDbl(e.target.checked)} />
@@ -78,7 +84,7 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
           </label>
           <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
             {r.packagedBbl != null
-              ? `${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs`
+              ? `${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs ≈ ${Math.round(r.pints)} pints`
               : "no batch volume set"}
           </div>
         </div>
@@ -128,7 +134,7 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
                     <td style={num}>{l.qty} {l.unit}</td>
                     <td style={num}>
                       <input
-                        style={{ ...inp, width: 82 }}
+                        style={{ ...inp, width: 96 }}
                         type="number" step="0.0001" min="0"
                         value={perUnit(l.costPerUnit)}
                         placeholder="—"
@@ -150,7 +156,9 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
       <div style={{ ...card, marginBottom: 8 }}>
         <div style={noteStyle}>
           Ingredient cost only — no packaging, labor, or utilities. Water salts are excluded
-          (dosed in grams, pennies per batch). Editing a cost here changes it for{" "}
+          (dosed in grams, pennies per batch). Cost per pint is a 16 oz pour of{" "}
+          <strong>packaged</strong> beer — it doesn't account for taproom pour loss (foam, line
+          purge, tasters), so a pint actually sold costs a little more. Editing a cost here changes it for{" "}
           <strong>every</strong> recipe, since prices live on the ingredient, not the recipe.
           {asOf && <> Prices as of <strong>{asOf}</strong>.</>}
         </div>

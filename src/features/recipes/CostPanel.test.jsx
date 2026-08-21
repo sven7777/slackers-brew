@@ -39,11 +39,13 @@ describe("CostPanel", () => {
     // 150 gal less 33% = 100.5 gal = 3.2419 bbl → 190 / 3.2419 = $58.61
     expect(stat("Cost / bbl")).toBe("$58.61");
     expect(stat("Cost / keg")).toBe("$29.30");
+    // $190 over 100.5 gal = 804 pints
+    expect(stat("Cost / pint")).toBe("$0.236");
   });
 
   it("shows the derived keg count so a wrong loss % is visible", () => {
     renderPanel();
-    expect(screen.getByText(/3\.24 bbl ≈ 6\.5 kegs/)).toBeInTheDocument();
+    expect(screen.getByText(/3\.24 bbl ≈ 6\.5 kegs ≈ 804 pints/)).toBeInTheDocument();
   });
 
   it("folds a hop used at two stages into one line", () => {
@@ -68,6 +70,14 @@ describe("CostPanel", () => {
   it("reports the oldest price date behind the number", () => {
     renderPanel();
     expect(screen.getByText(/Prices as of/)).toHaveTextContent("2025-06-19");
+  });
+
+  // Regression: the input used to round for display, so a 3-decimal malt price
+  // showed as 0.72 next to a cost computed from 0.724 — and editing the field
+  // would have written the truncated value back over the real one.
+  it("shows the stored price unrounded so editing cannot truncate it", () => {
+    renderPanel({ malts: [{ n: "2-Row", q: 0, cpu: 0.724 }] });
+    expect(screen.getByLabelText("Cost per lb of 2-Row")).toHaveValue(0.724);
   });
 
   it("edits a cost per unit through the inventory setter", () => {
@@ -111,6 +121,7 @@ describe("CostPanel", () => {
       renderPanel({ settings: { lossPct: 33 } });
       expect(stat("Batch total")).toBe("$190.00");
       expect(stat("Cost / bbl")).toBe("—");
+      expect(stat("Cost / pint")).toBe("—");
       expect(screen.getByText(/No batch volume/)).toBeInTheDocument();
     });
 
