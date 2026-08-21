@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vendor price lists — BSG marks these "TRADE SECRET CONFIDENTIAL".
+# This repo is public; keep them local.
+pricing/
