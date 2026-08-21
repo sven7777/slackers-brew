@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeRecipeCost, parseVolume, priceMapFrom } from "./cogs";
+import { computeRecipeCost, parseVolume, priceMapFrom, ceilCents } from "./cogs";
 
 // Prices here are fabricated round numbers (real vendor pricing stays out of
 // this repo), chosen so every expected total is checkable by hand.
@@ -21,6 +21,27 @@ const recipe = {
 // 100×1 + 50×2 = 200 malt; (10+30)×0.5 + 20×1 = 40 hop; 80 yeast;
 // 5×4 + 10×0.1 = 21 adj  →  341 total
 const TOTAL = 341;
+
+describe("ceilCents", () => {
+  it("rounds up to the cent", () => {
+    expect(ceilCents(20.9825)).toBe(20.99);
+    expect(ceilCents(47.1975)).toBe(47.2);
+    expect(ceilCents(0.5161)).toBe(0.52);
+  });
+
+  // 185 × 0.724 is 133.94000000000003 in binary floating point; a naive ceil
+  // would bill an extra cent for a rounding artifact.
+  it("does not round up on float noise alone", () => {
+    expect(ceilCents(185 * 0.724)).toBe(133.94);
+    expect(ceilCents(0.1 + 0.2)).toBe(0.3);
+    expect(ceilCents(1)).toBe(1);
+  });
+
+  it("passes through non-numbers as null", () => {
+    expect(ceilCents(null)).toBeNull();
+    expect(ceilCents(NaN)).toBeNull();
+  });
+});
 
 describe("parseVolume", () => {
   it("reads the shapes a free-text yield field actually holds", () => {
@@ -90,19 +111,43 @@ describe("computeRecipeCost", () => {
     expect(r.packagedBbl).toBeCloseTo(3.2419, 4);
     expect(r.kegs).toBeCloseTo(6.484, 3);          // matches the measured ~6.5
     expect(r.pints).toBeCloseTo(804, 6);           // 100.5 gal × 8 pints
-    expect(r.costPerBbl).toBeCloseTo(TOTAL / 3.24193, 3);
-    expect(r.costPerKeg).toBeCloseTo(r.costPerBbl / 2, 10);
-    expect(r.costPerPint).toBeCloseTo(TOTAL / 804, 6);
+    // Each rounded up to the cent from $341: /3.2419 bbl, /6.4839 kegs, /804 pints
+    expect(r.costPerBbl).toBe(105.19);   // raw 105.1843
+    expect(r.costPerKeg).toBe(52.6);     // raw 52.5921
+    expect(r.costPerPint).toBe(0.43);    // raw 0.4241
   });
 
   // Derived from one volume, so they must stay exactly consistent: 2 kegs to a
   // barrel, 124 pints to a keg, 248 to a barrel.
-  it("keeps keg and pint costs consistent with cost per bbl", () => {
+  // All three come off the same total and volume, so they stay in proportion —
+  // but each is independently rounded up, so only to within a cent.
+  it("keeps keg and pint costs in proportion to cost per bbl", () => {
     const r = run();
-    expect(r.costPerBbl / r.costPerKeg).toBeCloseTo(2, 10);
-    expect(r.costPerKeg / r.costPerPint).toBeCloseTo(124, 10);
-    expect(r.costPerBbl / r.costPerPint).toBeCloseTo(248, 10);
-    expect(r.total / r.pints).toBeCloseTo(r.costPerPint, 10);
+    expect(Math.abs(r.costPerKeg - r.costPerBbl / 2)).toBeLessThanOrEqual(0.01);
+    expect(Math.abs(r.costPerPint - r.costPerBbl / 248)).toBeLessThanOrEqual(0.01);
+  });
+
+  it("rounds every money figure up to the cent", () => {
+    const cents = (n) => Math.round(n * 100);
+    const r = run();
+    for (const v of [r.total, r.costPerBbl, r.costPerKeg, r.costPerPint,
+                     ...Object.values(r.byCategory), ...r.lines.map(l => l.cost)]) {
+      if (v == null) continue;
+      expect(cents(v), String(v)).toBe(Math.round(cents(v)));
+      expect(v).toBeCloseTo(Number(v.toFixed(2)), 10);
+    }
+  });
+
+  // If the column didn't add up to the total, the sheet would look broken.
+  it("makes the lines sum exactly to the subtotals and the total", () => {
+    const r = run();
+    for (const [cat, sub] of Object.entries(r.byCategory)) {
+      const sum = r.lines.filter(l => l.category === cat && l.cost != null)
+        .reduce((a, l) => a + l.cost, 0);
+      expect(sub).toBeCloseTo(sum, 10);
+    }
+    const all = Object.values(r.byCategory).reduce((a, b) => a + b, 0);
+    expect(r.total).toBeCloseTo(all, 10);
   });
 
   it("doubles the total for a double batch but leaves cost per bbl alone", () => {
