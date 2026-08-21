@@ -66,6 +66,12 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 
 `defSettings` — brewery identity `{name, tagline, emoji, logo}`. `logo` is a base64 data URL (or `null`); when set it overrides `emoji` in the header.
 
+**Ingredient pricing.** Recipes and inventory speak generic brewer shorthand (`"2-Row"`, `"Caramunich I"`); vendors sell branded SKUs in vendor pack sizes. [src/lib/products.js](src/lib/products.js) bridges the two: a `products` catalog of what Slackers actually buys (SKU, vendor, product name, `packQty`/`packUnit`, `orderPack`, hop `cropYear`) plus `defaultProductMap`, the per-category judgment layer mapping each generic name to a default SKU. Two names may point at one product (Midnight Wheat and Carafa Special III are the same sack) — they stay distinct in inventory and merge only when computing an order. Four ingredients have no vendor product at all (`UNPRICEABLE`: Coffee, Ghost Peppers, Straw/Rhubarb, Brewzyme D) and map to `null`.
+
+⚠️ **`products.js` carries no prices, deliberately.** BSG stamps its price lists "TRADE SECRET CONFIDENTIAL" and this repo is public, so vendor prices must never be committed — including as test fixtures, which use fabricated round numbers. Prices live only in the private Supabase DB (`inventory.cost_per_unit`, `products` table — migration 0008), seeded once from a gitignored file under `pricing/` and edited in-app thereafter. The nightly backup repo is private, so the whole chain holds. A test in `products.test.js` fails if a `price` field reappears in the catalog.
+
+[src/lib/pricing.js](src/lib/pricing.js) owns every vendor-pack → recipe-unit conversion (malt $/lb, hops $/lb→$/oz, yeast one 500 g brick = one `pack`, adjuncts per their own lbs/oz/ml/each). `costPerUnit()` returns **null**, never 0, when a product has no price or the units don't reconcile — an unpriced ingredient must surface in the UI rather than silently understate a cost.
+
 ## Key Computed Logic
 
 `computeOrder()` in [src/lib/orderCalc.js](src/lib/orderCalc.js) aggregates selected recipe needs, compares against current inventory, and returns `{malts, hops, yeast, adj}` arrays with `{n, need, have, order}` per ingredient. `maltBags(order)` computes 55 lb bag counts. Both are pure and unit-tested in `orderCalc.test.js`.
