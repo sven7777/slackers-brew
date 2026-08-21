@@ -72,6 +72,14 @@ describe("CostPanel", () => {
     expect(screen.getByText(/Prices as of/)).toHaveTextContent("2025-06-19");
   });
 
+  // Regression: the input used to round for display, so a 3-decimal malt price
+  // showed as 0.72 next to a cost computed from 0.724 — and editing the field
+  // would have written the truncated value back over the real one.
+  it("shows the stored price unrounded so editing cannot truncate it", () => {
+    renderPanel({ malts: [{ n: "2-Row", q: 0, cpu: 0.724 }] });
+    expect(screen.getByLabelText("Cost per lb of 2-Row")).toHaveValue(0.724);
+  });
+
   it("edits a cost per unit through the inventory setter", () => {
     const { setInvCost } = renderPanel();
     fireEvent.change(screen.getByLabelText("Cost per lb of 2-Row"), { target: { value: "1.25" } });

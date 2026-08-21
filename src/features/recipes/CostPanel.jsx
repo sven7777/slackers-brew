@@ -22,9 +22,11 @@ const CATS = [
 ];
 
 const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
-// Per-unit costs span four orders of magnitude (Clarity Ferm at $0.067/ml,
-// yeast at $74/pack), so let the small ones keep their significant digits.
-const perUnit = (n) => n == null ? "" : n < 0.1 ? n.toFixed(4) : n.toFixed(2);
+// The cost/unit input is bound to the STORED value, unrounded. Displaying a
+// rounded price here would both disagree with the extended cost beside it
+// (2-Row is $0.724/lb, not $0.72) and, worse, silently overwrite the real
+// price with the truncated one the moment anyone edited the field.
+const perUnit = (n) => n == null ? "" : String(n);
 
 const statBox = { flex: 1, minWidth: 130, padding: "12px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 };
 const statLabel = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" };
@@ -132,7 +134,7 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
                     <td style={num}>{l.qty} {l.unit}</td>
                     <td style={num}>
                       <input
-                        style={{ ...inp, width: 82 }}
+                        style={{ ...inp, width: 96 }}
                         type="number" step="0.0001" min="0"
                         value={perUnit(l.costPerUnit)}
                         placeholder="—"
