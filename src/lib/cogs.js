@@ -23,6 +23,7 @@ import { defSettings } from "./defaults";
 
 const GAL_PER_BBL = 31;
 const KEGS_PER_BBL = 2; // a half-barrel keg is 15.5 gal
+export const GAL_PER_KEG = GAL_PER_BBL / KEGS_PER_BBL;
 // A 16 oz pint, so 8 to the gallon and 248 to the barrel. This is cost per pint
 // of PACKAGED beer — it does not model taproom pour loss (foam, line purge,
 // tasters), so the cost of a pint actually sold is somewhat higher.
@@ -72,13 +73,45 @@ export function parseVolume(text) {
 //
 // Empty means "use the brewery default", which is what the Settings inputs
 // already promise by showing that default as their placeholder.
+//
+// A recipe may override the brewery loss % with `process.avgKegs`: what this
+// beer ACTUALLY yields, averaged over the brews of it. Kegs is the number a
+// brewer counts on the floor; a loss percentage is an abstraction derived from
+// it, so the recipe-level field asks for the measurement and this function does
+// the algebra. A dry-hop-heavy beer packaging 6 kegs and a clean lager
+// packaging 7 differ by 14% of their COGS, and nobody should have to work that
+// back to "23% vs 28% loss" by hand.
+//
+// Returns `lossPct` either way, so the cost math downstream stays one number
+// wide and double batches keep scaling by volume.
 export function batchVolume({ recipe, settings } = {}) {
   const kettleGal =
     parseVolume(recipe?.process?.postBoilYield) ??
     parseVolume(settings?.postBoilYield) ??
     parseVolume(defSettings.postBoilYield);
-  const lossPct = Number.isFinite(settings?.lossPct) ? settings.lossPct : defSettings.lossPct;
-  return { kettleGal, lossPct };
+  const defaultLoss = Number.isFinite(settings?.lossPct) ? settings.lossPct : defSettings.lossPct;
+
+  const avgKegs = parseKegs(recipe?.process?.avgKegs);
+  if (avgKegs != null && kettleGal != null) {
+    const packagedGal = avgKegs * GAL_PER_KEG;
+    // More beer packaged than boiled is not a yield, it's a typo (a kettle
+    // volume left at the 150 gal default while kegs were entered for a bigger
+    // system, say). Costing must never divide by a volume the brewery didn't
+    // make, so fall back to the percentage and let the UI say why.
+    if (packagedGal < kettleGal) {
+      return { kettleGal, defaultLossPct: defaultLoss, lossPct: (1 - packagedGal / kettleGal) * 100, avgKegs, source: "kegs" };
+    }
+    return { kettleGal, defaultLossPct: defaultLoss, lossPct: defaultLoss, avgKegs, source: "loss", kegsRejected: true };
+  }
+  return { kettleGal, defaultLossPct: defaultLoss, lossPct: defaultLoss, avgKegs: null, source: "loss" };
+}
+
+// Average yield is a free-text field like post-boil yield, so "6.5", "6.5 kegs"
+// and "  7 " all have to land. Null (not a guess, not 0) when there's no usable
+// number, so the caller falls back to the brewery loss %.
+export function parseKegs(text) {
+  const n = typeof text === "number" ? text : parseFloat(String(text ?? "").trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 // Build the name → cost-per-unit lookup the cost math needs from the inventory

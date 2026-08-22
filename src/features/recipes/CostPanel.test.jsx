@@ -22,11 +22,12 @@ const settings = { postBoilYield: 150, lossPct: 33 };
 
 const renderPanel = (over = {}) => {
   const setInvCost = vi.fn();
+  const setRecs = vi.fn();
   const utils = render(
-    <CostPanel recipe={recipe} dbl={false} setDbl={vi.fn()} {...inv}
+    <CostPanel recipe={recipe} ri={0} setRecs={setRecs} dbl={false} setDbl={vi.fn()} {...inv}
       setInvCost={setInvCost} settings={settings} {...over} />
   );
-  return { ...utils, setInvCost };
+  return { ...utils, setInvCost, setRecs };
 };
 
 // Find a stat tile by its label and read the dollar figure under it.
@@ -128,7 +129,7 @@ describe("CostPanel", () => {
     it("falls back to the brewery default loss when settings predate the field", () => {
       renderPanel({ settings: { name: "Slackers Brewing" } });
       expect(stat("Cost / bbl")).toBe("$58.61");
-      expect(screen.getByText(/150 gal less 33% loss/)).toBeInTheDocument();
+      expect(screen.getByText(/150 gal less 33\.0% loss/)).toBeInTheDocument();
     });
 
     it("treats a cleared loss field as the default, not as zero loss", () => {
@@ -138,8 +139,41 @@ describe("CostPanel", () => {
 
     it("states the volume basis, so per-bbl is never read against the kettle", () => {
       renderPanel();
-      expect(screen.getByText(/150 gal less 33% loss = 3\.24 bbl ≈ 6\.5 kegs ≈ 804 pints/))
+      expect(screen.getByText(/150 gal less 33\.0% loss = 3\.24 bbl ≈ 6\.5 kegs ≈ 804 pints/))
         .toBeInTheDocument();
+    });
+  });
+
+  describe("average keg yield", () => {
+    const withKegs = (avgKegs) => ({ ...recipe, process: { avgKegs } });
+
+    it("costs against the measured yield instead of the brewery loss", () => {
+      renderPanel({ recipe: withKegs(7) });
+      // 7 kegs = 108.5 gal = 3.5 bbl, so $190 / 3.5 = $54.29 (vs $58.61 at 33%).
+      expect(stat("Cost / bbl")).toBe("$54.29");
+      expect(screen.getByText(/your measured yield for this beer, so 27\.7% loss/)).toBeInTheDocument();
+      expect(screen.getByText(/150 gal less 27\.7% loss = 3\.50 bbl ≈ 7\.0 kegs/)).toBeInTheDocument();
+    });
+
+    it("shows the brewery default in kegs as the placeholder", () => {
+      renderPanel();
+      expect(screen.getByLabelText("Avg yield")).toHaveAttribute("placeholder", "6.5");
+      expect(screen.getByText(/blank uses the brewery default of 33% loss/)).toBeInTheDocument();
+    });
+
+    it("persists onto the recipe's process map, like a brew-sheet reading", () => {
+      const { setRecs } = renderPanel();
+      fireEvent.change(screen.getByLabelText("Avg yield"), { target: { value: "7" } });
+      expect(setRecs).toHaveBeenCalled();
+      const updater = setRecs.mock.calls[0][0];
+      expect(updater([{ n: "Test Ale", process: { postBoilYield: "150" } }])[0].process)
+        .toEqual({ postBoilYield: "150", avgKegs: "7" });
+    });
+
+    it("says so when the yield exceeds the boil, rather than costing against it", () => {
+      renderPanel({ recipe: withKegs(12) });
+      expect(screen.getByText(/more beer than the 150 gal boil/)).toBeInTheDocument();
+      expect(stat("Cost / bbl")).toBe("$58.61"); // the default, not 12 kegs' worth
     });
   });
 

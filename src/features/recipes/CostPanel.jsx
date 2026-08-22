@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { batchVolume, computeRecipeCost, priceMapFrom } from "../../lib/cogs";
+import { batchVolume, computeRecipeCost, priceMapFrom, GAL_PER_KEG } from "../../lib/cogs";
 import { card, hdr, cell, num, th, inp } from "../../styles";
 
 // Cost panel (Recipes ▸ Cost): ingredient COGS for the selected recipe — batch
@@ -28,18 +28,29 @@ const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
 // decimals here is the whole value, not a truncation of it — the field always
 // agrees with the extended cost beside it.
 const perUnit = (n) => n == null ? "" : n.toFixed(2);
+// What the brewery default works out to in kegs, shown as the yield field's
+// placeholder — the units the field asks for, not the percentage behind them.
+const kegsFromLoss = (gal, lossPct) => (gal * (1 - lossPct / 100)) / GAL_PER_KEG;
 
 const statBox = { flex: 1, minWidth: 130, padding: "12px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 };
 const statLabel = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" };
 const statValue = { fontSize: 22, fontWeight: 800, color: "#92400e", marginTop: 2 };
 const noteStyle = { fontSize: 12, color: "#64748b", padding: "8px 14px" };
 
-export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj, setInvCost, settings }) {
+export default function CostPanel({ recipe, ri, setRecs, dbl, setDbl, malts, hops, yeast, adj, setInvCost, settings }) {
   const priceMap = useMemo(() => priceMapFrom({ malts, hops, yeast, adj }), [malts, hops, yeast, adj]);
 
   // Both fall back to the brewery default when unset — an empty Settings field
-  // means "use the default", not "no loss". See batchVolume().
-  const { kettleGal: postBoilGal, lossPct } = batchVolume({ recipe, settings });
+  // means "use the default", not "no loss". A recipe's own average keg yield,
+  // when set, back-solves the loss % instead. See batchVolume().
+  const { kettleGal: postBoilGal, lossPct, defaultLossPct, source, kegsRejected } = batchVolume({ recipe, settings });
+
+  // Same write path the Brew Sheet uses for its planned readings: one key on
+  // the recipe's `process` map, so this needs no column of its own.
+  const setAvgKegs = (v) =>
+    setRecs((p) => p.map((rec, i) => (i === ri ? { ...rec, process: { ...(rec.process || {}), avgKegs: v } } : rec)));
+
+  const defaultKegs = postBoilGal != null ? kegsFromLoss(postBoilGal, defaultLossPct).toFixed(1) : "";
 
   const r = useMemo(
     () => computeRecipeCost({ recipe, priceMap, postBoilGal, lossPct, dbl }),
@@ -82,15 +93,38 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
             <input type="checkbox" checked={!!dbl} onChange={e => setDbl(e.target.checked)} />
             Double batch
           </label>
-          <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
-            {/* Spell out the basis: every figure above is per PACKAGED bbl, and a
-                brewer comparing them to the kettle volume should see the loss
-                that separates the two. */}
-            {r.packagedBbl != null
-              ? `${postBoilGal * (dbl ? 2 : 1)} gal less ${lossPct}% loss = ${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs ≈ ${Math.round(r.pints)} pints`
-              : "no batch volume set"}
-          </div>
         </div>
+      </div>
+
+      {/* Yield basis. Every figure above is per PACKAGED bbl, so the volume it
+          divides by — and the loss that separates that from the kettle — belongs
+          on screen next to the money, not buried in Settings. */}
+      <div style={{ ...card, marginBottom: 12 }}>
+        <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, color: "#475569" }}>
+          <label htmlFor="avg-kegs" style={{ fontWeight: 600 }}>Avg yield</label>
+          <input
+            id="avg-kegs" style={{ ...inp, width: 70 }} type="number" step="0.1" min="0"
+            value={recipe?.process?.avgKegs ?? ""}
+            placeholder={defaultKegs}
+            onChange={(e) => setAvgKegs(e.target.value === "" ? "" : e.target.value)} />
+          <span>kegs per batch</span>
+          <span style={{ color: "#94a3b8" }}>
+            {source === "kegs"
+              ? `— your measured yield for this beer, so ${lossPct.toFixed(1)}% loss`
+              : `— blank uses the brewery default of ${defaultLossPct}% loss`}
+          </span>
+        </div>
+        <div style={{ padding: "0 14px 10px", fontSize: 12, color: "#64748b" }}>
+          {r.packagedBbl != null
+            ? `${postBoilGal * (dbl ? 2 : 1)} gal less ${lossPct.toFixed(1)}% loss = ${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs ≈ ${Math.round(r.pints)} pints`
+            : "no batch volume set"}
+        </div>
+        {kegsRejected && (
+          <div style={{ padding: "0 14px 10px", fontSize: 12, color: "#92400e" }}>
+            That yield is more beer than the {postBoilGal} gal boil produces, so it's ignored
+            and the brewery default is used. Check the Brew Sheet's Post-Boil Yield.
+          </div>
+        )}
       </div>
 
       {r.missing.length > 0 && (

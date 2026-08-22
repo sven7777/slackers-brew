@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { batchVolume, computeRecipeCost, parseVolume, priceMapFrom, ceilCents } from "./cogs";
+import { batchVolume, computeRecipeCost, parseKegs, parseVolume, priceMapFrom, ceilCents } from "./cogs";
 import { defSettings } from "./defaults";
 
 // Prices here are fabricated round numbers (real vendor pricing stays out of
@@ -231,5 +231,51 @@ describe("batchVolume", () => {
     expect(batchVolume({ settings: { lossPct: null } }).lossPct).toBe(defSettings.lossPct);
     expect(batchVolume({ settings: { lossPct: 0 } }).lossPct).toBe(0); // an explicit 0 is honored
     expect(batchVolume({ settings: { lossPct: 25 } }).lossPct).toBe(25);
+  });
+});
+
+describe("average keg yield", () => {
+  const kegs = (v) => batchVolume({ recipe: { process: { avgKegs: v } }, settings: { postBoilYield: 150, lossPct: 33 } });
+
+  it("back-solves the loss % from what the beer actually yields", () => {
+    // 7 kegs = 108.5 gal off a 150 gal boil = 27.67% loss, not the default 33%.
+    const v = kegs(7);
+    expect(v.source).toBe("kegs");
+    expect(v.lossPct).toBeCloseTo(27.667, 3);
+    expect(v.kettleGal).toBe(150);
+    // The brewery default is still reported, so the UI can show what blank means.
+    expect(v.defaultLossPct).toBe(33);
+  });
+
+  it("reads the field as free text, like every other process reading", () => {
+    expect(parseKegs("6.5 kegs")).toBe(6.5);
+    expect(parseKegs(" 7 ")).toBe(7);
+    expect(parseKegs("")).toBeNull();
+    expect(parseKegs("half a keg")).toBeNull();
+    expect(parseKegs(0)).toBeNull();
+    expect(parseKegs(-2)).toBeNull();
+  });
+
+  it("falls back to the brewery loss when the field is empty or junk", () => {
+    for (const v of ["", null, undefined, "lots"]) expect(kegs(v).lossPct).toBe(33);
+    expect(kegs("").source).toBe("loss");
+  });
+
+  // Packaging more than was boiled would divide the batch cost by beer that
+  // does not exist — the one direction this module must never round.
+  it("rejects a yield larger than the boil rather than costing against it", () => {
+    const v = kegs(12); // 186 gal out of a 150 gal kettle
+    expect(v.source).toBe("loss");
+    expect(v.kegsRejected).toBe(true);
+    expect(v.lossPct).toBe(33);
+  });
+
+  it("flows through to the cost, so a better yield is a cheaper barrel", () => {
+    const priceMap = { malt: { "2-Row": 1 }, hop: {}, yeast: {}, adj: {} };
+    const recipe = { m: [["2-Row", 100]] };
+    const at = (lossPct) => computeRecipeCost({ recipe, priceMap, postBoilGal: 150, lossPct }).costPerBbl;
+    expect(at(33)).toBeCloseTo(30.85, 2);           // 100.5 gal packaged
+    expect(at(kegs(7).lossPct)).toBeCloseTo(28.58, 2); // 108.5 gal packaged
+    expect(at(kegs(7).lossPct)).toBeLessThan(at(33));
   });
 });
