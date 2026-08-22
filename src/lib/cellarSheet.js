@@ -11,7 +11,7 @@
 // fermentation temp, dry-hop varieties + amounts, cellar additions); the
 // schedule supplies WHEN.
 
-import { brewDayStages } from "./defaults";
+import { brewDayStages, dryHopStages, dryHopCharge, LEGACY_DRY_HOP_ACTION } from "./defaults";
 import { fmtGravity } from "./gravity";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -50,9 +50,32 @@ export function buildCellarSheet(recipe, brewDate) {
   // Yeast (strain → Gen/Type box).
   const yeast = y.map(([name, qty]) => ({ name, qty }));
 
-  // Dry hop: schedule says when, recipe hops at the `dryhop` stage say what.
-  const dryHopItems = h.filter(([, , stage]) => stage === "dryhop").map(([name, qty]) => ({ name, qty }));
-  const dryHopDates = datesOf((act) => act.toLowerCase().includes("dry hop"));
+  // Dry hop: the schedule says WHEN, the recipe's hops say WHAT, and the charge
+  // number is what pairs them. A double dry hop is two charges on two different
+  // days; before the numbering there was nothing to join on, so the sheet could
+  // only print a single date and did it on the first row alone.
+  //
+  // Charge 1 also absorbs the legacy unnumbered values, so a recipe that hasn't
+  // been migrated (a localStorage device, an old backup) still prints correctly.
+  const chargeOfAction = (action) => {
+    const a = action.trim().toLowerCase();
+    if (a === LEGACY_DRY_HOP_ACTION) return 1;
+    const m = /^dry hop\s*([1-9])$/.exec(a);
+    return m ? Number(m[1]) : null;
+  };
+  const dryHopCharges = dryHopStages
+    .map((_, i) => {
+      const charge = i + 1;
+      const items = h
+        .filter(([, , stage]) => dryHopCharge(stage) === charge)
+        .map(([name, qty]) => ({ name, qty }));
+      const dates = schedule.filter((row) => chargeOfAction(row.action) === charge).map((row) => row.date);
+      return { charge, items, dates, date: dates[0] ?? null };
+    })
+    // An empty charge prints nothing. A single-charge beer therefore looks
+    // exactly as it always did, and only a beer that IS double dry hopped
+    // grows a second block.
+    .filter((c) => c.items.length > 0 || c.dates.length > 0);
 
   // Cold-crash steps come straight off the schedule (Cr. 55 / 40 / 33 …) so a
   // recipe that crashes differently prints its own steps, not a fixed form.
@@ -86,7 +109,7 @@ export function buildCellarSheet(recipe, brewDate) {
     dateBrewed: brewDate ? addDays(brewDate, 0) : null,
     fermTemp: ft ?? null,
     yeast,
-    dryHop: { dates: dryHopDates, items: dryHopItems },
+    dryHop: { charges: dryHopCharges },
     coldCrash,
     blowOffs,
     rouse,

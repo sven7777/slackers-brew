@@ -20,7 +20,7 @@
 //    catalog via the ALIAS maps below and report anything still unmapped so the
 //    import UI can ask the user to map it.
 
-import { maltNames, hopNames, yeastNames, adjNames, adjUnits, saltNames } from "./defaults";
+import { maltNames, hopNames, yeastNames, adjNames, adjUnits, saltNames, dryHopCharge } from "./defaults";
 
 // --- name normalization (BeerSmith -> app catalog) -------------------------
 // Only non-identity mappings are listed; a raw name that already equals an app
@@ -93,7 +93,9 @@ const ALIAS_SALT = {
 };
 
 // BeerSmith enum codes -> our stage vocabulary.
-const HOP_USE = { 0: "boil", 1: "dryhop", 2: "mash", 3: "firstwort", 4: "whirlpool" };
+// BeerSmith models one dry hop use, so an import lands as charge 1; a second
+// or third charge is added in the app.
+const HOP_USE = { 0: "boil", 1: "dryhop1", 2: "mash", 3: "firstwort", 4: "whirlpool" };
 const MISC_USE = { 0: "boil", 1: "mash", 2: "primary", 3: "secondary", 4: "bottling", 5: "sparge" };
 
 // --- low-level XML helpers (no DOM; this format is flat per ingredient) -----
@@ -223,7 +225,7 @@ export function parseBeerSmith(xml) {
       const r = resolve(raw, ALIAS_HOP, hopNames);
       if (!r.mapped) flag("hop", raw.trim());
       const stage = HOP_USE[field(hp, "F_H_USE")] || "boil";
-      const time = stage === "dryhop" || stage === "mash" ? 0 : num(field(hp, "F_H_BOIL_TIME"));
+      const time = dryHopCharge(stage) || stage === "mash" ? 0 : num(field(hp, "F_H_BOIL_TIME"));
       h.push([r.name, num(field(hp, "F_H_AMOUNT")), stage, time]);
     }
 

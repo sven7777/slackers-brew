@@ -72,7 +72,7 @@ describe("parseBeerSmith", () => {
     expect(r.h).toEqual([
       ["CTZ", 20, "boil", 60],
       ["Mosaic", 12, "whirlpool", 15],
-      ["Willamette", 48, "dryhop", 0], // Aramis→Willamette; dry hop time zeroed
+      ["Willamette", 48, "dryhop1", 0], // Aramis→Willamette; BeerSmith's one dry hop use is charge 1, time zeroed
     ]);
   });
 

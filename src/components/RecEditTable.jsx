@@ -1,4 +1,4 @@
-import { adjUnits, brewDayStages, cellarStages, saltStages } from "../lib/defaults";
+import { adjUnits, brewDayStages, cellarStages, saltStages, stageLabels } from "../lib/defaults";
 import { cell, num, th, inp, rmBtn, addRow, sel, addBtn } from "../styles";
 
 const ALL_STAGES = [...brewDayStages, ...cellarStages];
@@ -75,9 +75,13 @@ export default function RecEditTable({ items = [], cat, names, unit, ri, showUni
               </td>
               {hasStage && (
                 <td style={cell}>
-                  <select value={it[cfg.stageAt] || ""} style={{ ...sel, width: "100%" }}
+                  {/* minWidth, not a column width: with auto table layout the
+                      column sized to whatever fit and clipped the label. Fine
+                      when it read "whirlp", not fine when "Dry Hop 1" and
+                      "Dry Hop 2" clip to the same "Dry H". */}
+                  <select value={it[cfg.stageAt] || ""} style={{ ...sel, width: "100%", minWidth: 96 }}
                     onChange={(e) => setField(setRecs, ri, cat, i, cfg.stageAt, e.target.value)}>
-                    {cfg.stages.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {cfg.stages.map((s) => <option key={s} value={s}>{stageLabels[s] ?? s}</option>)}
                   </select>
                 </td>
               )}
