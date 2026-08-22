@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeRecipeCost, parseVolume, priceMapFrom, ceilCents } from "./cogs";
+import { batchVolume, computeRecipeCost, parseVolume, priceMapFrom, ceilCents } from "./cogs";
+import { defSettings } from "./defaults";
 
 // Prices here are fabricated round numbers (real vendor pricing stays out of
 // this repo), chosen so every expected total is checkable by hand.
@@ -208,5 +209,27 @@ describe("computeRecipeCost", () => {
     expect(computeRecipeCost({ recipe: null, priceMap, postBoilGal: 150 }).total).toBe(0);
     const junk = { m: [null, ["Ghost", "not a number"], ["2-Row", 10]] };
     expect(computeRecipeCost({ recipe: junk, priceMap, postBoilGal: 150 }).total).toBe(10);
+  });
+});
+
+describe("batchVolume", () => {
+  it("takes the recipe's own post-boil yield first", () => {
+    const v = batchVolume({ recipe: { process: { postBoilYield: "4 bbl" } }, settings: { postBoilYield: 150 } });
+    expect(v.kettleGal).toBe(124);
+  });
+
+  it("falls back to the brewery setting, then to the default", () => {
+    expect(batchVolume({ settings: { postBoilYield: 200 } }).kettleGal).toBe(200);
+    expect(batchVolume({ settings: {} }).kettleGal).toBe(defSettings.postBoilYield);
+    expect(batchVolume().kettleGal).toBe(defSettings.postBoilYield);
+  });
+
+  // An absent or cleared loss must never resolve to 0%: that costs a batch
+  // against the full kettle volume, which is ~50% more beer than it packages.
+  it("never resolves an unset loss to zero", () => {
+    expect(batchVolume({ settings: {} }).lossPct).toBe(defSettings.lossPct);
+    expect(batchVolume({ settings: { lossPct: null } }).lossPct).toBe(defSettings.lossPct);
+    expect(batchVolume({ settings: { lossPct: 0 } }).lossPct).toBe(0); // an explicit 0 is honored
+    expect(batchVolume({ settings: { lossPct: 25 } }).lossPct).toBe(25);
   });
 });

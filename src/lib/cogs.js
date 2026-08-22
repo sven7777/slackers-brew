@@ -19,6 +19,8 @@
 // they're dosed in grams, and they come to pennies. The Cost view states that
 // rather than silently dropping them.
 
+import { defSettings } from "./defaults";
+
 const GAL_PER_BBL = 31;
 const KEGS_PER_BBL = 2; // a half-barrel keg is 15.5 gal
 // A 16 oz pint, so 8 to the gallon and 248 to the barrel. This is cost per pint
@@ -58,6 +60,25 @@ export function parseVolume(text) {
   const n = parseFloat(m[0]);
   if (!Number.isFinite(n) || n <= 0) return null;
   return /bbl|barrel/i.test(text) ? n * GAL_PER_BBL : n;
+}
+
+// Where a batch's volume comes from, in ONE place, because two callers used to
+// answer it differently. The Cost panel read `settings.lossPct` and fell back to
+// 0% when the key was absent; Settings' own preview fell back to the brewery
+// default of 33%. A settings record saved before these fields existed has
+// neither key, so the same batch read as 100.5 gal packaged in Settings and a
+// full 150 gal in Cost — costing every beer against ~50% more volume than it
+// ever packages ($90/bbl instead of $135/bbl).
+//
+// Empty means "use the brewery default", which is what the Settings inputs
+// already promise by showing that default as their placeholder.
+export function batchVolume({ recipe, settings } = {}) {
+  const kettleGal =
+    parseVolume(recipe?.process?.postBoilYield) ??
+    parseVolume(settings?.postBoilYield) ??
+    parseVolume(defSettings.postBoilYield);
+  const lossPct = Number.isFinite(settings?.lossPct) ? settings.lossPct : defSettings.lossPct;
+  return { kettleGal, lossPct };
 }
 
 // Build the name → cost-per-unit lookup the cost math needs from the inventory
