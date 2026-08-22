@@ -32,6 +32,8 @@ src/
   lib/          # pure logic + data + the data-access seam (see below)
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
+scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0011)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
@@ -39,9 +41,9 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
 **Four tabs:**
 - **Inventory** — editable quantity inputs for all ingredients
 - **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between four views of it:
-  - **Edit** — view/edit ingredient lists per recipe; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only.
+  - **Edit** — recipe header (name, style, target OG/FG/ABV, mash + ferm temp) then the ingredient lists; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only. Name is free text, style comes from [StyleSelect](src/components/StyleSelect.jsx); an empty name renders as `(untitled)` in the picker so a mid-edit recipe stays selectable.
   - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
-  - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
+  - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
 - **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + brewhouse loss %, which drive cost/bbl and cost/keg), ingredient price import, and data backup (export/import all app data as JSON)
