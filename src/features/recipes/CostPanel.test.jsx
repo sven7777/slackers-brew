@@ -115,18 +115,31 @@ describe("CostPanel", () => {
     });
   });
 
-  describe("without a batch volume", () => {
-    it("still totals but prompts for a yield", () => {
-      renderPanel({ settings: { lossPct: 33 } });
-      expect(stat("Batch total")).toBe("$190.00");
-      expect(stat("Cost / bbl")).toBe("—");
-      expect(stat("Cost / pint")).toBe("—");
-      expect(screen.getByText(/No batch volume/)).toBeInTheDocument();
-    });
-
+  describe("batch volume", () => {
     it("prefers the recipe's own post-boil yield over the brewery default", () => {
       renderPanel({ recipe: { ...recipe, process: { postBoilYield: "300 gal" } } });
       expect(stat("Cost / bbl")).toBe("$29.31"); // twice the volume, half the cost/bbl
+    });
+
+    // The bug this suite exists to prevent: a settings record saved before the
+    // batch-volume fields existed has neither key, and the panel used to read
+    // that as 0% loss — costing the batch against the full kettle volume, which
+    // understated cost/bbl by a third ($58.61 → $39.27 here).
+    it("falls back to the brewery default loss when settings predate the field", () => {
+      renderPanel({ settings: { name: "Slackers Brewing" } });
+      expect(stat("Cost / bbl")).toBe("$58.61");
+      expect(screen.getByText(/150 gal less 33% loss/)).toBeInTheDocument();
+    });
+
+    it("treats a cleared loss field as the default, not as zero loss", () => {
+      renderPanel({ settings: { postBoilYield: 150, lossPct: null } });
+      expect(stat("Cost / bbl")).toBe("$58.61");
+    });
+
+    it("states the volume basis, so per-bbl is never read against the kettle", () => {
+      renderPanel();
+      expect(screen.getByText(/150 gal less 33% loss = 3\.24 bbl ≈ 6\.5 kegs ≈ 804 pints/))
+        .toBeInTheDocument();
     });
   });
 

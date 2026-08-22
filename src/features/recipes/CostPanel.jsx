@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { computeRecipeCost, parseVolume, priceMapFrom } from "../../lib/cogs";
+import { batchVolume, computeRecipeCost, priceMapFrom } from "../../lib/cogs";
 import { card, hdr, cell, num, th, inp } from "../../styles";
 
 // Cost panel (Recipes ▸ Cost): ingredient COGS for the selected recipe — batch
@@ -37,10 +37,9 @@ const noteStyle = { fontSize: 12, color: "#64748b", padding: "8px 14px" };
 export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj, setInvCost, settings }) {
   const priceMap = useMemo(() => priceMapFrom({ malts, hops, yeast, adj }), [malts, hops, yeast, adj]);
 
-  const postBoilGal = parseVolume(recipe?.process?.postBoilYield)
-    ?? parseVolume(settings?.postBoilYield)
-    ?? null;
-  const lossPct = Number.isFinite(settings?.lossPct) ? settings.lossPct : 0;
+  // Both fall back to the brewery default when unset — an empty Settings field
+  // means "use the default", not "no loss". See batchVolume().
+  const { kettleGal: postBoilGal, lossPct } = batchVolume({ recipe, settings });
 
   const r = useMemo(
     () => computeRecipeCost({ recipe, priceMap, postBoilGal, lossPct, dbl }),
@@ -84,8 +83,11 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
             Double batch
           </label>
           <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+            {/* Spell out the basis: every figure above is per PACKAGED bbl, and a
+                brewer comparing them to the kettle volume should see the loss
+                that separates the two. */}
             {r.packagedBbl != null
-              ? `${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs ≈ ${Math.round(r.pints)} pints`
+              ? `${postBoilGal * (dbl ? 2 : 1)} gal less ${lossPct}% loss = ${r.packagedBbl.toFixed(2)} bbl ≈ ${r.kegs.toFixed(1)} kegs ≈ ${Math.round(r.pints)} pints`
               : "no batch volume set"}
           </div>
         </div>
@@ -97,15 +99,6 @@ export default function CostPanel({ recipe, dbl, setDbl, malts, hops, yeast, adj
             <strong>{r.missing.length} ingredient{r.missing.length > 1 ? "s" : ""} unpriced</strong> —{" "}
             {r.missing.map(m => m.name).join(", ")}. They are left out of the total, so the real
             cost is higher than shown. Enter a cost below to include them.
-          </div>
-        </div>
-      )}
-
-      {postBoilGal == null && (
-        <div style={{ ...card, borderColor: "#fbbf24", background: "#fffbeb", marginBottom: 12 }}>
-          <div style={{ padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
-            No batch volume — set <strong>Post-Boil Yield</strong> on the Brew Sheet, or a brewery
-            default in Settings, to get cost per bbl and per keg.
           </div>
         </div>
       )}

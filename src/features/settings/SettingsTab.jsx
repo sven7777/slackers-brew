@@ -1,4 +1,5 @@
 import { breweryEmojis, defSettings } from "../../lib/defaults";
+import { batchVolume } from "../../lib/cogs";
 import { card, hdr, btn, inp } from "../../styles";
 import DataBackup from "./DataBackup";
 import PriceImport from "./PriceImport";
@@ -121,8 +122,8 @@ export default function SettingsTab({ settings, setSettings, malts, setMalts, ho
           </div>
           <p style={{ margin: "12px 0 0", fontSize: 12, color: "#94a3b8" }}>
             {(() => {
-              const gal = settings.postBoilYield ?? defSettings.postBoilYield;
-              const loss = settings.lossPct ?? defSettings.lossPct;
+              // Same resolution the Cost panel uses, so the two can't disagree.
+              const { kettleGal: gal, lossPct: loss } = batchVolume({ settings });
               const kegs = (gal * (1 - loss / 100)) / 15.5;
               return Number.isFinite(kegs) && kegs > 0
                 ? `${gal} gal less ${loss}% ≈ ${kegs.toFixed(1)} kegs per batch.`
