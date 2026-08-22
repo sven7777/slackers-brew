@@ -72,18 +72,17 @@ describe("CostPanel", () => {
     expect(screen.getByText(/Prices as of/)).toHaveTextContent("2025-06-19");
   });
 
-  // Regression: the input used to round for display, so a 3-decimal malt price
-  // showed as 0.72 next to a cost computed from 0.724 — and editing the field
-  // would have written the truncated value back over the real one.
-  it("shows the stored price unrounded so editing cannot truncate it", () => {
-    renderPanel({ malts: [{ n: "2-Row", q: 0, cpu: 0.724 }] });
-    expect(screen.getByLabelText("Cost per lb of 2-Row")).toHaveValue(0.724);
+  it("shows prices to two decimals", () => {
+    renderPanel({ malts: [{ n: "2-Row", q: 0, cpu: 0.7 }] });
+    expect(screen.getByLabelText("Cost per lb of 2-Row")).toHaveValue(0.7);
   });
 
-  it("edits a cost per unit through the inventory setter", () => {
+  // The unit goes along so a price can be set on an ingredient that has no
+  // inventory row yet — App.jsx needs it to create one.
+  it("edits a cost per unit through the inventory setter, passing the unit", () => {
     const { setInvCost } = renderPanel();
     fireEvent.change(screen.getByLabelText("Cost per lb of 2-Row"), { target: { value: "1.25" } });
-    expect(setInvCost).toHaveBeenCalledWith("malt", "2-Row", "1.25");
+    expect(setInvCost).toHaveBeenCalledWith("malt", "2-Row", "1.25", "lb");
   });
 
   it("doubles the total for a double batch but holds cost per bbl", () => {

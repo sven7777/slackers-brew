@@ -33,6 +33,15 @@ describe("readPriceFile", () => {
 });
 
 describe("priceRows", () => {
+  // Prices are stored to the cent so the UI can show two decimals without the
+  // displayed price disagreeing with the cost computed from it.
+  it("rounds the derived price to the cent", () => {
+    const [row] = priceRows("hop", [{ n: "Citra", q: 0 }], { [SKU_CITRA]: { price: 13.99 } });
+    expect(row.cpu).toBe(0.87);        // 13.99/16 = 0.874375
+    const [malt] = priceRows("malt", [{ n: "2-Row", q: 0 }], { [SKU_2ROW]: { price: 0.724 } });
+    expect(malt.cpu).toBe(0.72);
+  });
+
   it("derives cost per recipe unit through the product's pack size", () => {
     const [row] = priceRows("hop", [{ n: "Citra", q: 0 }], { [SKU_CITRA]: { price: 16, effective: "2025-07-01" } });
     expect(row.cpu).toBe(1);           // $16/lb ÷ 16 oz

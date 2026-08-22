@@ -46,8 +46,14 @@ export function priceRows(category, rows, priceBySku) {
     const entry = sku ? priceBySku?.[sku] : null;
     if (!sku || !entry) return row;
     const product = productsBySku[sku];
-    const cpu = costPerUnit({ ...product, price: entry.price }, unitFor(category, row.n, row));
-    if (cpu == null) return row;
+    const raw = costPerUnit({ ...product, price: entry.price }, unitFor(category, row.n, row));
+    if (raw == null) return row;
+    // Store to the cent. A vendor quote can carry more precision than that
+    // (malt at $0.724/lb, hops at $0.874375/oz once converted from $/lb), but a
+    // price the UI shows to two decimals has to BE two decimals, or the cost
+    // column stops reconciling with the price beside it. Worth at most ~$1.30
+    // on a batch. Nearest, not up: costs round up, but a price is a quote.
+    const cpu = Math.round(raw * 100) / 100;
     return { ...row, cpu, sku, vendor: product.vendor ?? null, pricedAt: entry.effective };
   });
 }
