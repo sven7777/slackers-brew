@@ -34,3 +34,7 @@ dist-ssr
 # Vendor price lists — BSG marks these "TRADE SECRET CONFIDENTIAL".
 # This repo is public; keep them local.
 pricing/
+
+# BeerSmith exports used to regenerate catalogs (src/lib/beerStyles.js).
+# The generated module is committed; the multi-hundred-KB source export isn't.
+styles/

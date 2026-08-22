@@ -14,6 +14,8 @@
 //  - Hop stage is F_H_USE (0 boil, 1 dry hop, 2 mash, 3 first wort,
 //    4 whirlpool); boil/whirlpool minutes are in F_H_BOIL_TIME.
 //  - Misc F_M_TYPE 5 = water agent (salt); other types are flavor/spice/fining.
+//  - The recipe STYLE is a nested record inside <F_R_STYLE> (F_S_NAME,
+//    F_S_CATEGORY, the BJCP ranges), not text — see styleName().
 //  - Names are verbose ("Pale Malt (2 Row) US"); we normalize to the app
 //    catalog via the ALIAS maps below and report anything still unmapped so the
 //    import UI can ask the user to map it.
@@ -109,6 +111,18 @@ const field = (block, tag) => {
   const m = block.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
   return m ? unescapeXml(m[1]) : "";
 };
+// The style is not text in <F_R_STYLE> — it's a whole nested Style record
+// (<F_S_NAME>, <F_S_CATEGORY>, <F_S_GUIDE>, the BJCP ranges…). `field()` matches
+// scalar tags only ([^<]*), so reading F_R_STYLE directly always came back
+// empty and every imported recipe landed styleless ("Beachbomber — ").
+//
+// Take F_S_NAME from inside the record, falling back to the tag's own text so a
+// hand-written or simplified .bsmx with a plain <F_R_STYLE>American IPA</...>
+// still works.
+const styleName = (rb) => {
+  const record = rb.match(/<F_R_STYLE>[\s\S]*?<\/F_R_STYLE>/)?.[0];
+  return (record && field(record, "F_S_NAME")) || field(rb, "F_R_STYLE");
+};
 const blocks = (text, tag) =>
   text.match(new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, "g")) || [];
 const num = (s) => {
@@ -116,6 +130,26 @@ const num = (s) => {
   if (!isFinite(f)) return 0;
   return Math.round(f * 100) / 100;
 };
+
+// Parse a BeerSmith STYLE export (File ▸ Export ▸ Styles) into the style
+// catalog. Same file format as a recipe export, but the <Style> records stand
+// alone instead of sitting inside <F_R_STYLE>.
+//
+// Names and category labels only — deliberately NOT the F_S_DESCRIPTION prose,
+// which is verbatim BJCP guideline text and doesn't belong in a public repo.
+// The numeric vital statistics are skipped too: nothing uses them yet, and
+// re-running the generator brings them back the day something does.
+export function parseBeerSmithStyles(xml) {
+  const out = [];
+  const seen = new Set();
+  for (const b of blocks(xml, "Style")) {
+    const name = field(b, "F_S_NAME").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, category: field(b, "F_S_CATEGORY").trim(), guide: field(b, "F_S_GUIDE").trim() });
+  }
+  return out;
+}
 
 // Resolve a raw name to an app catalog name. Returns {name, mapped}: mapped is
 // false when the name is neither aliased nor already in the catalog.
@@ -216,7 +250,7 @@ export function parseBeerSmith(xml) {
 
     recipes.push({
       n: field(rb, "F_R_NAME"),
-      s: field(rb, "F_R_STYLE"),
+      s: styleName(rb),
       mt,
       ft,
       // BeerSmith recomputes OG/FG/ABV for display and doesn't persist them, so

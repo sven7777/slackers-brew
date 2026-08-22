@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBeerSmith } from "./beersmith";
+import { parseBeerSmith, parseBeerSmithStyles } from "./beersmith";
 
 // A compact .bsmx exercising the parser's tricky paths: oz→lb grain, a
 // fermentable sugar that's an app adjunct, verbose names needing aliasing,
@@ -7,7 +7,12 @@ import { parseBeerSmith } from "./beersmith";
 const XML = `
 <Recipe>
 <F_R_NAME>Test Ale</F_R_NAME>
-<F_R_STYLE>American IPA</F_R_STYLE>
+<F_R_STYLE><_PERMID_>0</_PERMID_>
+<F_S_NAME>American IPA</F_S_NAME>
+<F_S_CATEGORY>IPA</F_S_CATEGORY>
+<F_S_GUIDE>BJCP 2015</F_S_GUIDE>
+<F_S_MIN_OG>1.0560000</F_S_MIN_OG>
+</F_R_STYLE>
 <Grain><F_G_NAME>Pale Malt (2 Row) US</F_G_NAME><F_G_TYPE>0</F_G_TYPE><F_G_AMOUNT>1600.0</F_G_AMOUNT></Grain>
 <Grain><F_G_NAME>Mystery Malt</F_G_NAME><F_G_TYPE>0</F_G_TYPE><F_G_AMOUNT>160.0</F_G_AMOUNT></Grain>
 <Grain><F_G_NAME>Milk Sugar (Lactose)</F_G_NAME><F_G_TYPE>2</F_G_TYPE><F_G_AMOUNT>160.0</F_G_AMOUNT><F_G_BOIL_TIME>5.0</F_G_BOIL_TIME></Grain>
@@ -34,6 +39,23 @@ describe("parseBeerSmith", () => {
     expect(r.ft).toBe(68);
     // OG/FG/ABV aren't persisted by BeerSmith, so the parser leaves them null.
     expect([r.og, r.fg, r.abv]).toEqual([null, null, null]);
+  });
+
+  // BeerSmith writes the style as a nested record, not as text — reading
+  // <F_R_STYLE> directly returned "" and every imported recipe arrived
+  // styleless. All 47 recipes across the brewery's own .bsmx files were hit.
+  it("reads the style out of the nested Style record", () => {
+    expect(r.s).toBe("American IPA");
+  });
+
+  it("still accepts a plain-text style tag", () => {
+    const { recipes: rs } = parseBeerSmith("<Recipe><F_R_NAME>Flat</F_R_NAME><F_R_STYLE>Saison</F_R_STYLE></Recipe>");
+    expect(rs[0].s).toBe("Saison");
+  });
+
+  it("leaves the style empty when the file has none", () => {
+    const { recipes: rs } = parseBeerSmith("<Recipe><F_R_NAME>Bare</F_R_NAME></Recipe>");
+    expect(rs[0].s).toBe("");
   });
 
   it("leaves ferm temp null when the aging profile is absent", () => {
@@ -80,5 +102,29 @@ describe("parseBeerSmith", () => {
     expect(unmapped).toContainEqual({ category: "malt", raw: "Mystery Malt" });
     expect(unmapped).toContainEqual({ category: "adj", raw: "Pixie Dust" });
     expect(unmapped).toHaveLength(2);
+  });
+});
+
+// The style export (File ▸ Export ▸ Styles) is the same format, but the <Style>
+// records stand alone instead of sitting inside a recipe's <F_R_STYLE>.
+describe("parseBeerSmithStyles", () => {
+  const XML = `<Selections><Data>
+<Style><F_S_NAME>Altbier</F_S_NAME><F_S_CATEGORY>Amber Bitter European Beer</F_S_CATEGORY><F_S_GUIDE>BJCP 2015</F_S_GUIDE>
+<F_S_DESCRIPTION>Copyrighted guideline prose that must not be imported.</F_S_DESCRIPTION></Style>
+<Style><F_S_NAME>K&ouml;lsch</F_S_NAME><F_S_CATEGORY>Pale Bitter European Beer</F_S_CATEGORY><F_S_GUIDE>BJCP 2015</F_S_GUIDE></Style>
+<Style><F_S_NAME>Altbier</F_S_NAME><F_S_CATEGORY>Amber Bitter European Beer</F_S_CATEGORY></Style>
+<Style><F_S_NAME></F_S_NAME></Style>
+</Data></Selections>`;
+
+  it("takes name, category and guide — and nothing else", () => {
+    const [first] = parseBeerSmithStyles(XML);
+    expect(first).toEqual({ name: "Altbier", category: "Amber Bitter European Beer", guide: "BJCP 2015" });
+    // The description is BJCP's copyrighted text; it must not ride along.
+    expect(Object.keys(first)).not.toContain("description");
+  });
+
+  it("decodes entities, dedupes, and skips nameless records", () => {
+    const names = parseBeerSmithStyles(XML).map((s) => s.name);
+    expect(names).toEqual(["Altbier", "Kölsch"]);
   });
 });
