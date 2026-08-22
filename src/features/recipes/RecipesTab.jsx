@@ -4,6 +4,7 @@ import ScheduleEditTable from "../../components/ScheduleEditTable";
 import ImportBeerSmith from "./ImportBeerSmith";
 import BrewSheetPanel from "./BrewSheetPanel";
 import CellarPanel from "./CellarPanel";
+import CostPanel from "./CostPanel";
 import { defRecipes, maltNames, hopNames, yeastNames, adjNames, saltNames } from "../../lib/defaults";
 import { card, hdr, btn, inp } from "../../styles";
 
@@ -12,6 +13,7 @@ const SUBVIEWS = [
   { key: "edit", label: "Edit" },
   { key: "brew", label: "Brew Sheet" },
   { key: "cellar", label: "Cellar Sheet" },
+  { key: "cost", label: "Cost" },
 ];
 const segWrap = { display: "flex", gap: 4, padding: 4, background: "#f1f5f9", borderRadius: 8, marginBottom: 12 };
 const segBtn = (active) => ({
@@ -26,10 +28,11 @@ const segBtn = (active) => ({
 // temp, ingredient lists with stage/time, water salts, cellar schedule), its
 // printable Brew Sheet, and its printable Cellar Sheet. Reset to preset / import
 // .bsmx live in the Edit view.
-export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
+export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, yeast, adj, setInvCost, settings }) {
   const [addSel, setAddSel] = useState({ m: "", h: "", y: "", a: "", sa: "", sc: "" });
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState("edit");
+  const [costDbl, setCostDbl] = useState(false);
   const r = recs[selR];
 
   // selR is device-local while recs is shared, so a stale index can point past
@@ -88,6 +91,11 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR }) {
 
       {view === "brew" && <BrewSheetPanel recipe={r} ri={selR} setRecs={setRecs} />}
       {view === "cellar" && <CellarPanel recipe={r} />}
+      {view === "cost" && (
+        <CostPanel recipe={r} dbl={costDbl} setDbl={setCostDbl}
+          malts={malts} hops={hops} yeast={yeast} adj={adj}
+          setInvCost={setInvCost} settings={settings} />
+      )}
 
       {view === "edit" && <>
         <div style={{ ...card, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
