@@ -107,6 +107,27 @@ describe("parseBeerSmith", () => {
 
 // The style export (File ▸ Export ▸ Styles) is the same format, but the <Style>
 // records stand alone instead of sitting inside a recipe's <F_R_STYLE>.
+// Accented names come through as HTML named entities. The decoder composes
+// letter + accent rather than listing entities one by one — the old list
+// covered ö/ü/ä and let "Bi&egrave;re de Garde" through raw into the catalog.
+describe("entity decoding", () => {
+  const style = (raw) => parseBeerSmithStyles(`<Style><F_S_NAME>${raw}</F_S_NAME></Style>`)[0].name;
+
+  it("decodes any letter+accent entity, in either case", () => {
+    expect(style("Bi&egrave;re de Garde")).toBe("Bière de Garde");
+    expect(style("K&ouml;lsch")).toBe("Kölsch");
+    expect(style("M&auml;rzen")).toBe("Märzen");
+    expect(style("Cr&egrave;me Br&ucirc;l&eacute;e")).toBe("Crème Brûlée");
+    expect(style("&Aring;l &ntilde;&Uuml;")).toBe("Ål ñÜ");
+  });
+
+  it("decodes the letters that aren't letter+accent, and plain XML escapes", () => {
+    expect(style("Wei&szlig;bier")).toBe("Weißbier");
+    expect(style("Malt &amp; Hops")).toBe("Malt & Hops");
+    expect(style("&#8217;t Smisje")).toBe("\u2019t Smisje");
+  });
+});
+
 describe("parseBeerSmithStyles", () => {
   const XML = `<Selections><Data>
 <Style><F_S_NAME>Altbier</F_S_NAME><F_S_CATEGORY>Amber Bitter European Beer</F_S_CATEGORY><F_S_GUIDE>BJCP 2015</F_S_GUIDE>

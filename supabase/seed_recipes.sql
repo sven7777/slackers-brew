@@ -8,7 +8,7 @@ begin;
 -- 1. All Y'alls
 with r as (
   insert into recipes (name, style, og, fg, abv, mash_temp, ord)
-  values ('All Y''alls', 'NEIPA', null, null, null, 155, 0) returning id
+  values ('All Y''alls', 'New England IPA', null, null, null, 155, 0) returning id
 )
 insert into recipe_ingredients (recipe_id, category, name, qty, unit, stage, time_min, ord)
 select r.id, v.category, v.name, v.qty::numeric, v.unit::text, v.stage::text, v.time_min::numeric, v.ord
@@ -36,7 +36,7 @@ from r, (values
 -- 2. Beachcomber
 with r as (
   insert into recipes (name, style, og, fg, abv, mash_temp, ord)
-  values ('Beachcomber', 'Belgian Blond', null, null, null, 152, 1) returning id
+  values ('Beachcomber', 'Belgian Blond Ale', null, null, null, 152, 1) returning id
 )
 insert into recipe_ingredients (recipe_id, category, name, qty, unit, stage, time_min, ord)
 select r.id, v.category, v.name, v.qty::numeric, v.unit::text, v.stage::text, v.time_min::numeric, v.ord
@@ -105,7 +105,7 @@ from r, (values
 -- 5. James
 with r as (
   insert into recipes (name, style, og, fg, abv, mash_temp, ord)
-  values ('James', 'American Brown', null, null, null, 154, 4) returning id
+  values ('James', 'American Brown Ale', null, null, null, 154, 4) returning id
 )
 insert into recipe_ingredients (recipe_id, category, name, qty, unit, stage, time_min, ord)
 select r.id, v.category, v.name, v.qty::numeric, v.unit::text, v.stage::text, v.time_min::numeric, v.ord
