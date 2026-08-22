@@ -92,7 +92,7 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
       {view === "brew" && <BrewSheetPanel recipe={r} ri={selR} setRecs={setRecs} />}
       {view === "cellar" && <CellarPanel recipe={r} />}
       {view === "cost" && (
-        <CostPanel recipe={r} dbl={costDbl} setDbl={setCostDbl}
+        <CostPanel recipe={r} ri={selR} setRecs={setRecs} dbl={costDbl} setDbl={setCostDbl}
           malts={malts} hops={hops} yeast={yeast} adj={adj}
           setInvCost={setInvCost} settings={settings} />
       )}
