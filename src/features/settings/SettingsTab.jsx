@@ -1,6 +1,7 @@
 import { breweryEmojis, defSettings } from "../../lib/defaults";
 import { card, hdr, btn, inp } from "../../styles";
 import DataBackup from "./DataBackup";
+import PriceImport from "./PriceImport";
 
 // Largest logo we'll store. localStorage is small (~5MB) and base64 inflates
 // the file ~33%, so we cap raw uploads well under that.
@@ -12,7 +13,7 @@ const textInp = { ...inp, width:'100%', textAlign:'left' };
 
 // Settings tab: edit brewery identity (name, tagline, icon). The icon is either
 // a picked emoji or an uploaded logo image (stored as a base64 data URL).
-export default function SettingsTab({ settings, setSettings }) {
+export default function SettingsTab({ settings, setSettings, malts, setMalts, hops, setHops, yeast, setYeast, adj, setAdj }) {
   const set = (patch) => setSettings(p => ({ ...p, ...patch }));
 
   const pickEmoji = (emoji) => set({ emoji, logo: null });
@@ -95,6 +96,44 @@ export default function SettingsTab({ settings, setSettings }) {
           </button>
         </div>
       </div>
+
+      <div style={card}>
+        <div style={hdr}>🛢️ Batch Volume</div>
+        <div style={{ padding: 16 }}>
+          <p style={{ margin: "0 0 12px", fontSize: 13, color: "#64748b" }}>
+            Used for cost per barrel and per keg. A recipe's own Post-Boil Yield on its Brew
+            Sheet wins when set; this is the fallback. Loss covers everything between the kettle
+            and the keg — trub, yeast, dry-hop absorption, transfer.
+          </p>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ ...field, marginBottom: 0 }}>
+              <label style={label} htmlFor="post-boil-yield">Default post-boil yield (gal)</label>
+              <input id="post-boil-yield" type="number" step="1" min="0" style={{ ...inp, width: 110 }}
+                value={settings.postBoilYield ?? ""} placeholder={String(defSettings.postBoilYield)}
+                onChange={e => set({ postBoilYield: e.target.value === "" ? null : parseFloat(e.target.value) })} />
+            </div>
+            <div style={{ ...field, marginBottom: 0 }}>
+              <label style={label} htmlFor="loss-pct">Brewhouse loss (%)</label>
+              <input id="loss-pct" type="number" step="1" min="0" max="99" style={{ ...inp, width: 110 }}
+                value={settings.lossPct ?? ""} placeholder={String(defSettings.lossPct)}
+                onChange={e => set({ lossPct: e.target.value === "" ? null : parseFloat(e.target.value) })} />
+            </div>
+          </div>
+          <p style={{ margin: "12px 0 0", fontSize: 12, color: "#94a3b8" }}>
+            {(() => {
+              const gal = settings.postBoilYield ?? defSettings.postBoilYield;
+              const loss = settings.lossPct ?? defSettings.lossPct;
+              const kegs = (gal * (1 - loss / 100)) / 15.5;
+              return Number.isFinite(kegs) && kegs > 0
+                ? `${gal} gal less ${loss}% ≈ ${kegs.toFixed(1)} kegs per batch.`
+                : "Set a yield and loss to see the keg count.";
+            })()}
+          </p>
+        </div>
+      </div>
+
+      <PriceImport malts={malts} setMalts={setMalts} hops={hops} setHops={setHops}
+        yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} />
 
       <DataBackup />
     </div>

@@ -55,7 +55,7 @@ export const defRecipes = [
   {n:"Leder Jörtsen",s:"Festbier",og:null,fg:null,abv:null,mt:152,m:[["Munich",110],["Pils",110],["Vienna",15],["Carafoam",10],["Caramunich I",10]],h:[["Amarillo",18,"boil",60],["Saaz",8,"boil",20],["Saaz",10,"boil",5]],y:[["K97",1]],a:[["Clarity Ferm",125,"ml","fermentation",0]],sa:[["Chalk",58,"mash"],["Baking Soda",24,"mash"],["Chalk",73,"boil"],["Baking Soda",30,"boil"]]},
   {n:"Mango Unchained",s:"Double IPA",og:null,fg:null,abv:null,mt:152,m:[["2-Row",330],["Flaked Wheat",20],["Carafoam",20],["Caramunich I",20]],h:[["CTZ",36,"boil",60],["Cascade",10,"boil",10],["Amarillo",12,"whirlpool",15],["Cascade",12,"whirlpool",15],["Amarillo",48,"dryhop",0],["Cascade",48,"dryhop",0]],y:[["K97",1]],a:[["Lactose",15,"lbs","boil",5],["Mango Puree",18,"lbs","secondary",0]],sa:[]},
   {n:"Night Jörts",s:"Czech Dark Lager",og:null,fg:null,abv:null,mt:152,m:[["Pils",185],["Carafa Special III",15],["Carafoam",8],["Caramunich I",8]],h:[["Centennial",16,"boil",60],["Centennial",6,"boil",5]],y:[["K97",1]],a:[["Clarity Ferm",125,"ml","fermentation",0]],sa:[["CaCl2",27,"mash"],["CaSo4",7,"mash"]]},
-  {n:"Pinkety Drinkety",s:"Cream Ale",og:null,fg:null,abv:null,mt:148,m:[["Pils",165],["Flaked Corn",20],["Carafoam",5]],h:[["CTZ",5,"boil",60],["Saaz",5,"boil",5]],y:[["K97",10]],a:[["Straw/Rhubarb",62,"oz","secondary",0],["Clarity Ferm",125,"ml","fermentation",0]],sa:[]},
+  {n:"Pinkety Drinkety",s:"Cream Ale",og:null,fg:null,abv:null,mt:148,m:[["Pils",165],["Flaked Corn",20],["Carafoam",5]],h:[["CTZ",5,"boil",60],["Saaz",5,"boil",5]],y:[["K97",1]],a:[["Straw/Rhubarb",62,"oz","secondary",0],["Clarity Ferm",125,"ml","fermentation",0]],sa:[]},
   {n:"Red Panda",s:"Belgian Tripel",og:null,fg:null,abv:null,mt:152,m:[["Pils",300],["Caramunich I",20],["Aromatic",15],["Carafoam",12],["Roasted Barley",2]],h:[["CTZ",14,"boil",60],["Saaz",8,"boil",5]],y:[["BE-256",1]],a:[["Honey",18,"lbs","boil",60],["Whirlfloc",12,"each","boil",15]],sa:[["CaSo4",51.87,"mash"],["Chalk",42,"mash"],["CaCl2",20,"mash"],["Salt",15,"mash"],["CaSo4",12,"boil"],["Chalk",10,"boil"],["CaCl2",5,"boil"],["Salt",4,"boil"]]},
   {n:"Scarlett",s:"Red IPA",og:null,fg:null,abv:null,mt:154,m:[["2-Row",110],["Maris Otter",110],["Munich",55],["Caramunich I",30],["Roasted Barley",4]],h:[["Chinook",18,"boil",60],["Centennial",18,"boil",15],["Cascade",18,"boil",10],["Centennial",42,"whirlpool",60],["Cascade",36,"dryhop",0]],y:[["DA-16",1]],a:[],sa:[["CaSo4",68,"mash"],["CaCl2",35,"mash"],["CaSo4",33,"boil"],["CaCl2",18,"boil"]]},
   {n:"Sheriff Bart IPA",s:"Black IPA",og:null,fg:null,abv:null,mt:152,m:[["2-Row",275],["Caramunich I",22],["Midnight Wheat",22],["Chocolate",5]],h:[["CTZ",12,"boil",60],["Chinook",16,"boil",20],["Cascade",32,"dryhop",0],["CTZ",8,"boil",20],["CTZ",24,"boil",5],["CTZ",32,"dryhop",0]],y:[["US-05",1]],a:[["Whirlfloc",12,"each","boil",15]],sa:[["CaSo4",48,"mash"],["CaCl2",45,"mash"],["Epsom",28,"mash"],["CaSo4",48,"boil"],["CaCl2",40,"boil"],["Epsom",28,"boil"]]},
@@ -79,7 +79,10 @@ export const saltNames = defSalts;
 export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Settings"];
 
 // Default brewery identity, editable in the Settings tab.
-export const defSettings = { name: "Slackers Brewing", tagline: "Inventory & Order Manager", emoji: "🍺", logo: null };
+// `postBoilYield` (gal off the kettle) and `lossPct` (kettle → packaged: trub,
+// yeast, dry-hop absorption, transfer) drive cost per bbl / per keg. The defaults
+// are Slackers' measured numbers: 150 gal post-boil packages out at ~6.5 kegs.
+export const defSettings = { name: "Slackers Brewing", tagline: "Inventory & Order Manager", emoji: "🍺", logo: null, postBoilYield: 150, lossPct: 33 };
 
 // Curated brewery-relevant emojis offered in the Settings icon picker.
 export const breweryEmojis = ["🍺","🍻","🏭","🌾","🍷","🥂","🛢️","⚗️","🔥","🧪","🌿","🦫"];

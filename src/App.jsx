@@ -19,6 +19,16 @@ export default function App() {
   const [recs, setRecs] = usePersistentState("recipes", () => structuredClone(defRecipes));
   const [settings, setSettings] = usePersistentState("settings", { ...defSettings });
 
+  // Ingredient prices live on inventory rows, so the Cost view edits inventory
+  // even though it renders inside a recipe. One setter keeps that in App.jsx
+  // rather than threading four setters through the Recipes tab.
+  const SETTER = { malt: setMalts, hop: setHops, yeast: setYeast, adj: setAdj };
+  const setInvCost = (category, name, raw) => {
+    const v = raw === "" ? null : parseFloat(raw);
+    const cpu = Number.isFinite(v) ? v : null;
+    SETTER[category]?.(p => p.map(it => it.n === name ? { ...it, cpu } : it));
+  };
+
   return (
     <div style={{fontFamily:'-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif',color:'#1e293b',maxWidth:900,margin:'0 auto',padding:'0 16px'}}>
       <div style={{textAlign:'center',padding:'16px 0 8px'}}>
@@ -40,9 +50,9 @@ export default function App() {
           outside the boundary, so a broken tab is always escapable. */}
       <ErrorBoundary key={tab}>
         {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
-        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR}/>}
+        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings}/>}
         {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
-        {tab===3 && <SettingsTab settings={settings} setSettings={setSettings}/>}
+        {tab===3 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
       </ErrorBoundary>
     </div>
   );

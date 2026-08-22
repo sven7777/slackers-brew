@@ -137,6 +137,24 @@ describe("inventory keys", () => {
     expect(await backend.load("malts", fb)).toBe(fb);
   });
 
+  // Saving a category replaces every row in it, so a pricing field that didn't
+  // survive the round trip would be silently wiped the next time anyone edited
+  // an unrelated quantity.
+  it("round-trips ingredient pricing", async () => {
+    const malts = [{ n: "2-Row", q: 10, cpu: 0.72, sku: "MRAH1102", vendor: "Rahr", pricedAt: "2025-06-19" }];
+    await backend.save("malts", malts);
+    expect(client.store.inventory[0]).toMatchObject({
+      cost_per_unit: 0.72, product_sku: "MRAH1102", vendor: "Rahr", price_effective: "2025-06-19",
+    });
+    expect(await backend.load("malts", null)).toEqual(malts);
+  });
+
+  it("leaves an unpriced row as plain {n, q}", async () => {
+    await backend.save("malts", [{ n: "2-Row", q: 10 }]);
+    expect(client.store.inventory[0]).toMatchObject({ cost_per_unit: null, product_sku: null });
+    expect(await backend.load("malts", null)).toEqual([{ n: "2-Row", q: 10 }]);
+  });
+
   it("save replaces the whole category (delete-then-insert)", async () => {
     await backend.save("yeast", [{ n: "K97", q: 1 }, { n: "S-04", q: 2 }]);
     await backend.save("yeast", [{ n: "US-05", q: 3 }]);
