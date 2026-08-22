@@ -25,6 +25,9 @@ const PRINT_CSS = `
 
 const sheetBox = { border: "1px solid #000", borderRadius: 4, padding: 8, background: "#fff" };
 const sectTitle = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 4px", color: "#000" };
+// Charge sub-heading inside the Dry Hop box: smaller and lighter than the box
+// title so the box still reads as one section, not three.
+const chargeTitle = { fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#475569", margin: "3px 0 1px" };
 const miniTh = { textAlign: "left", fontSize: 9, fontWeight: 700, color: "#475569", borderBottom: "1px solid #000", padding: "2px 4px" };
 const miniTd = { fontSize: 11, padding: "2px 4px", borderBottom: "1px solid #e2e8f0", color: "#000" };
 const tbl = { width: "100%", borderCollapse: "collapse" };
@@ -140,27 +143,49 @@ function CellarSheetPage({ sheet }) {
               target: sheet.coldCrash.find((c) => c.temp === t)?.date ?? null,
             }))} />
 
-          {/* Dry Hop keeps a variety/amount table but adds a Target/Actual date pair. */}
+          {/* Dry Hop: one block per charge, since a double dry hop goes in on two
+              different days. Every hop in a charge carries that charge's Target
+              date — they all go in together — with a blank Actual beside it. */}
           <div style={sheetBox}>
             <div style={sectTitle}>Dry Hop</div>
-            <table style={{ ...tbl, tableLayout: "fixed" }}>
-              <colgroup><col /><col style={{ width: 40 }} /><col style={{ width: 60 }} /><col style={{ width: 60 }} /></colgroup>
-              <thead><tr>
-                <th style={miniTh}>Type</th><th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
-                <th style={taTh}>Target</th><th style={taTh}>Actual</th>
-              </tr></thead>
-              <tbody>
-                {sheet.dryHop.items.map((it, i) => (
-                  <tr key={i}>
-                    <td style={miniTd}>{it.name}</td>
-                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700 }}>{it.qty} oz</td>
-                    <td style={taCell}><span style={i === 0 && sheet.dryHop.dates[0] ? taVal : { ...taVal, color: "#cbd5e1" }}>{i === 0 && sheet.dryHop.dates[0] ? sheet.dryHop.dates[0] : " "}</span></td>
-                    <td style={taCell}><span style={taVal}>&nbsp;</span></td>
-                  </tr>
-                ))}
-                {sheet.dryHop.items.length === 0 && <tr><td style={{ ...blank, fontStyle: "italic" }} colSpan={4}>No dry hop.</td></tr>}
-              </tbody>
-            </table>
+            {sheet.dryHop.charges.length === 0 && (
+              <div style={{ ...blank, fontStyle: "italic" }}>No dry hop.</div>
+            )}
+            {sheet.dryHop.charges.map((c) => (
+              <div key={c.charge} style={{ marginBottom: 4 }}>
+                {/* Only label the charges when there's more than one: a single
+                    dry hop needs no "1" to disambiguate it from nothing. */}
+                {sheet.dryHop.charges.length > 1 && (
+                  <div style={chargeTitle}>Dry Hop {c.charge}</div>
+                )}
+                <table style={{ ...tbl, tableLayout: "fixed" }}>
+                  <colgroup><col /><col style={{ width: 40 }} /><col style={{ width: 60 }} /><col style={{ width: 60 }} /></colgroup>
+                  <thead><tr>
+                    <th style={miniTh}>Type</th><th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
+                    <th style={taTh}>Target</th><th style={taTh}>Actual</th>
+                  </tr></thead>
+                  <tbody>
+                    {c.items.map((it, i) => (
+                      <tr key={i}>
+                        <td style={miniTd}>{it.name}</td>
+                        <td style={{ ...miniTd, textAlign: "right", fontWeight: 700 }}>{it.qty} oz</td>
+                        <td style={taCell}><span style={c.date ? taVal : { ...taVal, color: "#cbd5e1" }}>{c.date || " "}</span></td>
+                        <td style={taCell}><span style={taVal}>&nbsp;</span></td>
+                      </tr>
+                    ))}
+                    {/* A charge scheduled but with no hops listed still prints its
+                        date, so the day isn't silently lost off the sheet. */}
+                    {c.items.length === 0 && (
+                      <tr>
+                        <td style={{ ...miniTd, fontStyle: "italic" }} colSpan={2}>Not listed</td>
+                        <td style={taCell}><span style={c.date ? taVal : { ...taVal, color: "#cbd5e1" }}>{c.date || " "}</span></td>
+                        <td style={taCell}><span style={taVal}>&nbsp;</span></td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
 
           <TABox title="Rousing" empty="No rouse."

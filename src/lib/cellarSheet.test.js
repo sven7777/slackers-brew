@@ -78,12 +78,63 @@ describe('buildCellarSheet', () => {
     expect(s.blowOffs).toHaveLength(5);
   });
 
-  it('pairs dry-hop dates with the recipe dry-hop varieties', () => {
+  // This fixture deliberately uses the OLD unnumbered values ('dryhop' /
+  // 'Dry Hop'). A device on localStorage or an old backup file still carries
+  // them, and they must keep printing as charge 1.
+  it('reads legacy unnumbered dry hops as charge 1', () => {
     const s = buildCellarSheet(recipe, '2026-07-01');
-    expect(s.dryHop.dates).toEqual(['Mon 7/13']); // day 12
-    expect(s.dryHop.items).toEqual([
+    expect(s.dryHop.charges).toHaveLength(1);
+    const [c] = s.dryHop.charges;
+    expect(c.charge).toBe(1);
+    expect(c.date).toBe('Mon 7/13'); // day 12
+    expect(c.items).toEqual([
       { name: 'Cascade', qty: 48 }, { name: 'Mosaic', qty: 48 }, { name: 'Simcoe', qty: 16 },
     ]);
+  });
+
+  // The point of numbering: a double dry hop is two charges on two days, and
+  // each hop has to print against ITS day.
+  it('gives each dry-hop charge its own date', () => {
+    const dbl = {
+      ...recipe,
+      h: [
+        ['Cascade', 12, 'boil', 10],
+        ['Cascade', 48, 'dryhop1', 0],
+        ['Mosaic', 48, 'dryhop1', 0],
+        ['Citra', 32, 'dryhop2', 0],
+      ],
+      sc: [[0, 'Brew Date'], [12, 'Dry Hop 1'], [15, 'Dry Hop 2'], [20, 'Keg']],
+    };
+    const { charges } = buildCellarSheet(dbl, '2026-07-01').dryHop;
+    expect(charges).toHaveLength(2);
+    expect(charges[0]).toMatchObject({
+      charge: 1,
+      date: 'Mon 7/13',
+      items: [{ name: 'Cascade', qty: 48 }, { name: 'Mosaic', qty: 48 }],
+    });
+    expect(charges[1]).toMatchObject({
+      charge: 2,
+      date: 'Thu 7/16',
+      items: [{ name: 'Citra', qty: 32 }],
+    });
+  });
+
+  it('prints a scheduled charge even when no hops are listed for it', () => {
+    const sheet = buildCellarSheet({
+      ...recipe, h: [], sc: [[0, 'Brew Date'], [14, 'Dry Hop 2']],
+    }, '2026-07-01');
+    expect(sheet.dryHop.charges).toEqual([
+      { charge: 2, items: [], dates: ['Wed 7/15'], date: 'Wed 7/15' },
+    ]);
+  });
+
+  it('omits a charge that has neither hops nor a scheduled day', () => {
+    const sheet = buildCellarSheet({
+      ...recipe,
+      h: [['Citra', 32, 'dryhop3', 0]],
+      sc: [[0, 'Brew Date'], [18, 'Dry Hop 3']],
+    }, '2026-07-01');
+    expect(sheet.dryHop.charges.map((c) => c.charge)).toEqual([3]);
   });
 
   it('carries yeast strains', () => {
@@ -115,6 +166,6 @@ describe('buildCellarSheet', () => {
     expect(s.schedule).toEqual([]);
     expect(s.coldCrash).toEqual([]);
     expect(s.bung).toBeNull();
-    expect(s.dryHop.items).toEqual([]);
+    expect(s.dryHop.charges).toEqual([]);
   });
 });
