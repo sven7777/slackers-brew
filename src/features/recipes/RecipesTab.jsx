@@ -5,6 +5,7 @@ import ImportBeerSmith from "./ImportBeerSmith";
 import BrewSheetPanel from "./BrewSheetPanel";
 import CellarPanel from "./CellarPanel";
 import CostPanel from "./CostPanel";
+import StyleSelect from "../../components/StyleSelect";
 import { defRecipes, maltNames, hopNames, yeastNames, adjNames, saltNames } from "../../lib/defaults";
 import { card, hdr, btn, inp } from "../../styles";
 
@@ -55,6 +56,25 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
     const val = raw === "" ? null : parseFloat(raw);
     setRecs((p) => p.map((rec, i) => (i === selR ? { ...rec, [field]: Number.isNaN(val) ? null : val } : rec)));
   };
+  // Name and style are free text, not numbers. Style especially: BeerSmith's own
+  // names ("Belgian Dark Strong Ale") are what the brewer expects to read back,
+  // and a fixed dropdown would just be a second catalog to maintain.
+  const setText = (field, raw) =>
+    setRecs((p) => p.map((rec, i) => (i === selR ? { ...rec, [field]: raw } : rec)));
+  const labeledField = (label, control, htmlFor) => (
+    <div style={{ fontSize: 12, color: "#64748b", display: "flex", flexDirection: "column", gap: 2, flex: "1 1 200px" }}>
+      <label htmlFor={htmlFor}>{label}</label>
+      {control}
+    </div>
+  );
+  const textInput = (label, field, placeholder) => (
+    <label style={{ fontSize: 12, color: "#64748b", display: "flex", flexDirection: "column", gap: 2, flex: "1 1 200px" }}>
+      {label}
+      <input type="text" value={r[field] ?? ""} placeholder={placeholder}
+        onChange={(e) => setText(field, e.target.value)}
+        style={{ ...inp, width: "100%", boxSizing: "border-box", textAlign: "left" }} />
+    </label>
+  );
   const metaInput = (label, field, step) => (
     <label style={{ fontSize: 12, color: "#64748b", display: "flex", flexDirection: "column", gap: 2 }}>
       {label}
@@ -77,7 +97,9 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <select value={selR} onChange={(e) => { setSelR(+e.target.value); setAddSel({ m: "", h: "", y: "", a: "", sa: "", sc: "" }); }}
           style={{ flex: 1, padding: "10px 12px", fontSize: 15, fontWeight: 600, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b" }}>
-          {recs.map((rec, i) => <option key={i} value={i}>{rec.n} — {rec.s}</option>)}
+          {/* The name is editable now, so it can be empty mid-edit. An option that
+              renders as bare " — " is unpickable, so label it instead. */}
+          {recs.map((rec, i) => <option key={i} value={i}>{rec.n?.trim() || "(untitled)"} — {rec.s}</option>)}
         </select>
         {view === "edit" && !importing && <button style={{ ...btn, borderColor: "#f59e0b", color: "#92400e" }} onClick={() => setImporting(true)}>⬆️ Import .bsmx</button>}
         {view === "edit" && <button style={{ ...btn, borderColor: "#fca5a5", color: "#dc2626" }} onClick={() => resetRec(selR)}>Reset Recipe</button>}
@@ -98,12 +120,21 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
       )}
 
       {view === "edit" && <>
-        <div style={{ ...card, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
-          {metaInput("Target OG", "og", 0.001)}
-          {metaInput("Target FG", "fg", 0.001)}
-          {metaInput("Target ABV %", "abv", 0.1)}
-          {metaInput("Mash Temp °F", "mt", 1)}
-          {metaInput("Ferm Temp °F", "ft", 1)}
+        {/* Two rows on purpose: the free-text identity fields want the width,
+            the five numbers are fixed and narrow. One flex row wrapped them
+            unevenly and left Ferm Temp stranded on a line of its own. */}
+        <div style={{ ...card, padding: 12, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+            {textInput("Name", "n", "Recipe name")}
+            {labeledField("Style", <StyleSelect id="recipe-style" value={r.s} onChange={(v) => setText("s", v)} />, "recipe-style")}
+          </div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+            {metaInput("Target OG", "og", 0.001)}
+            {metaInput("Target FG", "fg", 0.001)}
+            {metaInput("Target ABV %", "abv", 0.1)}
+            {metaInput("Mash Temp °F", "mt", 1)}
+            {metaInput("Ferm Temp °F", "ft", 1)}
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
