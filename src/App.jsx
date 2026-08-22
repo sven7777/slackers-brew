@@ -22,11 +22,19 @@ export default function App() {
   // Ingredient prices live on inventory rows, so the Cost view edits inventory
   // even though it renders inside a recipe. One setter keeps that in App.jsx
   // rather than threading four setters through the Recipes tab.
+  //
+  // A recipe can name an ingredient that has no inventory row — seeded recipes
+  // did exactly that with Whirlfloc, and any hand-typed name does it too. This
+  // used to map over the list, match nothing, and silently do nothing, so the
+  // price field simply refused to accept input. Create the row instead.
   const SETTER = { malt: setMalts, hop: setHops, yeast: setYeast, adj: setAdj };
-  const setInvCost = (category, name, raw) => {
+  const setInvCost = (category, name, raw, unit) => {
     const v = raw === "" ? null : parseFloat(raw);
-    const cpu = Number.isFinite(v) ? v : null;
-    SETTER[category]?.(p => p.map(it => it.n === name ? { ...it, cpu } : it));
+    // Prices are money: two decimals, so what's shown is what's stored.
+    const cpu = Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
+    SETTER[category]?.(prev => prev.some(it => it.n === name)
+      ? prev.map(it => it.n === name ? { ...it, cpu } : it)
+      : [...prev, { n: name, q: 0, ...(unit ? { u: unit } : null), cpu }]);
   };
 
   return (
