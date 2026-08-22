@@ -11,7 +11,7 @@
 // fermentation temp, dry-hop varieties + amounts, cellar additions); the
 // schedule supplies WHEN.
 
-import { brewDayStages, dryHopStages, dryHopCharge, LEGACY_DRY_HOP_ACTION } from "./defaults";
+import { brewDayStages, dryHopStages, dryHopCharge, stageLabels, LEGACY_DRY_HOP_ACTION } from "./defaults";
 import { fmtGravity } from "./gravity";
 
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -31,6 +31,29 @@ function crashTemp(action) {
   const m = /(\d+)\s*$/.exec(action);
   return m ? Number(m[1]) : null;
 }
+
+// Cellar addition stages in the order they happen. "fermentation" is the value
+// the seeded recipes (and BeerSmith imports) actually use for primary, so it's
+// listed alongside it rather than sorting as an unknown.
+const MISC_STAGE_ORDER = [
+  "fermentation", "primary", ...dryHopStages, "secondary", "fining", "rousing",
+  "transfer", "keg", "bottling",
+];
+
+// The stages a schedule action can date. Anything else stays a write-in.
+const MISC_STAGE_ACTIONS = { rousing: "rouse", transfer: "transfer", keg: "keg" };
+
+// A stage off the list keeps its recipe order at the end: free text is allowed
+// here, and inventing a position for it would reorder the sheet arbitrarily.
+const miscStageRank = (stage) => {
+  const i = MISC_STAGE_ORDER.indexOf(stage);
+  return i === -1 ? MISC_STAGE_ORDER.length : i;
+};
+
+// Printed stage name: the shared label where one exists (dry-hop charges), else
+// the raw stage title-cased ("secondary" → "Secondary").
+const miscStageLabel = (stage) =>
+  stageLabels[stage] ?? (stage ? stage.replace(/\b\w/g, (c) => c.toUpperCase()) : "");
 
 export function buildCellarSheet(recipe, brewDate) {
   if (!recipe) return null;
@@ -96,9 +119,26 @@ export function buildCellarSheet(recipe, brewDate) {
 
   // Misc cellar additions = adjuncts added off brew day (fermentation, secondary,
   // fining, …). Brew-day adjuncts belong on the Brew Day sheet, so drop them.
+  //
+  // Each one carries WHEN in the process it goes in: "Mango Puree, 18 lbs" on
+  // its own doesn't say whether that's at primary or at transfer, and the crew
+  // reading the sheet on the tank has no other source for it. Where the stage
+  // maps to a scheduled action (rousing / transfer / keg) the row also gets that
+  // step's date; the rest print a blank date line, since a stage the schedule
+  // doesn't pin down would only be a guess printed as a plan.
   const misc = a
     .filter(([, , , stage]) => !brewDayStages.includes(stage))
-    .map(([name, qty, unit]) => ({ name, qty, unit: unit || "" }));
+    .map(([name, qty, unit, stage]) => ({
+      name,
+      qty,
+      unit: unit || "",
+      stage: stage || "",
+      stageLabel: miscStageLabel(stage),
+      date: MISC_STAGE_ACTIONS[stage] ? firstDate(is(MISC_STAGE_ACTIONS[stage])) : null,
+    }))
+    // Process order, so the sheet reads top-to-bottom the way the tank does.
+    // sort is stable, so two additions at the same stage keep recipe order.
+    .sort((x, y) => miscStageRank(x.stage) - miscStageRank(y.stage));
 
   return {
     name: n,

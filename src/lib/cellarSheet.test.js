@@ -146,9 +146,46 @@ describe('buildCellarSheet', () => {
     expect(buildCellarSheet(recipe).fermTemp).toBeNull();
   });
 
-  it('keeps only off-brew-day adjuncts as misc additions', () => {
+  it('keeps only off-brew-day adjuncts as misc additions, labelled with their stage', () => {
     const s = buildCellarSheet(recipe);
-    expect(s.misc).toEqual([{ name: 'Mango Puree', qty: 18, unit: 'lbs' }]);
+    expect(s.misc).toEqual([
+      { name: 'Mango Puree', qty: 18, unit: 'lbs', stage: 'secondary', stageLabel: 'Secondary', date: null },
+    ]);
+  });
+
+  it('dates a misc addition from the stage\'s scheduled step, where there is one', () => {
+    const r = {
+      ...recipe,
+      a: [
+        ['Mango Puree', 18, 'lbs', 'secondary', 0],   // no scheduled step — write-in
+        ['Gelatin', 2, 'oz', 'transfer', 0],          // Transfer, day 19
+      ],
+    };
+    const misc = buildCellarSheet(r, '2026-07-01').misc;
+    expect(misc.map((m) => [m.name, m.date])).toEqual([
+      ['Mango Puree', null],
+      ['Gelatin', 'Mon 7/20'],
+    ]);
+  });
+
+  it('orders misc additions by where they fall in the process', () => {
+    const r = {
+      ...recipe,
+      a: [
+        ['Gelatin', 2, 'oz', 'transfer', 0],
+        ['Mango Puree', 18, 'lbs', 'secondary', 0],
+        ['Clarity Ferm', 125, 'ml', 'fermentation', 0],
+        ['Sugar', 1, 'lbs', 'keg', 0],
+      ],
+    };
+    expect(buildCellarSheet(r).misc.map((m) => m.name))
+      .toEqual(['Clarity Ferm', 'Mango Puree', 'Gelatin', 'Sugar']);
+  });
+
+  it('labels a stage it does not know and leaves it in recipe order at the end', () => {
+    const r = { ...recipe, a: [['Oak Cubes', 4, 'oz', 'barrel aging', 0], ['Mango Puree', 18, 'lbs', 'secondary', 0]] };
+    const misc = buildCellarSheet(r).misc;
+    expect(misc.map((m) => m.stageLabel)).toEqual(['Secondary', 'Barrel Aging']);
   });
 
   it('routes rouse dates', () => {

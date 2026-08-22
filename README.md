@@ -27,7 +27,8 @@ either way.
     crash, bung, dry hop, rouse, transfer, carb, keg) alongside its yeast, dry-hop
     varieties, and cellar additions. Dry hopping is charged: hops assigned to
     **Dry Hop 1/2/3** print against their own charge's scheduled day, so a double
-    dry hop shows two dates.
+    dry hop shows two dates. Misc. additions print the stage they go in at, the
+    scheduled date where there is one, and a box to tick once they're in.
   - **Cost** — ingredient COGS for the recipe: batch total, cost per barrel, per
     keg and per 16 oz pint, with per-category subtotals and an editable cost per
     unit on each ingredient. Per-volume figures are of *packaged* beer, from the
