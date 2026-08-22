@@ -29,7 +29,7 @@ const STYLE_PAIRS = [
   ["Mixed-Fermentation Sour Beer", "American Wild Ale"],
   ["Wild Specialty Beer", "American Wild Ale"],
   ["Belgian Pale Ale", "Belgian Ale"],
-  ["Bi&egrave;re de Garde", "Belgian Ale"],
+  ["Bière de Garde", "Belgian Ale"],
   ["Witbier", "Belgian Ale"],
   ["Best Bitter", "British Bitter"],
   ["Ordinary Bitter", "British Bitter"],

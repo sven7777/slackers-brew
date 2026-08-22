@@ -99,12 +99,24 @@ const MISC_USE = { 0: "boil", 1: "mash", 2: "primary", 3: "secondary", 4: "bottl
 // --- low-level XML helpers (no DOM; this format is flat per ingredient) -----
 
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'" };
+// Accented letters arrive as HTML named entities (&ouml;, &egrave;), and those
+// names follow a pattern: letter + accent. Composing from that pattern covers
+// every Latin-1 accented letter in one rule, in both cases — which listing them
+// individually did not: the file handled ö/ü/ä and left "Bi&egrave;re de Garde"
+// to reach the UI raw.
+const ACCENTS = {
+  grave: "\u0300", acute: "\u0301", circ: "\u0302", tilde: "\u0303",
+  uml: "\u0308", ring: "\u030A", cedil: "\u0327",
+};
+// The handful that aren't letter+accent.
+const LETTERS = { szlig: "ß", aelig: "æ", AElig: "Æ", oslash: "ø", Oslash: "Ø", eth: "ð", thorn: "þ" };
 function unescapeXml(s) {
   return s
-    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&ouml;/g, "ö").replace(/&uuml;/g, "ü").replace(/&auml;/g, "ä")
-    .replace(/&Ouml;/g, "Ö").replace(/&Uuml;/g, "Ü").replace(/&Auml;/g, "Ä")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&([a-zA-Z])(grave|acute|circ|tilde|uml|ring|cedil);/g,
+      (m, letter, accent) => (letter + ACCENTS[accent]).normalize("NFC"))
+    .replace(/&(szlig|aelig|AElig|oslash|Oslash|eth|thorn);/g, (_, n) => LETTERS[n])
     .replace(/&amp;|&lt;|&gt;|&quot;|&apos;/g, (m) => ENTITIES[m]);
 }
 const field = (block, tag) => {
