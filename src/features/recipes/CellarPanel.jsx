@@ -32,6 +32,12 @@ const miniTh = { textAlign: "left", fontSize: 9, fontWeight: 700, color: "#47556
 const miniTd = { fontSize: 11, padding: "2px 4px", borderBottom: "1px solid #e2e8f0", color: "#000" };
 const tbl = { width: "100%", borderCollapse: "collapse" };
 const blank = { ...miniTd, color: "#cbd5e1" }; // a write-in cell
+// The stage under a Misc. Addition's name ("Secondary", "Dry Hop 2"): when in
+// the process it goes in, kept quiet enough that the name still leads.
+const stageSub = { fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#64748b" };
+// An empty tick box, borrowed from the Brew Sheet's prep steps — the space the
+// cellar crew marks to confirm an addition actually went in.
+const checkBox = { display: "inline-block", width: 11, height: 11, border: "1.5px solid #000", borderRadius: 2 };
 
 // Target/Actual convention borrowed 1:1 from the Brew Sheet: a label column, a
 // Target cell (pre-filled from the schedule where known) and an always-blank
@@ -191,25 +197,40 @@ function CellarSheetPage({ sheet }) {
           <TABox title="Rousing" empty="No rouse."
             rows={sheet.rouse.map((d) => ({ label: "Rouse", target: d }))} />
 
+          {/* Misc. Additions — every line says WHEN in the process it goes in
+              (the stage, under the name), carries the schedule's date where one
+              pins it down, and ends in an ADDED box the cellar crew ticks or
+              initials. A name and an amount alone left them with nothing to
+              record against: no way to tell a pending addition from a done one. */}
           <div style={sheetBox}>
             <div style={sectTitle}>Misc. Additions</div>
-            <table style={tbl}>
-              <thead><tr><th style={miniTh}>Date</th><th style={miniTh}>Type</th><th style={{ ...miniTh, textAlign: "right" }}>Amt</th></tr></thead>
+            <table style={{ ...tbl, tableLayout: "fixed" }}>
+              <colgroup><col /><col style={{ width: 46 }} /><col style={{ width: 58 }} /><col style={{ width: 44 }} /></colgroup>
+              <thead><tr>
+                <th style={miniTh}>Type / When</th>
+                <th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
+                <th style={taTh}>Target</th>
+                <th style={taTh}>Added</th>
+              </tr></thead>
               <tbody>
                 {sheet.misc.map((m, i) => (
                   <tr key={i}>
-                    <td style={blank}>&nbsp;</td>
-                    <td style={miniTd}>{m.name}</td>
-                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700 }}>{m.qty} {m.unit}</td>
+                    <td style={{ ...miniTd, verticalAlign: "bottom" }}>
+                      {m.name}
+                      {m.stageLabel && <div style={stageSub}>{m.stageLabel}</div>}
+                    </td>
+                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700, verticalAlign: "bottom" }}>{m.qty} {m.unit}</td>
+                    <td style={taCell}><span style={m.date ? taVal : { ...taVal, color: "#cbd5e1" }}>{m.date || " "}</span></td>
+                    <td style={{ ...taCell, textAlign: "center" }}><span style={taVal}><span style={checkBox} /></span></td>
                   </tr>
                 ))}
-                {sheet.misc.length === 0 && <tr><td style={{ ...blank, fontStyle: "italic" }} colSpan={3}>None.</td></tr>}
+                {sheet.misc.length === 0 && <tr><td style={{ ...blank, fontStyle: "italic" }} colSpan={4}>None.</td></tr>}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Col 2 — Gravity Log, Blow Offs, Transfer/Carb, Packaging, Misc Additions */}
+        {/* Col 2 — Gravity Log, Blow Offs, Transfer/Carb, Packaging */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={sheetBox}>
             <div style={{ ...sectTitle, display: "flex", justifyContent: "space-between" }}>
