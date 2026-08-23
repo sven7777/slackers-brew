@@ -38,7 +38,8 @@ either way.
   computed order summary: how much you need, how much you have, and how much to
   order. Malts also roll up into 55 lb bag counts.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
-  volume and brewhouse loss that drive costing, ingredient pricing (upload the
+  volume that drives costing — post-boil yield plus the average kegs a batch
+  packages, which is where the brewhouse loss % comes from — ingredient pricing (upload the
   vendor's PDF price list, see exactly which prices would change, then apply —
   the scanned spot hop list is read by OCR, with every price shown against the
   page it came from and editable before anything is saved), and a

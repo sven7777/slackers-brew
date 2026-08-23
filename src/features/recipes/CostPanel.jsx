@@ -108,10 +108,14 @@ export default function CostPanel({ recipe, ri, setRecs, dbl, setDbl, malts, hop
             placeholder={defaultKegs}
             onChange={(e) => setAvgKegs(e.target.value === "" ? "" : e.target.value)} />
           <span>kegs per batch</span>
+          {/* The default loss % is rounded inline rather than through a helper:
+              it reads off the batchVolume result AFTER the useMemo above, and a
+              call there extends that object's mutable range past the memo — at
+              which point the React Compiler gives up on the whole panel. */}
           <span style={{ color: "#94a3b8" }}>
             {source === "kegs"
               ? `— your measured yield for this beer, so ${lossPct.toFixed(1)}% loss`
-              : `— blank uses the brewery default of ${defaultLossPct}% loss`}
+              : `— blank uses the brewery default of ${Math.round(defaultLossPct * 10) / 10}% loss`}
           </span>
         </div>
         <div style={{ padding: "0 14px 10px", fontSize: 12, color: "#64748b" }}>

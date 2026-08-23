@@ -20,6 +20,7 @@
 // rather than silently dropping them.
 
 import { defSettings } from "./defaults";
+import { compareNames } from "./sortNames";
 
 const GAL_PER_BBL = 31;
 const KEGS_PER_BBL = 2; // a half-barrel keg is 15.5 gal
@@ -63,6 +64,19 @@ export function parseVolume(text) {
   return /bbl|barrel/i.test(text) ? n * GAL_PER_BBL : n;
 }
 
+// Kettle → packaged loss implied by an average keg count, or null when there is
+// nothing usable to derive it from.
+//
+// More beer packaged than boiled is not a yield, it's a typo (a kettle volume
+// left at the 150 gal default while kegs were entered for a bigger system,
+// say). Costing must never divide by a volume the brewery didn't make, so that
+// case returns null too and the caller falls back to the percentage.
+export function lossFromKegs(kegs, kettleGal) {
+  if (kegs == null || kettleGal == null) return null;
+  const packagedGal = kegs * GAL_PER_KEG;
+  return packagedGal < kettleGal ? (1 - packagedGal / kettleGal) * 100 : null;
+}
+
 // Where a batch's volume comes from, in ONE place, because two callers used to
 // answer it differently. The Cost panel read `settings.lossPct` and fell back to
 // 0% when the key was absent; Settings' own preview fell back to the brewery
@@ -82,29 +96,53 @@ export function parseVolume(text) {
 // packaging 7 differ by 14% of their COGS, and nobody should have to work that
 // back to "23% vs 28% loss" by hand.
 //
+// The brewery-wide default works the same way, from `settings.avgKegs`: the
+// Settings tab asks for kegs too, so there is one unit for yield in the app
+// rather than kegs on a recipe and a percentage behind it in Settings.
+//
+// That back-solve uses the SETTINGS kettle volume, never the recipe's. The
+// setting is a ratio measured on a typical batch — 6.5 kegs off the house 150
+// gal boil is 33% loss, and 33% is what should carry over to a recipe that
+// boils a different volume. Dividing the house keg count by the recipe's
+// kettle would read a 300 gal brew as losing 66%.
+//
 // Returns `lossPct` either way, so the cost math downstream stays one number
 // wide and double batches keep scaling by volume.
 export function batchVolume({ recipe, settings } = {}) {
-  const kettleGal =
-    parseVolume(recipe?.process?.postBoilYield) ??
-    parseVolume(settings?.postBoilYield) ??
-    parseVolume(defSettings.postBoilYield);
-  const defaultLoss = Number.isFinite(settings?.lossPct) ? settings.lossPct : defSettings.lossPct;
+  const settingsGal = parseVolume(settings?.postBoilYield) ?? parseVolume(defSettings.postBoilYield);
+  const kettleGal = parseVolume(recipe?.process?.postBoilYield) ?? settingsGal;
+
+  // A stored `lossPct` still stands for a settings record saved before the kegs
+  // field existed (and for anyone who prefers the percentage); defSettings
+  // backstops both.
+  const storedLoss = Number.isFinite(settings?.lossPct) ? settings.lossPct : defSettings.lossPct;
+  const defaultAvgKegs = parseKegs(settings?.avgKegs);
+  const defaultLossFromKegs = lossFromKegs(defaultAvgKegs, settingsGal);
+  const defaultLossPct = defaultLossFromKegs ?? storedLoss;
 
   const avgKegs = parseKegs(recipe?.process?.avgKegs);
-  if (avgKegs != null && kettleGal != null) {
-    const packagedGal = avgKegs * GAL_PER_KEG;
-    // More beer packaged than boiled is not a yield, it's a typo (a kettle
-    // volume left at the 150 gal default while kegs were entered for a bigger
-    // system, say). Costing must never divide by a volume the brewery didn't
-    // make, so fall back to the percentage and let the UI say why.
-    if (packagedGal < kettleGal) {
-      return { kettleGal, defaultLossPct: defaultLoss, lossPct: (1 - packagedGal / kettleGal) * 100, avgKegs, source: "kegs" };
-    }
-    return { kettleGal, defaultLossPct: defaultLoss, lossPct: defaultLoss, avgKegs, source: "loss", kegsRejected: true };
-  }
-  return { kettleGal, defaultLossPct: defaultLoss, lossPct: defaultLoss, avgKegs: null, source: "loss" };
+  const recipeLossFromKegs = lossFromKegs(avgKegs, kettleGal);
+
+  return {
+    kettleGal,
+    lossPct: recipeLossFromKegs ?? defaultLossPct,
+    avgKegs,
+    source: recipeLossFromKegs != null ? "kegs" : "loss",
+    // Kegs were entered and they don't fit in the boil, so the percentage is
+    // used instead and the UI says why. Same guard at both levels.
+    kegsRejected: recipeLossFromKegs == null && avgKegs != null && kettleGal != null,
+    defaultLossPct,
+    defaultAvgKegs,
+    defaultSource: defaultLossFromKegs != null ? "kegs" : "loss",
+    defaultKegsRejected: defaultAvgKegs != null && defaultLossFromKegs == null,
+  };
 }
+
+// A loss percentage for display. Derived from kegs it carries float noise
+// (6.5 kegs off 150 gal is 32.833333…%), and a tenth of a percent is already
+// finer than the measurement behind it. Whole numbers stay whole.
+export const fmtLossPct = (n) =>
+  Number.isFinite(n) ? String(Math.round(n * 10) / 10) : "";
 
 // Average yield is a free-text field like post-boil yield, so "6.5", "6.5 kegs"
 // and "  7 " all have to land. Null (not a guess, not 0) when there's no usable
@@ -154,7 +192,12 @@ export function computeRecipeCost({ recipe, priceMap, postBoilGal, lossPct = 0, 
       totals.set(name, { qty: (prev?.qty || 0) + q * mult, unit: prev?.unit ?? unit(tuple) });
     }
 
-    for (const [name, { qty, unit: u }] of totals) {
+    // Alphabetical within the category, matching the Recipes tab's ingredient
+    // tables. Order is safe to choose here: the rows key and edit by NAME, and
+    // the subtotal sums already-rounded line costs, so it doesn't move a cent.
+    const entries = [...totals.entries()].sort(([a], [b]) => compareNames(a, b));
+
+    for (const [name, { qty, unit: u }] of entries) {
       const cpu = priceMap?.[key]?.[name];
       if (!Number.isFinite(cpu)) {
         missing.push({ category: key, name, qty, unit: u });

@@ -108,7 +108,11 @@ create table if not exists settings (
   name    text,
   tagline text,
   emoji   text,
-  logo    text
+  logo    text,
+  -- Non-identity brewery preferences (batch volume: post-boil yield, brewhouse
+  -- loss, average keg yield). JSONB for the same reason recipes.process is:
+  -- the field set keeps growing by one and shouldn't cost a migration each time.
+  prefs   jsonb not null default '{}'::jsonb
 );
 
 -- ---------------------------------------------------------------------------

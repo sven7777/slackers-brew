@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { computeOrder, maltBags } from "../../lib/orderCalc";
+import { sortedWithIndex } from "../../lib/sortNames";
 import { card, hdr, badge, btn, cell, num, th } from "../../styles";
 
 // Order Calculator tab: select recipes (single/double), then show how much of
@@ -19,6 +20,9 @@ export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, 
     return idx===i?{...o,[f]:!o[f]}:o;
   }));
   const anySel = orders.some(o=>o.sel);
+  // Alphabetical for picking; `orders` still lines up with `recs` by stored
+  // index, so each row carries its own rather than its rank in this list.
+  const picker = useMemo(()=>sortedWithIndex(recs,r=>r?.n?.trim()||""),[recs]);
   const needOrd = its => its.some(i=>i.order>0);
 
   return (
@@ -29,7 +33,7 @@ export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, 
           {anySel && <button style={btn} onClick={()=>setOrders(recs.map(()=>({sel:false,dbl:false})))}>Clear All</button>}
         </div>
         <div style={{padding:8}}>
-          {recs.map((r,i)=>(
+          {picker.map(({item:r,index:i})=>(
             <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'6px 8px',borderBottom:'1px solid #f1f5f9'}}>
               <input type="checkbox" checked={ord(i).sel} onChange={()=>toggleOrd(i,'sel')} style={{width:18,height:18,accentColor:'#f59e0b'}}/>
               <span style={{flex:1,fontSize:14,fontWeight:ord(i).sel?600:400}}>{r.n} <span style={{color:'#94a3b8',fontSize:12}}>({r.s})</span></span>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { batchVolume, computeRecipeCost, parseKegs, parseVolume, priceMapFrom, ceilCents } from "./cogs";
+import { batchVolume, computeRecipeCost, fmtLossPct, lossFromKegs, parseKegs, parseVolume, priceMapFrom, ceilCents } from "./cogs";
 import { defSettings } from "./defaults";
 
 // Prices here are fabricated round numbers (real vendor pricing stays out of
@@ -169,7 +169,8 @@ describe("computeRecipeCost", () => {
 
     it("reports them instead of silently costing them at zero", () => {
       const r = run({ recipe: withUnpriced });
-      expect(r.missing.map(m => m.name)).toEqual(["Unpriced Malt", "Never Heard Of It"]);
+      // Alphabetical within the category, like the lines they came from.
+      expect(r.missing.map(m => m.name)).toEqual(["Never Heard Of It", "Unpriced Malt"]);
       expect(r.total).toBe(TOTAL); // unchanged — they are excluded, not zeroed
     });
 
@@ -277,5 +278,93 @@ describe("average keg yield", () => {
     expect(at(33)).toBeCloseTo(30.85, 2);           // 100.5 gal packaged
     expect(at(kegs(7).lossPct)).toBeCloseTo(28.58, 2); // 108.5 gal packaged
     expect(at(kegs(7).lossPct)).toBeLessThan(at(33));
+  });
+});
+
+// The Settings tab asks for kegs too, so the brewery-wide default is derived
+// the same way a recipe's is — one unit for yield across the whole app.
+describe("line order", () => {
+  it("lists each category's ingredients alphabetically", () => {
+    const recipe = {
+      m: [["White Wheat", 55], ["2-Row", 185], ["Flaked Oat", 15]],
+      h: [["Mosaic", 48, "dryhop1", 0], ["Amarillo", 16, "boil", 7.5]],
+    };
+    const priceMap = { malt: {}, hop: {}, yeast: {}, adj: {} };
+    const r = computeRecipeCost({ recipe, priceMap, postBoilGal: 150, lossPct: 33 });
+    expect(r.lines.map(l => l.name)).toEqual([
+      "2-Row", "Flaked Oat", "White Wheat", "Amarillo", "Mosaic",
+    ]);
+  });
+
+  it("still folds one ingredient's stages into a single line", () => {
+    const recipe = { h: [["Cascade", 12, "boil", 10], ["Amarillo", 16, "boil", 7.5], ["Cascade", 48, "dryhop1", 0]] };
+    const r = computeRecipeCost({ recipe, priceMap: { malt: {}, hop: { Cascade: 1, Amarillo: 1 }, yeast: {}, adj: {} }, postBoilGal: 150 });
+    expect(r.lines.map(l => [l.name, l.qty])).toEqual([["Amarillo", 16], ["Cascade", 60]]);
+  });
+});
+
+describe("brewery default keg yield", () => {
+  it("back-solves the default loss % from settings.avgKegs", () => {
+    const v = batchVolume({ settings: { postBoilYield: 150, avgKegs: "6.5" } });
+    // 6.5 kegs = 100.75 gal off 150 gal = 32.83% loss.
+    expect(v.defaultSource).toBe("kegs");
+    expect(v.defaultLossPct).toBeCloseTo(32.833, 3);
+    expect(v.lossPct).toBeCloseTo(32.833, 3);
+    expect(v.defaultAvgKegs).toBe(6.5);
+  });
+
+  it("keeps a stored lossPct for a settings record saved before the kegs field", () => {
+    const v = batchVolume({ settings: { postBoilYield: 150, lossPct: 25 } });
+    expect(v.defaultSource).toBe("loss");
+    expect(v.defaultLossPct).toBe(25);
+  });
+
+  it("prefers the entered kegs over a stale stored lossPct", () => {
+    expect(batchVolume({ settings: { postBoilYield: 150, lossPct: 25, avgKegs: "6.5" } }).defaultLossPct)
+      .toBeCloseTo(32.833, 3);
+  });
+
+  it("ignores a default yield bigger than the boil and says so", () => {
+    const v = batchVolume({ settings: { postBoilYield: 150, lossPct: 33, avgKegs: "12" } });
+    expect(v.defaultKegsRejected).toBe(true);
+    expect(v.defaultLossPct).toBe(33);
+  });
+
+  // A brewery-wide keg count is a RATIO measured on the house batch. Applying it
+  // to a recipe that boils a different volume by dividing kegs into that recipe's
+  // kettle would read a 300 gal brew as losing two thirds of its beer.
+  it("back-solves against the settings kettle, not the recipe's", () => {
+    const v = batchVolume({
+      recipe: { process: { postBoilYield: "300" } },
+      settings: { postBoilYield: 150, avgKegs: "6.5" },
+    });
+    expect(v.kettleGal).toBe(300);
+    expect(v.lossPct).toBeCloseTo(32.833, 3);
+  });
+
+  it("still lets a recipe's own yield win", () => {
+    const v = batchVolume({
+      recipe: { process: { avgKegs: "7" } },
+      settings: { postBoilYield: 150, avgKegs: "6.5" },
+    });
+    expect(v.source).toBe("kegs");
+    expect(v.lossPct).toBeCloseTo(27.667, 3);
+    expect(v.defaultLossPct).toBeCloseTo(32.833, 3);
+  });
+});
+
+describe("lossFromKegs", () => {
+  it("returns null rather than a negative loss when kegs exceed the boil", () => {
+    expect(lossFromKegs(12, 150)).toBeNull();
+    expect(lossFromKegs(null, 150)).toBeNull();
+    expect(lossFromKegs(6.5, null)).toBeNull();
+  });
+});
+
+describe("fmtLossPct", () => {
+  it("trims float noise to a tenth and leaves whole numbers whole", () => {
+    expect(fmtLossPct(32.833333333)).toBe("32.8");
+    expect(fmtLossPct(33)).toBe("33");
+    expect(fmtLossPct(null)).toBe("");
   });
 });
