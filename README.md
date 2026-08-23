@@ -39,7 +39,9 @@ either way.
   order. Malts also roll up into 55 lb bag counts.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume and brewhouse loss that drive costing, ingredient pricing (upload the
-  vendor's PDF price list, see exactly which prices would change, then apply), and a
+  vendor's PDF price list, see exactly which prices would change, then apply —
+  the scanned spot hop list is read by OCR, with every price shown against the
+  page it came from and editable before anything is saved), and a
   full export/import of all app data as JSON.
 
 ## Running Locally

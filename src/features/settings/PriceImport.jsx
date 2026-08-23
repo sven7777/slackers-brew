@@ -2,7 +2,9 @@ import { useState } from "react";
 import { readPriceFile } from "../../lib/applyPrices";
 import { priceChanges } from "../../lib/priceChanges";
 import { parsePriceList } from "../../lib/parsePriceList";
+import { parseSpotHopPages, parseSpotHopDate, matchSpotHopPrices } from "../../lib/spotHops";
 import PriceReview from "./PriceReview";
+import HopPriceReview from "./HopPriceReview";
 import { card, hdr, btn } from "../../styles";
 
 // Settings ▸ Ingredient Prices: load vendor pricing onto inventory.
@@ -28,10 +30,11 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
   const [status, setStatus] = useState(null);   // {ok, msg}
   const [busy, setBusy] = useState(null);       // progress text while parsing
   const [pending, setPending] = useState(null); // {source, result} awaiting confirmation
+  const [hopPending, setHopPending] = useState(null); // OCR'd hop list awaiting confirmation
 
   const inventory = { malts, hops, yeast, adj };
 
-  const fail = (msg) => { setBusy(null); setPending(null); setStatus({ ok: false, msg }); };
+  const fail = (msg) => { setBusy(null); setPending(null); setHopPending(null); setStatus({ ok: false, msg }); };
 
   // A parsed {sku: {price}} map → the change set the review screen shows.
   const propose = (priceBySku, source) => {
@@ -61,6 +64,52 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     reader.readAsText(file);
   };
 
+  // The image-only path: render each page, OCR it, and match the varieties we
+  // buy against the crop-year columns. Nothing here is trusted — it all lands in
+  // HopPriceReview for a human to check against the page it came from.
+  const readHopList = async (data, pageCount) => {
+    // The engine and language model download on first use (then the browser
+    // caches them), so name the wait rather than hanging silently.
+    setBusy("Loading the text reader…");
+    const [{ renderPdfPages }, { createReader }] = await Promise.all([
+      import("../../lib/pdfText"),
+      import("../../lib/ocr"),
+    ]);
+    const reader = await createReader();
+
+    const pageWords = [];
+    let previews;
+    try {
+      // Rendered and read one page at a time: a page at OCR resolution is ~30MB
+      // of canvas, and renderPdfPages frees each before building the next.
+      previews = await renderPdfPages(data, {
+        onPage: async ({ pageNumber, canvas }) => {
+          setBusy(`Reading page ${pageNumber} of ${pageCount}…`);
+          pageWords.push(await reader.read(canvas));
+        },
+      });
+    } finally {
+      await reader.close();
+    }
+
+    const { rows } = parseSpotHopPages(pageWords);
+    if (rows.length === 0) {
+      fail("Couldn't read any prices off that PDF. Is it the BSG spot hop list?");
+      return;
+    }
+    const listDate = parseSpotHopDate(pageWords);
+
+    setBusy(null);
+    setStatus(null);
+    setHopPending({
+      hops: matchSpotHopPrices(rows),
+      effective: dateLabel(listDate),
+      rawEffective: listDate,
+      pages: previews,
+      currentByName: Object.fromEntries((hops || []).map((h) => [h.n, h.cpu ?? null])),
+    });
+  };
+
   const readPdf = async (file) => {
     setBusy("Reading the PDF…");
     try {
@@ -69,11 +118,10 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
       const { lines, hasText, pageCount } = await extractPdfLines(data);
 
       // A PDF printed from a screenshot has no text to extract — every price is
-      // just pixels. Say so plainly rather than reporting "0 prices found",
-      // which reads like the file was wrong when it's the format that differs.
+      // just pixels — so it goes to OCR instead. That is the spot hop list, and
+      // it is the only source of hop pricing there is.
       if (!hasText) {
-        fail(`That PDF has no readable text — its ${pageCount} page${pageCount === 1 ? "" : "s"} are images `
-          + "(the BSG spot hop list is like this). Reading those needs the hop-list importer.");
+        await readHopList(data, pageCount);
         return;
       }
 
@@ -99,6 +147,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     if (!file) return;
     setStatus(null);
     setPending(null);
+    setHopPending(null);
     if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") readPdf(file);
     else readJson(file);
   };
@@ -112,6 +161,22 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     setAdj(next.adj);
     setPending(null);
     setStatus({ ok: true, msg: `Applied ${n} price change${n === 1 ? "" : "s"}.` });
+  };
+
+  // Confirmed hop prices → the same {sku: {price}} map every other import
+  // produces, so they take the identical path into inventory.
+  const applyHops = (confirmed) => {
+    const priceBySku = Object.fromEntries(
+      confirmed.filter((r) => Number.isFinite(r.perLb) && r.perLb > 0)
+        .map((r) => [r.sku, { price: r.perLb, effective: hopPending.rawEffective }]),
+    );
+    const { next, changes } = priceChanges(inventory, priceBySku);
+    setMalts(next.malts);
+    setHops(next.hops);
+    setYeast(next.yeast);
+    setAdj(next.adj);
+    setHopPending(null);
+    setStatus({ ok: true, msg: `Applied ${changes.length} hop price${changes.length === 1 ? "" : "s"}.` });
   };
 
   return (
@@ -141,6 +206,10 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
         {pending && (
           <PriceReview source={pending.source} result={pending.result}
             onApply={apply} onCancel={() => setPending(null)} />
+        )}
+
+        {hopPending && (
+          <HopPriceReview {...hopPending} onApply={applyHops} onCancel={() => setHopPending(null)} />
         )}
       </div>
     </div>
