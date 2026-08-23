@@ -38,7 +38,8 @@ either way.
   computed order summary: how much you need, how much you have, and how much to
   order. Malts also roll up into 55 lb bag counts.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
-  volume and brewhouse loss that drive costing, ingredient price import, and a
+  volume and brewhouse loss that drive costing, ingredient pricing (upload the
+  vendor's PDF price list, see exactly which prices would change, then apply), and a
   full export/import of all app data as JSON.
 
 ## Running Locally
