@@ -31,7 +31,8 @@ src/
   hooks/        # usePersistentState (async-aware; routes through repo.js)
   lib/          # pure logic + data + the data-access seam (see below)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
-                #   pdfLines → parsePriceList → priceChanges → applyPrices
+                #   pdfLines → parsePriceList → priceChanges → applyPrices,
+                #   and the scanned path: ocr (tesseract) → spotHops
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
@@ -86,6 +87,12 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 
 Nothing is applied until it's confirmed: [src/lib/priceChanges.js](src/lib/priceChanges.js) diffs the parsed map against current inventory and [PriceReview.jsx](src/features/settings/PriceReview.jsx) renders it. It reports **three** outcomes, not a success count — `changes`, `unchanged`, and `skipped` (with a reason: `absent` from this list / `unmapped` to any product / `unconvertible` units) — because an ingredient a list doesn't price is not the same as one whose price didn't move, and collapsing them is how a half-applied import passes for a complete one.
 
+**Spot hop list (OCR).** A PDF with no text layer is rasterized and read by tesseract.js, in [src/lib/ocr.js](src/lib/ocr.js) (the only module that touches it, dynamically imported — the wasm engine and language model fetch on first use). Two things about that path are load-bearing: pages render with **`intent: "print"`**, because pdf.js's default display path drives itself with `requestAnimationFrame` and a BACKGROUND TAB never fires it — the render then never resolves, silently, forever; and each page is **binarized** before OCR (luminance threshold 170), because the list prints dark blue type on alternating green/grey stripes, which more than doubled the prices found on a sample page. Pages render and release one at a time (a page at `OCR_SCALE` is ~30MB of canvas).
+
+[src/lib/spotHops.js](src/lib/spotHops.js) turns OCR words into prices, and is written around the fact that **every number is a guess until a human confirms it**. Column geometry is the crux: the table is variety × crop year, so a price means nothing without the column it sits under, and hop products carry a `cropYear` for exactly this. Hard-won details, all of which were real failures: only an uppercase `ORIGIN` on a price-free row marks the origin column (the list's own footnote says "…crop **origin** may fluctuate…", and reading that as the header truncated every label below it, dropping two thirds of a page); a label word is claimed by its **start** x, not its end (OCR runs a whole variety cell into one wide token that overhangs the column); the price pattern stays anchored with a short unit suffix (`/lb`, `/Ib`, `/1b`, `/b`) so the header's phone number `1.800.374.2739` can't read as $1.80; `l`/`I`/`1`/`|` are folded on both sides when matching, since "Idaho 7" comes back as "ldaho 7"; and Cryo/Enriched/44 lb rows are excluded outright — they're different products at their own (much higher) prices. **Two prices that land in the same crop-year column mark the row `ambiguous`**, which prefills nothing and says so on screen: a misread year header shifts every boundary, and offering a 2024 price as the 2023 one is precisely the confident lie the review screen exists to prevent.
+
+⚠️ **OCR coverage on this list is partial and that is by design, not a bug to hide.** On the real July 2025 list it prefills roughly a third of the 14 hops and matches a few more with the crop year missing; the rest read "not found on this list" and are typed in, with the page image one click away in the same panel ([HopPriceReview.jsx](src/features/settings/HopPriceReview.jsx) — prices entered per pound as the list quotes them, shown converted to the per-ounce figure that gets stored). Never widen a match rule to raise that number at the cost of certainty.
+
 ⚠️ **The two BSG PDFs are not the same kind of file.** The Houston price list is an Excel export with a real text layer and prices all 32 BSG-SKU products in the catalog. The **spot hop list is four JPEG images with no text layer at all** (printed from a screenshot — `pdffonts` reports zero fonts), which is why hop products carry synthetic SKUs (`HOP-CAS`) plus a `cropYear` and match by variety + year rather than SKU. `hasText` is what tells the two apart; the image path is OCR.
 
 ## Key Computed Logic
@@ -126,6 +133,7 @@ Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.tes
 | Language | JSX (no TypeScript) |
 | Storage | localStorage (default) or Supabase Postgres, behind the `repo.js` backend seam |
 | PDF | pdf.js (`pdfjs-dist`), dynamically imported — price-list upload only |
+| OCR | tesseract.js, dynamically imported — scanned hop list only (engine + model load from CDN on first use) |
 | Auth | Supabase Auth (magic link + Google OAuth), only when Supabase is configured |
 
 ## What Doesn't Exist
