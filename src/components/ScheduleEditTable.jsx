@@ -1,5 +1,11 @@
 import { cellarActions } from "../lib/defaults";
+import { sortedNames } from "../lib/sortNames";
 import { cell, num, th, inp, rmBtn, addRow, sel, addBtn } from "../styles";
+
+// The rows stay in day order (that's the schedule), so the alphabetical list is
+// the picker: `cellarActions` is grouped by process order in defaults.js, which
+// is the wrong shape for finding "Rouse" in a list of fourteen.
+const ACTION_OPTIONS = sortedNames(cellarActions);
 
 // Editable cellar schedule for one recipe. A row is [dayOffset, action]; the
 // Cellar Summary sheet turns each into a calendar date (brewDate + day) and
@@ -53,7 +59,7 @@ export default function ScheduleEditTable({ items = [], ri, setRecs, addSel, set
                   onChange={(e) => setField(setRecs, ri, i, 1, e.target.value)}>
                   {/* Tolerate a stored action that's no longer in the catalog. */}
                   {!cellarActions.includes(it[1]) && <option value={it[1]}>{it[1]}</option>}
-                  {cellarActions.map((a) => <option key={a} value={a}>{a}</option>)}
+                  {ACTION_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
               </td>
               <td style={{ ...cell, textAlign: "center" }}>
@@ -69,7 +75,7 @@ export default function ScheduleEditTable({ items = [], ri, setRecs, addSel, set
       <div style={addRow}>
         <select value={addSel.sc || ""} onChange={(e) => setAddSel((p) => ({ ...p, sc: e.target.value }))} style={sel}>
           <option value="">Add step...</option>
-          {cellarActions.map((a) => <option key={a} value={a}>{a}</option>)}
+          {ACTION_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
         <button style={addBtn} onClick={() => { addRowFor(setRecs, ri, addSel.sc); setAddSel((p) => ({ ...p, sc: "" })); }}>+ Add</button>
       </div>

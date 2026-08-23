@@ -44,3 +44,24 @@ describe('ScheduleEditTable day ordering', () => {
     expect(recs()[0].sc).toEqual([[2, 'Keg'], [3, 'Dry Hop']]);
   });
 });
+
+// The rows stay in day order — that IS the schedule — so the alphabetical ask
+// lands on the action pickers.
+describe('ScheduleEditTable alphabetical action pickers', () => {
+  const props = { ri: 0, addSel: { sc: '' }, setAddSel: vi.fn() };
+
+  it('lists actions alphabetically in the add picker', () => {
+    render(<ScheduleEditTable {...props} items={[]} setRecs={vi.fn()} />);
+    const opts = [...screen.getByRole('combobox').options].map((o) => o.text);
+    expect(opts[0]).toBe('Add step...');
+    expect(opts.slice(1)).toEqual([...opts.slice(1)].sort((a, b) => a.localeCompare(b)));
+    expect(opts.slice(1, 4)).toEqual(['Blow Off', 'Brew Date', 'Bung | Pressure']);
+  });
+
+  it('still offers a stored action the catalog no longer lists', () => {
+    render(<ScheduleEditTable {...props} items={[[3, 'Krausen Skim']]} setRecs={vi.fn()} />);
+    const rowSel = screen.getAllByRole('combobox')[0];
+    expect(rowSel.value).toBe('Krausen Skim');
+    expect([...rowSel.options].map((o) => o.text)).toContain('Krausen Skim');
+  });
+});

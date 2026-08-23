@@ -61,3 +61,34 @@ describe('RecipesTab name and style fields', () => {
     expect(screen.getByLabelText('Style')).toHaveValue('Witbier');
   });
 });
+
+// The picker reads alphabetically while selR still indexes the stored list, so
+// the option's value has to be the stored position, not its rank on screen.
+describe('RecipesTab alphabetical recipe picker', () => {
+  const recs = [
+    { n: 'Wit’s End', s: 'Witbier', m: [], h: [], y: [], a: [], sa: [], sc: [] },
+    { n: 'all y’alls', s: 'NEIPA', m: [], h: [], y: [], a: [], sa: [], sc: [] },
+    { n: '', s: 'Kölsch', m: [], h: [], y: [], a: [], sa: [], sc: [] },
+    { n: 'James', s: 'American Brown Ale', m: [], h: [], y: [], a: [], sa: [], sc: [] },
+  ];
+  const picker = () => screen.getAllByRole('combobox')[0];
+
+  it('orders options by name, ignoring case', () => {
+    render(<RecipesTab recs={recs} setRecs={vi.fn()} selR={0} setSelR={vi.fn()} />);
+    expect([...picker().options].map((o) => o.text)).toEqual([
+      '(untitled) — Kölsch',
+      'all y’alls — NEIPA',
+      'James — American Brown Ale',
+      'Wit’s End — Witbier',
+    ]);
+  });
+
+  it('keeps each option pointed at its stored index', () => {
+    const setSelR = vi.fn();
+    render(<RecipesTab recs={recs} setRecs={vi.fn()} selR={0} setSelR={setSelR} />);
+    // "James" is third on screen but index 3 in the stored list.
+    expect([...picker().options].map((o) => o.value)).toEqual(['2', '1', '3', '0']);
+    fireEvent.change(picker(), { target: { value: '3' } });
+    expect(setSelR).toHaveBeenCalledWith(3);
+  });
+});

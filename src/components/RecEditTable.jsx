@@ -1,4 +1,5 @@
 import { adjUnits, brewDayStages, cellarStages, saltStages, stageLabels } from "../lib/defaults";
+import { sortedNames, sortedWithIndex } from "../lib/sortNames";
 import { cell, num, th, inp, rmBtn, addRow, sel, addBtn } from "../styles";
 
 const ALL_STAGES = [...brewDayStages, ...cellarStages];
@@ -41,10 +42,17 @@ const addItem = (setRecs, ri, cat, name) => {
 // Stage (and, for hops/adjuncts, Time) columns; staged categories allow the
 // same ingredient to be added multiple times. A recipe saved before a category
 // existed (stale localStorage) has no array for it at all, so default to empty.
+//
+// Rows and the picker both read alphabetically — a 20-malt catalog and a
+// 9-row grain bill are both things you scan for a name. The sort is a DISPLAY
+// order only: the stored array keeps its own order (which is what the printable
+// sheets group by stage and time), so every edit still addresses `row.index`,
+// the position in that array, not the position on screen.
 export default function RecEditTable({ items = [], cat, names, unit, ri, showUnit, setRecs, addSel, setAddSel }) {
   const cfg = CFG[cat];
   const used = new Set(items.map((x) => x[0]));
-  const avail = cfg.dups ? names : names.filter((n) => !used.has(n));
+  const avail = sortedNames(cfg.dups ? names : names.filter((n) => !used.has(n)));
+  const rows = sortedWithIndex(items, (t) => t[0]);
   const hasStage = cfg.stageAt != null;
   const hasTime = cfg.timeAt != null;
 
@@ -61,7 +69,7 @@ export default function RecEditTable({ items = [], cat, names, unit, ri, showUni
           </tr>
         </thead>
         <tbody>
-          {items.map((it, i) => (
+          {rows.map(({ item: it, index: i }) => (
             <tr key={i}>
               <td style={cell}>
                 {it[0]}

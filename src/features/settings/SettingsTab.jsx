@@ -1,5 +1,5 @@
 import { breweryEmojis, defSettings } from "../../lib/defaults";
-import { batchVolume } from "../../lib/cogs";
+import { batchVolume, fmtLossPct, GAL_PER_KEG } from "../../lib/cogs";
 import { card, hdr, btn, inp } from "../../styles";
 import DataBackup from "./DataBackup";
 import PriceImport from "./PriceImport";
@@ -18,6 +18,15 @@ export default function SettingsTab({ settings, setSettings, malts, setMalts, ho
   const set = (patch) => setSettings(p => ({ ...p, ...patch }));
 
   const pickEmoji = (emoji) => set({ emoji, logo: null });
+
+  // Same resolution the Cost panel uses, so the two can't disagree. The keg
+  // field is the input and the loss % is derived, so the derived number is what
+  // gets shown back — never a second field to keep in sync.
+  const { kettleGal: gal, lossPct: loss, defaultKegsRejected } = batchVolume({ settings });
+  const kegs = gal != null && loss < 100 ? (gal * (1 - loss / 100)) / GAL_PER_KEG : null;
+  // What the fallback loss % works out to in kegs — the units the field asks
+  // for, shown as its placeholder, exactly as the Cost view does per recipe.
+  const defaultKegs = kegs != null ? kegs.toFixed(1) : "";
 
   const uploadLogo = (e) => {
     const file = e.target.files?.[0];
@@ -102,9 +111,11 @@ export default function SettingsTab({ settings, setSettings, malts, setMalts, ho
         <div style={hdr}>🛢️ Batch Volume</div>
         <div style={{ padding: 16 }}>
           <p style={{ margin: "0 0 12px", fontSize: 13, color: "#64748b" }}>
-            Used for cost per barrel and per keg. A recipe's own Post-Boil Yield on its Brew
-            Sheet wins when set; this is the fallback. Loss covers everything between the kettle
-            and the keg — trub, yeast, dry-hop absorption, transfer.
+            Used for cost per barrel and per keg. A recipe's own Post-Boil Yield and Avg
+            yield on its Cost view win when set; these are the fallbacks. Brewhouse loss —
+            everything between the kettle and the keg (trub, yeast, dry-hop absorption,
+            transfer) — is worked out from the two numbers below, so you enter kegs, the
+            figure you count on the floor, rather than a percentage.
           </p>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <div style={{ ...field, marginBottom: 0 }}>
@@ -114,22 +125,23 @@ export default function SettingsTab({ settings, setSettings, malts, setMalts, ho
                 onChange={e => set({ postBoilYield: e.target.value === "" ? null : parseFloat(e.target.value) })} />
             </div>
             <div style={{ ...field, marginBottom: 0 }}>
-              <label style={label} htmlFor="loss-pct">Brewhouse loss (%)</label>
-              <input id="loss-pct" type="number" step="1" min="0" max="99" style={{ ...inp, width: 110 }}
-                value={settings.lossPct ?? ""} placeholder={String(defSettings.lossPct)}
-                onChange={e => set({ lossPct: e.target.value === "" ? null : parseFloat(e.target.value) })} />
+              <label style={label} htmlFor="avg-kegs-default">Average yield (kegs per batch)</label>
+              <input id="avg-kegs-default" type="number" step="0.1" min="0" style={{ ...inp, width: 110 }}
+                value={settings.avgKegs ?? ""} placeholder={defaultKegs}
+                onChange={e => set({ avgKegs: e.target.value === "" ? "" : e.target.value })} />
             </div>
           </div>
           <p style={{ margin: "12px 0 0", fontSize: 12, color: "#94a3b8" }}>
-            {(() => {
-              // Same resolution the Cost panel uses, so the two can't disagree.
-              const { kettleGal: gal, lossPct: loss } = batchVolume({ settings });
-              const kegs = (gal * (1 - loss / 100)) / 15.5;
-              return Number.isFinite(kegs) && kegs > 0
-                ? `${gal} gal less ${loss}% ≈ ${kegs.toFixed(1)} kegs per batch.`
-                : "Set a yield and loss to see the keg count.";
-            })()}
+            {kegs != null
+              ? `${gal} gal less ${fmtLossPct(loss)}% loss ≈ ${kegs.toFixed(1)} kegs per batch.`
+              : "Set a post-boil yield to see the keg count."}
           </p>
+          {defaultKegsRejected && (
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "#92400e" }}>
+              That yield is more beer than the {gal} gal boil produces, so it's ignored and
+              {" "}{fmtLossPct(loss)}% loss is used instead. Check the post-boil yield.
+            </p>
+          )}
         </div>
       </div>
 

@@ -186,6 +186,23 @@ describe("settings", () => {
     const fb = { name: "def" };
     expect(await backend.load("settings", fb)).toBe(fb);
   });
+
+  it("round-trips the batch-volume prefs, which used to be dropped on save", async () => {
+    const s = { name: "Slackers", tagline: "beer", emoji: "🍺", logo: null,
+      postBoilYield: 165, lossPct: 30, avgKegs: "7" };
+    await backend.save("settings", s);
+    expect(client.store.settings[0].prefs).toEqual({ postBoilYield: 165, lossPct: 30, avgKegs: "7" });
+    expect(await backend.load("settings", null)).toEqual(s);
+  });
+
+  it("leaves a cleared pref absent, so it reads as unset rather than zero", async () => {
+    await backend.save("settings", { name: "Slackers", tagline: "", emoji: "🍺", logo: null,
+      postBoilYield: null, avgKegs: "" });
+    expect(client.store.settings[0].prefs).toEqual({});
+    const loaded = await backend.load("settings", null);
+    expect("postBoilYield" in loaded).toBe(false);
+    expect("avgKegs" in loaded).toBe(false);
+  });
 });
 
 describe("recipes", () => {

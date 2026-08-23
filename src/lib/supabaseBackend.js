@@ -38,6 +38,19 @@ const FIELD_BY_CATEGORY = { malt: "m", hop: "h", yeast: "y", adj: "a", salt: "sa
 
 const SHARED_KEYS = new Set([...Object.keys(CATEGORY), "recipes", "settings"]);
 
+// Settings fields that live in the `prefs` JSONB column rather than one of
+// their own. Brewery identity earned columns; these are small brewery
+// preferences that keep arriving one at a time, so they take the same shape
+// `recipes.process` took, for the same reason — a new one costs no migration.
+//
+// They had NO home here before: the batch-volume fields shipped with the COGS
+// work but were never added to the select or the upsert, so on the Supabase
+// backend every one of them was dropped on save and re-read as the built-in
+// default. Costing quietly ran against 150 gal / 33% no matter what Settings
+// showed. Anything added to the settings object from here on belongs in this
+// list or in a column.
+const SETTINGS_PREFS = ["postBoilYield", "lossPct", "avgKegs"];
+
 export function createSupabaseBackend(client, localBackend = localStorageBackend) {
   async function load(key, fallback) {
     if (!SHARED_KEYS.has(key)) return localBackend.load(key, fallback);
@@ -107,21 +120,33 @@ async function saveInventory(client, category, items) {
 async function loadSettings(client, fallback) {
   const { data, error } = await client
     .from("settings")
-    .select("name,tagline,emoji,logo")
+    .select("name,tagline,emoji,logo,prefs")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
   if (!data) return fallback;
-  return { name: data.name, tagline: data.tagline, emoji: data.emoji, logo: data.logo };
+  const out = { name: data.name, tagline: data.tagline, emoji: data.emoji, logo: data.logo };
+  // Only keys actually stored come back, so a settings row written before a
+  // pref existed stays absent rather than arriving as null — the difference
+  // between "unset, use the default" and "explicitly nothing".
+  for (const k of SETTINGS_PREFS) {
+    if (data.prefs && k in data.prefs) out[k] = data.prefs[k];
+  }
+  return out;
 }
 
 async function saveSettings(client, s) {
+  const prefs = {};
+  for (const k of SETTINGS_PREFS) {
+    if (s?.[k] != null && s[k] !== "") prefs[k] = s[k];
+  }
   const { error } = await client.from("settings").upsert({
     id: 1,
     name: s.name ?? null,
     tagline: s.tagline ?? null,
     emoji: s.emoji ?? null,
     logo: s.logo ?? null,
+    prefs,
   });
   if (error) throw error;
 }

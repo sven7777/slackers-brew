@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import RecEditTable from "../../components/RecEditTable";
 import ScheduleEditTable from "../../components/ScheduleEditTable";
 import ImportBeerSmith from "./ImportBeerSmith";
@@ -7,6 +7,7 @@ import CellarPanel from "./CellarPanel";
 import CostPanel from "./CostPanel";
 import StyleSelect from "../../components/StyleSelect";
 import { defRecipes, maltNames, hopNames, yeastNames, adjNames, saltNames } from "../../lib/defaults";
+import { sortedWithIndex } from "../../lib/sortNames";
 import { card, hdr, btn, inp } from "../../styles";
 
 // Sub-views of the Recipes tab, all driven by the one recipe dropdown below.
@@ -35,6 +36,10 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
   const [view, setView] = useState("edit");
   const [costDbl, setCostDbl] = useState(false);
   const r = recs[selR];
+
+  // The picker reads alphabetically; `selR` still indexes the stored list, so
+  // each option carries the position it came from rather than its rank here.
+  const picker = useMemo(() => sortedWithIndex(recs, (rec) => rec?.n?.trim() || ""), [recs]);
 
   // selR is device-local while recs is shared, so a stale index can point past
   // the list (e.g. the recipe list shrank, or shared data hasn't loaded yet).
@@ -99,7 +104,7 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
           style={{ flex: 1, padding: "10px 12px", fontSize: 15, fontWeight: 600, borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b" }}>
           {/* The name is editable now, so it can be empty mid-edit. An option that
               renders as bare " — " is unpickable, so label it instead. */}
-          {recs.map((rec, i) => <option key={i} value={i}>{rec.n?.trim() || "(untitled)"} — {rec.s}</option>)}
+          {picker.map(({ item: rec, index: i }) => <option key={i} value={i}>{rec.n?.trim() || "(untitled)"} — {rec.s}</option>)}
         </select>
         {view === "edit" && !importing && <button style={{ ...btn, borderColor: "#f59e0b", color: "#92400e" }} onClick={() => setImporting(true)}>⬆️ Import .bsmx</button>}
         {view === "edit" && <button style={{ ...btn, borderColor: "#fca5a5", color: "#dc2626" }} onClick={() => resetRec(selR)}>Reset Recipe</button>}

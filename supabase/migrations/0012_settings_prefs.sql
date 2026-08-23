@@ -1,0 +1,13 @@
+-- Settings: a JSONB bag for brewery preferences that aren't identity.
+--
+-- The batch-volume fields (post-boil yield, brewhouse loss, and now average keg
+-- yield) shipped with the COGS work but were never added to the settings row's
+-- select/upsert, so on the shared backend they were written nowhere and read
+-- back as the built-in defaults — costing ran against 150 gal / 33% loss no
+-- matter what the Settings tab showed. `recipes.process` solved the same
+-- problem the same way: one JSONB column, so the next small preference costs
+-- no migration.
+--
+-- Additive and idempotent (CI applies this unattended against production).
+-- Existing rows get {} and keep their identity columns untouched.
+alter table settings add column if not exists prefs jsonb not null default '{}'::jsonb;
