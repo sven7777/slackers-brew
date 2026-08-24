@@ -9,12 +9,17 @@ import { card, hdr, btn } from "../../styles";
 
 // Settings ▸ Ingredient Prices: load vendor pricing onto inventory.
 //
-// Two sources, one path. A hand-built JSON file ({sku: price}) and the vendor's
-// own PDF price list both reduce to the same {sku: {price}} map, which
-// priceChanges() turns into a change set, which the brewer confirms before
-// anything is written. The catalog in lib/products.js supplies the rest — each
-// ingredient's product, pack size and unit conversion — so an import only ever
-// has to supply numbers.
+// Several sources, one path. A hand-built JSON file ({sku: price}), the vendor's
+// PDF price list, and the spot hop list all reduce to the same {sku: {price}}
+// map, which priceChanges() turns into a change set, which the brewer confirms
+// before anything is written. The catalog in lib/products.js supplies the rest —
+// each ingredient's product, pack size and unit conversion — so an import only
+// ever has to supply numbers.
+//
+// A dropped PDF is identified by its CONTENT, not its file name or its file
+// type: parsePriceList() claims it if it holds vendor SKU rows, the spot hop
+// parser claims it if it holds a variety x crop-year table, and a PDF with no
+// text layer at all is that same hop table as page images, read by OCR.
 //
 // pdf.js is imported dynamically, on the first PDF only: it is far larger than
 // the whole app, and nobody should download a PDF parser to edit their inventory.
@@ -30,7 +35,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
   const [status, setStatus] = useState(null);   // {ok, msg}
   const [busy, setBusy] = useState(null);       // progress text while parsing
   const [pending, setPending] = useState(null); // {source, result} awaiting confirmation
-  const [hopPending, setHopPending] = useState(null); // OCR'd hop list awaiting confirmation
+  const [hopPending, setHopPending] = useState(null); // spot hop list awaiting confirmation
 
   const inventory = { malts, hops, yeast, adj };
 
@@ -102,12 +107,43 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     setBusy(null);
     setStatus(null);
     setHopPending({
+      source: "ocr",
       hops: matchSpotHopPrices(rows),
       effective: dateLabel(listDate),
       rawEffective: listDate,
       pages: previews,
       currentByName: Object.fromEntries((hops || []).map((h) => [h.n, h.cpu ?? null])),
     });
+  };
+
+  // The spot hop list with a real text layer. Same table, same parser, exact
+  // numbers instead of OCR guesses — so this path reads it directly and never
+  // starts the OCR engine. Returns whether it recognised the document.
+  const readHopText = async (data, pageCount) => {
+    const { extractPdfWords, renderPdfPages } = await import("../../lib/pdfText");
+    const { pages: pageWords } = await extractPdfWords(data);
+    const { rows } = parseSpotHopPages(pageWords);
+    if (rows.length === 0) return false;
+
+    // The page images are still worth having: the review screen's job is letting
+    // a brewer check a price against the page it came from, and that is just as
+    // useful when the number is exact. Rendered at preview resolution only —
+    // there is no OCR to feed here, so none of the OCR_SCALE cost applies.
+    setBusy(`Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}…`);
+    const previews = await renderPdfPages(data, { scale: 2 });
+
+    const listDate = parseSpotHopDate(pageWords);
+    setBusy(null);
+    setStatus(null);
+    setHopPending({
+      source: "text",
+      hops: matchSpotHopPrices(rows),
+      effective: dateLabel(listDate),
+      rawEffective: listDate,
+      pages: previews,
+      currentByName: Object.fromEntries((hops || []).map((h) => [h.n, h.cpu ?? null])),
+    });
+    return true;
   };
 
   const readPdf = async (file) => {
@@ -118,24 +154,36 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
       const { lines, hasText, pageCount } = await extractPdfLines(data);
 
       // A PDF printed from a screenshot has no text to extract — every price is
-      // just pixels — so it goes to OCR instead. That is the spot hop list, and
-      // it is the only source of hop pricing there is.
+      // just pixels — so it goes to OCR. Only the spot hop list has ever arrived
+      // that way.
       if (!hasText) {
         await readHopList(data, pageCount);
         return;
       }
 
+      // Two different documents have a text layer, and WHICH parser a file wants
+      // is decided by what its words say, not by whether it has any. Try the SKU
+      // price list first, then the hop table.
+      //
+      // ⚠️ This used to route on `hasText` alone, which was fine only while the
+      // hop list was image-only. The April 2026 list came as an Excel export —
+      // real text, no SKUs anywhere in it — so it went to the SKU parser, found
+      // nothing, and was reported unreadable. Both parsers now get a look before
+      // anything is called unrecognised.
       const parsed = parsePriceList(lines);
-      if (!parsed.count) {
-        fail("Couldn't find any priced products in that PDF. Is it a BSG/Rahr price list?");
+      if (parsed.count) {
+        propose(parsed.prices, {
+          label: file.name,
+          effective: dateLabel(parsed.effective),
+          count: parsed.count,
+          conflicts: parsed.conflicts,
+        });
         return;
       }
-      propose(parsed.prices, {
-        label: file.name,
-        effective: dateLabel(parsed.effective),
-        count: parsed.count,
-        conflicts: parsed.conflicts,
-      });
+
+      if (await readHopText(data, pageCount)) return;
+
+      fail("Couldn't find any prices in that PDF. Is it a BSG/Rahr price list or spot hop list?");
     } catch (err) {
       fail(`Couldn't read that PDF: ${err?.message || "unknown error"}`);
     }

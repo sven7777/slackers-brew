@@ -3,14 +3,20 @@ import { productsBySku } from "../../lib/products";
 import { costPerUnit } from "../../lib/pricing";
 import { btn } from "../../styles";
 
-// Confirmation screen for the OCR'd spot hop list.
+// Confirmation screen for the spot hop list.
 //
-// Every number here was READ OFF AN IMAGE by tesseract, so none of it is trusted
-// until a person says so. The screen is built for checking rather than for
-// accepting: each hop shows the row OCR matched it to, the price it read, and —
-// underneath — the actual page it came from, so a doubtful number can be
-// compared against the source without leaving the app. Every price is editable,
-// and a low-confidence read is flagged rather than quietly used.
+// The list arrives two ways and the screen says which: an Excel export is read
+// EXACTLY from its text layer, while a scanned one is read off an image by
+// tesseract and every digit is a guess. Either way nothing is trusted until a
+// person says so, because the risk that matters is not a misread digit — it is a
+// price matched to the wrong ROW or the wrong CROP YEAR, and exact text does
+// nothing to rule that out.
+//
+// So the screen is built for checking rather than for accepting: each hop shows
+// the row it was matched to, the price found, and — underneath — the actual page
+// it came from, so a doubtful number can be compared against the source without
+// leaving the app. Every price is editable, and on the scanned path a
+// low-confidence read is flagged rather than quietly used.
 //
 // Prices are entered the way the list quotes them ($/lb) and shown converted to
 // what inventory stores ($/oz), because a brewer reading the sheet should never
@@ -37,7 +43,8 @@ const perOunce = (sku, perLb) => {
   return raw == null ? null : Math.round(raw * 100) / 100;
 };
 
-export default function HopPriceReview({ hops, pages, currentByName, effective, onApply, onCancel }) {
+export default function HopPriceReview({ hops, pages, currentByName, effective, source = "ocr", onApply, onCancel }) {
+  const scanned = source !== "text";
   // One editable $/lb per hop, seeded from OCR (blank where it found nothing).
   const [entered, setEntered] = useState(() =>
     Object.fromEntries(hops.map((h) => [h.name, h.price != null ? String(h.price) : ""])));
@@ -60,8 +67,18 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
         {effective && <span style={{ ...note, marginLeft: 8 }}>dated {effective}</span>}
       </div>
       <p style={{ margin: "0 0 10px", fontSize: 13, color: "#475569" }}>
-        This list is a scan, so every price below was <strong>read off the image</strong> — check them against
-        the page before applying. Prices are per pound, as the list quotes them.
+        {scanned ? (
+          <>
+            This list is a scan, so every price below was <strong>read off the image</strong> — check them
+            against the page before applying.
+          </>
+        ) : (
+          <>
+            Prices below were read <strong>exactly</strong> from the list's own text. Still worth a look at
+            the <em>Read from</em> column: it shows which row and crop year each price came from.
+          </>
+        )}{" "}
+        Prices are per pound, as the list quotes them.
       </p>
 
       <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 6 }}>
@@ -93,7 +110,7 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
                       {r.ambiguous && (
                         <strong style={{ color: "#b45309" }}> · crop years unclear, read them off the page</strong>
                       )}
-                      {!r.ambiguous && r.confidence != null && r.confidence < LOW_CONFIDENCE && (
+                      {scanned && !r.ambiguous && r.confidence != null && r.confidence < LOW_CONFIDENCE && (
                         <strong style={{ color: "#b45309" }}> · unsure, check this one</strong>
                       )}
                     </span>
