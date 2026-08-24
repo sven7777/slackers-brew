@@ -41,8 +41,9 @@ either way.
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — ingredient pricing (upload the
   vendor's PDF price list, see exactly which prices would change, then apply —
-  the scanned spot hop list is read by OCR, with every price shown against the
-  page it came from and editable before anything is saved), and a
+  the spot hop list is read too, from its text when it has one and by OCR when
+  it's a scan, with every price shown against the page it came from and editable
+  before anything is saved), and a
   full export/import of all app data as JSON.
 
 ## Running Locally

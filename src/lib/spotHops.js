@@ -1,10 +1,17 @@
-// BSG spot hop list (OCR'd words) → a price per hop we buy.
+// BSG spot hop list (positioned words) → a price per hop we buy.
 //
 // This list is the only source for hop pricing — the Houston price list carries
-// no hops at all — and it arrives as four page IMAGES with no text layer, so the
-// words come from OCR and every number is a guess until a human confirms it.
-// That shapes the whole module: it reports what it found, where it found it, and
-// how sure it was, and never decides anything a brewer can't check on the page.
+// no hops at all — and it arrives in TWO forms. The July 2025 list was four page
+// IMAGES with no text layer, so its words came from OCR and every number was a
+// guess. The April 2026 list is an Excel export with a real text layer, so its
+// words are exact. This module takes either: the input is positioned words
+// ({text, x0, x1, y0, y1}, y counting DOWN the page), and the parse is geometry
+// on top of that, so the source only changes how much the result can be trusted
+// — `confidence` is present on an OCR word and absent on an exact one.
+//
+// What does not change is that a brewer confirms every price before it is
+// written. The module reports what it found, where it found it, and how sure it
+// was, and never decides anything a brewer can't check on the page.
 //
 // The table is variety × crop year:
 //
@@ -37,7 +44,13 @@ const PRICE_RE = /^\$?(\d{1,3}(?:,\d{3})*\.\d{2})(?:\s*[/|]\s*[a-zA-Z0-9]{1,3}\.
 // "lb" comes back from OCR as "lb", "Ib" or "1b" depending on the row, so the
 // pack sizes are matched with all three — a 44 lb pack read as "441b" that
 // slipped through would price a batch off the wrong product.
-const NOT_OURS = /\b(cryo|enriched)\b|\b(44|22)\s?[l1I]b\b/i;
+// CO2 extract is on the list too, in its own block at the end, priced per CAN —
+// a different product in a different unit, and the pack maths in pricing.js is
+// per pound. Shortest-label-wins already prefers "Cascade Pellet - 11lb" over
+// "Cascade - CO2 Hop Extract (150GMA)", but only while BOTH are on the list; a
+// month where a variety shows up as extract only would otherwise price a batch
+// off a $44 can as though it were $44/lb.
+const NOT_OURS = /\b(cryo|enriched)\b|\b(44|22)\s?[l1I]b\b|\bco2\b|\bextract\b/i;
 
 // Fold OCR punctuation noise: trademark marks, en/em dashes, doubled spaces.
 export function normalizeVariety(text) {
@@ -93,31 +106,73 @@ function readYearHeader(row) {
   });
 }
 
-// OCR words → { rows }, each row carrying its label text and the prices it holds,
-// tagged with the crop year of the column each price fell in.
-export function parseSpotHops(words) {
-  const grouped = groupWordsIntoRows(words);
-  const rows = [];
-  let columns = null;
-  let originX = null; // left edge of the ORIGIN column, from the header
-
+// Positioned words → { rows }, each row carrying its label text and the prices
+// it holds, tagged with the crop year of the column each price fell in. The
+// words may come from OCR or from a real text layer; the geometry is the same.
+//
+// The page's HEADER ROW is read first, in a pass of its own, and then applies to
+// the whole page — including rows ABOVE it.
+//
+// ⚠️ That is not a nicety. This is a spreadsheet print-out, and Excel repeats
+// the header row wherever the page break happens to leave it: on the April 2026
+// list page 2 opens straight into Mosaic and doesn't print "HOP VARIETY | ORIGIN
+// | 2023 | 2024 | 2025" until two thirds of the way down. Walking top-to-bottom
+// and only trusting a header once it had been passed left the first thirteen
+// rows of that page with no columns, so every price on them landed in no crop
+// year and the rows were dropped whole — Mosaic among them, which Slackers buys.
+//
+// Carrying the header upward is safe because the columns are a property of the
+// PAGE, not of where the header was printed: a spreadsheet prints one column
+// layout per sheet, and the x positions bear that out (2023 at x=291.5 on both
+// pages of that list). Multiple headers on a page still work as before — a row
+// takes the nearest header at or above it — so a genuine mid-page layout change
+// would still be honoured.
+function readPageHeaders(grouped) {
+  const headers = [];
+  let originX = null;
   for (const row of grouped) {
-    const priced = row.words
-      .map((w) => ({ word: w, price: priceOf(w.text) }))
-      .filter((p) => p.price != null);
-
+    const hasPrice = row.words.some((w) => priceOf(w.text) != null);
     // ⚠️ Only the printed HEADER marks the origin column — matched case-sensitively
     // and only on a row carrying no prices. The list's own footnote reads
     // "*Amarillo crop origin may fluctuate between US and Germany…", and taking
     // that lowercase "origin" as the column boundary truncated every label below
     // it: 40 varieties a page collapsed to 15 rows, most of them a single word.
-    const origin = priced.length === 0 && row.words.find((w) => String(w.text).trim() === "ORIGIN");
-    if (origin) originX = origin.x0;
+    if (!hasPrice) {
+      const origin = row.words.find((w) => String(w.text).trim() === "ORIGIN");
+      if (origin && originX == null) originX = origin.x0;
+    }
+    const columns = readYearHeader(row);
+    if (columns) headers.push({ row, centre: row.centre, columns });
+  }
+  return { headers, originX };
+}
 
-    const header = readYearHeader(row);
-    if (header) { columns = header; continue; }
+export function parseSpotHops(words) {
+  const grouped = groupWordsIntoRows(words);
+  const { headers, originX } = readPageHeaders(grouped);
+  const headerRows = new Set(headers.map((h) => h.row));
 
+  // The nearest header at or above this row; failing that, the page's first —
+  // which is what rescues the rows printed above a mid-page header.
+  const columnsFor = (centre) => {
+    let found = null;
+    for (const h of headers) {
+      if (h.centre <= centre) found = h;
+      else break;
+    }
+    return (found ?? headers[0])?.columns ?? null;
+  };
+
+  const rows = [];
+  for (const row of grouped) {
+    if (headerRows.has(row)) continue;
+
+    const priced = row.words
+      .map((w) => ({ word: w, price: priceOf(w.text) }))
+      .filter((p) => p.price != null);
     if (priced.length === 0) continue;
+
+    const columns = columnsFor(row.centre);
 
     // Label = the variety cell only. The ORIGIN column sits between the variety
     // and the prices, so the header's own "ORIGIN" tells us where to stop —

@@ -5,10 +5,17 @@
 // price list never downloads a PDF parser. Keep it that way — a static import of
 // this file from anywhere in the app tree undoes that.
 //
-// Two kinds of PDF arrive here, and telling them apart decides the whole import:
-// a vendor list exported from Excel carries real text, which comes out exactly;
-// a list printed from a screenshot carries none, and has to be rasterized and
-// read by OCR instead. `hasText` is that test.
+// Three kinds of PDF arrive here. A vendor price list exported from Excel
+// carries real text laid out in SKU rows; the spot hop list carries real text
+// laid out as a variety x crop-year TABLE; and a spot hop list printed from a
+// screenshot carries no text at all and has to be rasterized and read by OCR.
+//
+// `hasText` separates the last from the first two, but it is NOT what picks
+// between them -- both of the first two have text, and which parser a document
+// wants is decided by what the words say, not by whether there are any. (That
+// distinction is the bug: routing on `hasText` alone sent the April 2026 hop
+// list, the first one with a text layer, into the SKU parser, which found no
+// SKUs and reported the file unreadable.)
 
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -107,4 +114,47 @@ function downscale(canvas, width) {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(canvas, 0, 0, small.width, small.height);
   return small.toDataURL("image/jpeg", 0.75);
+}
+
+// PDF → positioned WORDS, one array per page, in the same shape OCR produces
+// ({text, x0, x1, y0, y1}) so spotHops.js can read either source unchanged.
+//
+// This exists because the spot hop list changed format: it used to arrive as
+// page images (printed from a screenshot) and now arrives as an Excel export
+// with a real text layer. The table is still variety × crop year, so the parse
+// is still geometric — only where the words come from changed. Reading them
+// exactly beats OCR outright: no misread digits, no confidence scores, and every
+// row on the page instead of the third OCR could manage.
+//
+// ⚠️ The y axis is FLIPPED here. PDF coordinates put y=0 at the bottom of the
+// page and count upward; OCR boxes count downward from the top. spotHops.js
+// sorts rows by ascending y to read a table top-to-bottom, so handing it raw PDF
+// coordinates would walk the page upside down — the year header would arrive
+// after the rows it labels and every price would land in no column at all.
+export async function extractPdfWords(data) {
+  const task = open(data);
+  const doc = await task.promise;
+  try {
+    const pages = [];
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const height = page.getViewport({ scale: 1 }).height;
+      const content = await page.getTextContent();
+      pages.push(
+        content.items
+          .filter((it) => typeof it.str === "string" && it.str.trim() !== "")
+          .map((it) => {
+            const x = it.transform[4];
+            const y = it.transform[5];
+            const w = it.width || 0;
+            const h = it.height || 0;
+            return { text: it.str, x0: x, x1: x + w, y0: height - y - h, y1: height - y };
+          }),
+      );
+      page.cleanup();
+    }
+    return { pages, pageCount: doc.numPages };
+  } finally {
+    task.destroy();
+  }
 }

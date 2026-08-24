@@ -114,6 +114,47 @@ describe('parseSpotHops', () => {
     expect(rows).toEqual([]);
   });
 
+  // ⚠️ Regression: this is a spreadsheet print-out, and Excel puts the repeated
+  // header wherever the page break leaves it. On the April 2026 list page 2 opens
+  // straight into rows and doesn't print the year header until two thirds down.
+  // Trusting a header only AFTER passing it dropped every row above it — Mosaic
+  // among them — because their prices landed in no crop-year column at all.
+  it('applies a mid-page year header to the rows printed above it', () => {
+    const rows = parseSpotHops([
+      ...row('Mosaic Pellet - 11lb', 40, [[615, '$1.00/lb'], [1075, '$3.00/lb']]),
+      ...header,
+      ...row('Simcoe Pellet - 11lb', 130, [[615, '$2.00/lb']]),
+    ]).rows;
+    expect(rows.map((r) => r.label)).toEqual(['Mosaic Pellet - 11lb', 'Simcoe Pellet - 11lb']);
+    expect(rows[0].prices).toEqual([
+      expect.objectContaining({ year: 2022, price: 1 }),
+      expect.objectContaining({ year: 2024, price: 3 }),
+    ]);
+  });
+
+  it('uses the ORIGIN column boundary for rows above the header too', () => {
+    const rows = parseSpotHops([
+      ...row('Mosaic Pellet - 11lb', 40, [[1075, '$3.00/lb']]),
+      ...header,
+    ]).rows;
+    expect(rows[0].label).toBe('Mosaic Pellet - 11lb');
+  });
+
+  // A row still takes the NEAREST header at or above it, so a page that really
+  // does change layout partway down is read correctly rather than being flattened
+  // onto whichever header happened to come first.
+  it('prefers the nearest header above a row when a page has several', () => {
+    const shifted = [w('2030', 620, 400, { width: 40 }), w('2031', 850, 400, { width: 40 })];
+    const rows = parseSpotHops([
+      ...header,
+      ...row('Cascade Pellet - 11lb', 130, [[615, '$1.00/lb']]),
+      ...shifted,
+      ...row('Citra Pellet - 11lb', 430, [[615, '$2.00/lb']]),
+    ]).rows;
+    expect(rows[0].prices[0].year).toBe(2022);
+    expect(rows[1].prices[0].year).toBe(2030);
+  });
+
   it('survives no words at all', () => {
     expect(parseSpotHops([]).rows).toEqual([]);
     expect(parseSpotHops(undefined).rows).toEqual([]);
@@ -212,6 +253,19 @@ describe('matchSpotHopPrices', () => {
     expect(rows2[0].ambiguous).toBe(true);
     const hop = matchSpotHopPrices(rows2, [{ name: 'Simcoe', sku: 'HOP-SIM', cropYear: 2023 }])[0];
     expect(hop).toMatchObject({ ambiguous: true, price: null });
+  });
+
+  // The list carries a CO2 extract block priced per CAN. Shortest-label-wins
+  // already prefers the pellet row while both are printed; this is the month
+  // where only the extract is, and a $44 can must not become a $44/lb hop.
+  it('never takes a CO2 extract row for a pellet', () => {
+    const extractOnly = parseSpotHops([
+      ...header,
+      ...row('Simcoe - CO2 Hop Extract (150 GMA)', 130, [[1075, '$44.00/lb']]),
+    ]).rows;
+    const [hop] = matchSpotHopPrices(extractOnly, [{ name: 'Simcoe', sku: 'HOP-SIM', cropYear: 2024 }]);
+    expect(hop.matchedLabel).toBeNull();
+    expect(hop.price).toBeNull();
   });
 
   it('reports an unmatched hop rather than dropping it', () => {
