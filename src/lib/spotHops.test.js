@@ -194,54 +194,84 @@ describe('parseSpotHopDate', () => {
 
 describe('matchSpotHopPrices', () => {
   const { rows } = parseSpotHops(words);
-  const find = (name, cropYear) =>
-    matchSpotHopPrices(rows, [{ name, sku: 'HOP-X', cropYear }])[0];
+  const find = (name) => matchSpotHopPrices(rows, [{ name, sku: 'HOP-X' }])[0];
 
-  it('reads the price from the crop year the brewery actually buys', () => {
-    expect(find('Cascade', 2022)).toMatchObject({ price: 1, year: 2022, matchedLabel: 'Cascade Pellet - 11lb' });
-    expect(find('Cascade', 2024)).toMatchObject({ price: 3, year: 2024 });
+  // Slackers buys the most recent crop, so the year comes off the LIST rather
+  // than out of the catalog. Cascade is priced here for 2022 and 2024.
+  it('takes the newest crop year the list carries', () => {
+    expect(find('Cascade')).toMatchObject({ price: 3, year: 2024, matchedLabel: 'Cascade Pellet - 11lb' });
+  });
+
+  it('still offers the older crops as a one-click choice', () => {
+    expect(find('Cascade').available.map((p) => p.year)).toEqual([2022, 2024]);
   });
 
   it('never takes the Cryo variant for a plain pellet', () => {
     // "Cryo Cascade" doesn't start with the variety; "Citra Cryo" does, and is
     // excluded outright — at 2x the price it would quietly wreck a batch cost.
-    expect(find('Citra', 2024)).toMatchObject({ price: 4, matchedLabel: 'Citra Pellet - 11lb' });
+    expect(find('Citra')).toMatchObject({ price: 4, matchedLabel: 'Citra Pellet - 11lb' });
   });
 
   it('never takes a 44 lb pack for an 11 lb box', () => {
-    expect(find('Centennial', 2024)).toMatchObject({ price: 5, matchedLabel: 'Centennial Pellet - 11lb' });
+    expect(find('Centennial')).toMatchObject({ price: 5, matchedLabel: 'Centennial Pellet - 11lb' });
   });
 
-  it('offers the other crop years instead of guessing when ours is not listed', () => {
-    // Cascade is priced for 2022 and 2024; a 2023 box has no quote here.
-    const hop = find('Cascade', 2023);
-    expect(hop.price).toBeNull();
-    expect(hop.available.map((p) => p.year)).toEqual([2022, 2024]);
+  // ⚠️ The real list carries TWO Amarillo pellet rows: a starred American/German
+  // one priced across three crops, and a German one priced for the oldest crop
+  // only, at a third of the money. Picking one row by shortest label landed on
+  // the German one and read a two-crop-stale price as current.
+  it('pools every matching row, so the newest crop wins across rows', () => {
+    const two = parseSpotHops([
+      ...header,
+      ...row('Amarillo Pellet - 11lb', 130, [[615, '$3.99/lb']]),
+      ...row('Amarillo Pellet - 11lb*', 160, [[615, '$8.99/lb'], [1075, '$11.99/lb']]),
+    ]).rows;
+    const [hop] = matchSpotHopPrices(two, [{ name: 'Amarillo', sku: 'HOP-AMA' }]);
+    expect(hop).toMatchObject({ price: 11.99, year: 2024, matchedLabel: 'Amarillo Pellet - 11lb*' });
+    // Both 2022 quotes stay visible — they disagree, and that's the brewer's call.
+    expect(hop.available.filter((p) => p.year === 2022).map((p) => p.price)).toEqual([3.99, 8.99]);
   });
 
-  it('takes the newest price for a hop with no crop year on file', () => {
-    expect(find('Cascade', null)).toMatchObject({ price: 3, year: 2024 });
+  it('prefills nothing when two rows disagree on the newest crop', () => {
+    const clash = parseSpotHops([
+      ...header,
+      ...row('Simcoe Pellet - 11lb', 130, [[1075, '$10.00/lb']]),
+      ...row('Simcoe Pellet - 11 lb', 160, [[1075, '$14.00/lb']]),
+    ]).rows;
+    const [hop] = matchSpotHopPrices(clash, [{ name: 'Simcoe', sku: 'HOP-SIM' }]);
+    expect(hop).toMatchObject({ conflict: true, price: null });
+    expect(hop.available.map((p) => p.price)).toEqual([10, 14]);
+  });
+
+  it('treats the same price quoted twice as agreement, not a conflict', () => {
+    const dupe = parseSpotHops([
+      ...header,
+      ...row('Simcoe Pellet - 11lb', 130, [[1075, '$10.00/lb']]),
+      ...row('Simcoe Pellet - 11 lb', 160, [[1075, '$10.00/lb']]),
+    ]).rows;
+    const [hop] = matchSpotHopPrices(dupe, [{ name: 'Simcoe', sku: 'HOP-SIM' }]);
+    expect(hop).toMatchObject({ conflict: false, price: 10, year: 2024 });
   });
 
   it('sees past a stray separator-bar token glued to the front of a label', () => {
     const noisy = parseSpotHops([...header, ...row('EE Simcoe Pellet - 11lb', 130, [[1075, '$6.00/lb']])]).rows;
-    expect(matchSpotHopPrices(noisy, [{ name: 'Simcoe', sku: 'HOP-SIM', cropYear: 2024 }])[0])
+    expect(matchSpotHopPrices(noisy, [{ name: 'Simcoe', sku: 'HOP-SIM' }])[0])
       .toMatchObject({ price: 6 });
   });
 
   it('still refuses a Cryo row that reaches it through that leading token', () => {
     const noisy = parseSpotHops([...header, ...row('EE Simcoe Cryo Pellet - 11lb', 130, [[1075, '$20.00/lb']])]).rows;
-    expect(matchSpotHopPrices(noisy, [{ name: 'Simcoe', sku: 'HOP-SIM', cropYear: 2024 }])[0].price).toBeNull();
+    expect(matchSpotHopPrices(noisy, [{ name: 'Simcoe', sku: 'HOP-SIM' }])[0].price).toBeNull();
   });
 
   it('excludes a 44 lb pack even when OCR reads it as "441b"', () => {
     const rows44 = parseSpotHops([...header, ...row('Willamette Pellet - 441b', 130, [[1075, '$7.00/lb']])]).rows;
-    expect(matchSpotHopPrices(rows44, [{ name: 'Willamette', sku: 'HOP-WIL', cropYear: 2024 }])[0].price).toBeNull();
+    expect(matchSpotHopPrices(rows44, [{ name: 'Willamette', sku: 'HOP-WIL' }])[0].price).toBeNull();
   });
 
   it('matches a variety whose capital I came back as a lowercase l', () => {
     const ocr = parseSpotHops([...header, ...row('ldaho 7 Pellet - 11lb', 130, [[615, '$5.99/lb']])]).rows;
-    expect(matchSpotHopPrices(ocr, [{ name: 'Idaho 7', sku: 'HOP-IDA7', cropYear: 2022 }])[0])
+    expect(matchSpotHopPrices(ocr, [{ name: 'Idaho 7', sku: 'HOP-IDA7' }])[0])
       .toMatchObject({ price: 5.99, year: 2022 });
   });
 
@@ -251,7 +281,7 @@ describe('matchSpotHopPrices', () => {
     const bad = [...header, ...row('Simcoe Pellet - 11lb', 130, [[860, '$12.60/lb'], [880, '$13.99/lb']])];
     const rows2 = parseSpotHops(bad).rows;
     expect(rows2[0].ambiguous).toBe(true);
-    const hop = matchSpotHopPrices(rows2, [{ name: 'Simcoe', sku: 'HOP-SIM', cropYear: 2023 }])[0];
+    const hop = matchSpotHopPrices(rows2, [{ name: 'Simcoe', sku: 'HOP-SIM' }])[0];
     expect(hop).toMatchObject({ ambiguous: true, price: null });
   });
 
@@ -263,13 +293,13 @@ describe('matchSpotHopPrices', () => {
       ...header,
       ...row('Simcoe - CO2 Hop Extract (150 GMA)', 130, [[1075, '$44.00/lb']]),
     ]).rows;
-    const [hop] = matchSpotHopPrices(extractOnly, [{ name: 'Simcoe', sku: 'HOP-SIM', cropYear: 2024 }]);
+    const [hop] = matchSpotHopPrices(extractOnly, [{ name: 'Simcoe', sku: 'HOP-SIM' }]);
     expect(hop.matchedLabel).toBeNull();
     expect(hop.price).toBeNull();
   });
 
   it('reports an unmatched hop rather than dropping it', () => {
-    expect(find('Mosaic', 2024)).toMatchObject({ name: 'Mosaic', matchedLabel: null, price: null, available: [] });
+    expect(find('Mosaic')).toMatchObject({ name: 'Mosaic', matchedLabel: null, price: null, available: [] });
   });
 
   it('defaults to the hops in the product catalog', () => {
