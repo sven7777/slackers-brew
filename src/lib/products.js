@@ -51,19 +51,23 @@ export const products = [
   { sku: "AZZZ1302", vendor: "OiO", name: "OiO Flaked Corn - 50 lb",       packQty: 1, packUnit: "lb", orderPack: "50 lb" },
   { sku: "AZZZ1303", vendor: "OiO", name: "OiO Rolled Oat Flakes - 55 lb", packQty: 1, packUnit: "lb", orderPack: "55 lb" },
 
-  // ---- Hops (quoted $/lb, 11 lb boxes; cropYear is what that price is for) --
-  { sku: "HOP-IDA7",  vendor: "BSG", name: "Idaho 7™ Pellet - 11 lb",    cropYear: 2022, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-CTZ",   vendor: "BSG", name: "CTZ Pellet - 11 lb",         cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-CAS",   vendor: "BSG", name: "Cascade Pellet - 11 lb",     cropYear: 2023, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-CHI",   vendor: "BSG", name: "Chinook Pellet - 11 lb",     cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-CEN",   vendor: "BSG", name: "Centennial Pellet - 11 lb",  cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-CRY",   vendor: "BSG", name: "Crystal Pellet - 11 lb",     cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-AMA",   vendor: "BSG", name: "Amarillo® Pellet - 11 lb",  cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-SAA",   vendor: "BSG", name: "Saaz Pellet - 11 lb",       cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-WIL",   vendor: "BSG", name: "Willamette Pellet - 11 lb", cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-CIT",   vendor: "BSG", name: "Citra® Pellet - 11 lb",     cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-MOS",   vendor: "BSG", name: "Mosaic® Pellet - 11 lb",    cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
-  { sku: "HOP-SIM",   vendor: "BSG", name: "Simcoe® Pellet - 11 lb",    cropYear: 2024, packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  // ---- Hops (quoted $/lb, 11 lb boxes) ----------------------------------
+  // No crop year here on purpose: Slackers buys the most recent crop, so the
+  // year a price belongs to is read off the spot list being imported rather
+  // than stored. A stored one goes stale every harvest and silently suppresses
+  // the match (it did — see spotHops.js).
+  { sku: "HOP-IDA7",  vendor: "BSG", name: "Idaho 7™ Pellet - 11 lb",    packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-CTZ",   vendor: "BSG", name: "CTZ Pellet - 11 lb",         packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-CAS",   vendor: "BSG", name: "Cascade Pellet - 11 lb",     packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-CHI",   vendor: "BSG", name: "Chinook Pellet - 11 lb",     packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-CEN",   vendor: "BSG", name: "Centennial Pellet - 11 lb",  packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-CRY",   vendor: "BSG", name: "Crystal Pellet - 11 lb",     packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-AMA",   vendor: "BSG", name: "Amarillo® Pellet - 11 lb",  packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-SAA",   vendor: "BSG", name: "Saaz Pellet - 11 lb",       packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-WIL",   vendor: "BSG", name: "Willamette Pellet - 11 lb", packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-CIT",   vendor: "BSG", name: "Citra® Pellet - 11 lb",     packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-MOS",   vendor: "BSG", name: "Mosaic® Pellet - 11 lb",    packQty: 1, packUnit: "lb", orderPack: "11 lb" },
+  { sku: "HOP-SIM",   vendor: "BSG", name: "Simcoe® Pellet - 11 lb",    packQty: 1, packUnit: "lb", orderPack: "11 lb" },
   // Not on the spot list — Derek's last paid price, quoted per 11 lb box.
   { sku: "HOP-PB25",  vendor: "BSG", name: "Pink Boots Blend 2025 - 11 lb", packQty: 11, packUnit: "lb", orderPack: "11 lb" },
   { sku: "HOP-LEM",   vendor: "BSG", name: "Lemondrop™ Pellet - 11 lb",     packQty: 11, packUnit: "lb", orderPack: "11 lb" },

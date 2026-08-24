@@ -78,13 +78,14 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
             the <em>Read from</em> column: it shows which row and crop year each price came from.
           </>
         )}{" "}
-        Prices are per pound, as the list quotes them.
+        Prices are per pound, as the list quotes them, and each is the{" "}
+        <strong>newest crop year</strong> the list carries for that hop — the older ones are one click away.
       </p>
 
       <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 6 }}>
         <thead><tr>
           <th style={th}>Hop</th>
-          <th style={th}>Crop</th>
+          <th style={th}>Crop yr</th>
           <th style={{ ...th, textAlign: "right" }}>$ / lb</th>
           <th style={{ ...th, textAlign: "right" }}>Now / oz</th>
           <th style={{ ...th, textAlign: "right" }}>New / oz</th>
@@ -94,7 +95,7 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
           {rows.map((r) => (
             <tr key={r.name}>
               <td style={{ ...td, fontWeight: 600 }}>{r.name}</td>
-              <td style={{ ...td, color: "#64748b" }}>{r.cropYear ?? "—"}</td>
+              <td style={{ ...td, color: "#64748b" }}>{r.year ?? "—"}</td>
               <td style={numTd}>
                 <input style={priceInp} inputMode="decimal" value={entered[r.name]}
                   onChange={(e) => set(r.name, e.target.value)} placeholder="—" />
@@ -106,9 +107,11 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
                   ? (
                     <span style={note}>
                       {r.matchedLabel}
-                      {r.year != null && r.cropYear != null && r.year !== r.cropYear && ` · ${r.year} crop`}
                       {r.ambiguous && (
                         <strong style={{ color: "#b45309" }}> · crop years unclear, read them off the page</strong>
+                      )}
+                      {r.conflict && !r.ambiguous && (
+                        <strong style={{ color: "#b45309" }}> · two prices for that crop, pick one</strong>
                       )}
                       {scanned && !r.ambiguous && r.confidence != null && r.confidence < LOW_CONFIDENCE && (
                         <strong style={{ color: "#b45309" }}> · unsure, check this one</strong>
@@ -116,12 +119,15 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
                     </span>
                   )
                   : <span style={{ ...note, fontStyle: "italic" }}>not found on this list</span>}
-                {/* Our crop year wasn't quoted, but other years were — offered as
-                    a choice rather than substituted silently. */}
-                {r.price == null && !r.ambiguous && r.available?.length > 0 && (
+                {/* Every quote found for this variety, offered rather than
+                    substituted. Shown when nothing could be prefilled, and also
+                    alongside a prefill so an older crop is one click away. */}
+                {r.available?.length > (r.price == null ? 0 : 1) && (
                   <div style={{ marginTop: 3 }}>
                     {r.available.map((p) => (
-                      <button key={p.year} type="button" style={chip} onClick={() => set(r.name, String(p.price))}>
+                      <button key={`${p.year}:${p.price}`} type="button" style={chip}
+                        title={p.label ?? undefined}
+                        onClick={() => set(r.name, String(p.price))}>
                         use {p.year}: {money(p.price)}
                       </button>
                     ))}

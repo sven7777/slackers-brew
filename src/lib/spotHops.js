@@ -23,7 +23,7 @@
 // two different prices, and products.js already carries the `cropYear` Slackers
 // actually buys. Columns come from the year header, which repeats on every page.
 
-import { defaultProductMap, productsBySku } from "./products";
+import { defaultProductMap } from "./products";
 
 // A four-digit year in the plausible range for a crop. Anything else that looks
 // like a number in a header is not a column.
@@ -244,27 +244,46 @@ export function parseSpotHopPages(pages) {
   return { rows: (pages || []).flatMap((words) => parseSpotHops(words).rows) };
 }
 
-// The hops Slackers buys, as {name, sku, cropYear} — the inventory name is what
-// the list is searched for, and the crop year is which column to read.
+// The hops Slackers buys, as {name, sku} — the inventory name is what the list
+// is searched for. There is deliberately no crop year here: Slackers buys the
+// most recent crop, so which column to read is a property of the LIST in front
+// of you, not of the catalog (see matchSpotHopPrices).
 export function ourHops() {
   return Object.entries(defaultProductMap.hop || {})
-    .map(([name, sku]) => ({ name, sku, cropYear: productsBySku[sku]?.cropYear ?? null }))
+    .map(([name, sku]) => ({ name, sku }))
     .filter((h) => h.sku);
 }
 
-// Pair each hop we buy with a row on the list.
+// Pair each hop we buy with a price on the list.
 //
 // A row matches when it STARTS with the variety name, which is what separates
 // "Cascade Pellet - 11lb" from "Cryo Cascade Hops®" without a special case, and
-// the Cryo/Enriched/44 lb variants are excluded outright: they're different
-// products at their own prices, and quietly costing a batch at Cryo money would
-// be a large silent error.
+// the Cryo/Enriched/44 lb/extract variants are excluded outright: they're
+// different products at their own prices, and quietly costing a batch at Cryo
+// money would be a large silent error.
 //
-// `price` is filled ONLY from the exact crop year the brewery buys. When the
-// list has that variety at other years instead (Cascade is priced for 2022 and
-// 2024, and Slackers' box is 2023), the alternatives come back in `available`
-// for a human to choose from — guessing an adjacent year's price would be
-// inventing a quote.
+// **The price taken is the NEWEST crop year on the list**, because that is what
+// the brewery buys. This used to come from a `cropYear` stored per product and
+// only prefilled on an exact match, which was wrong in the way stored snapshots
+// are always wrong: the catalog said 2022-2024, the April 2026 list quoted
+// 2023-2025, and five hops that were sitting right there on the page prefilled
+// nothing. The crop year Slackers buys is a property of the list in front of
+// you, so it is read off the list.
+//
+// ⚠️ Prices are pooled across EVERY matching row, not taken from one. The list
+// carries two Amarillo pellet rows — a starred American/German one priced
+// 2023-2025, and a German one priced 2023 only, at a third of the money — and
+// picking a single row by shortest label landed on the German one, whose newest
+// year is two crops stale. Pooling asks the right question ("what is the newest
+// Amarillo on this page?") instead of the wrong one ("what does this one row
+// say?").
+//
+// Nothing is prefilled where the answer isn't clean: if two rows quote DIFFERENT
+// prices for the newest year, or the row it came from had unreadable columns,
+// the price is left blank and every candidate is offered in `available` for a
+// human to pick off the page. Guessing between two live quotes is exactly the
+// confident lie this screen exists to prevent.
+
 // Does this row name this variety? The striped separator bars between rows come
 // back from OCR as a stray "EE" or "FF" glued to the front of the next label, so
 // one short leading token is allowed before the variety. Nothing longer, and the
@@ -286,26 +305,43 @@ function startsWithVariety(rowVariety, variety) {
 
 export function matchSpotHopPrices(rows, hops = ourHops()) {
   return hops.map((hop) => {
-    const variety = hop.name;
     const candidates = (rows || []).filter(
-      (r) => startsWithVariety(r.variety, variety) && !NOT_OURS.test(r.label),
+      (r) => startsWithVariety(r.variety, hop.name) && !NOT_OURS.test(r.label),
     );
-    // Prefer the shortest label: "Cascade Pellet - 11lb" over any longer variant
-    // that happens to share the prefix.
-    const match = candidates.sort((a, b) => a.label.length - b.label.length)[0] || null;
-    const available = match ? [...match.prices].sort((a, b) => a.year - b.year) : [];
-    // A row whose columns didn't add up never pre-fills a price, whatever year
-    // it seems to carry; it shows on the review screen for a human to read off
-    // the page instead.
-    const exact = hop.cropYear && !match?.ambiguous ? available.find((p) => p.year === hop.cropYear) : null;
-    // A hop with no crop year on file (a blend bought once) takes the newest
-    // price on the list, flagged by the year shown beside it.
-    const chosen = exact ?? (hop.cropYear || match?.ambiguous ? null : available[available.length - 1] ?? null);
+
+    // Every (year, price) this variety is quoted at anywhere on the list, each
+    // remembering the row it came from so a brewer can tell two rows apart.
+    // Deduped on year+price: a repeated block quoting the same number twice is
+    // agreement, not a conflict.
+    const seen = new Set();
+    const available = [];
+    for (const row of candidates) {
+      for (const p of row.prices) {
+        const key = `${p.year}:${p.price}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        available.push({ ...p, label: row.label, ambiguous: Boolean(row.ambiguous) });
+      }
+    }
+    available.sort((a, b) => a.year - b.year || a.price - b.price);
+
+    const newestYear = available.length ? available[available.length - 1].year : null;
+    const atNewest = available.filter((p) => p.year === newestYear);
+    // Two different prices for the same crop year, or a row whose columns didn't
+    // add up: prefill nothing and say so.
+    const conflict = atNewest.length > 1;
+    const ambiguous = atNewest.some((p) => p.ambiguous);
+    const chosen = conflict || ambiguous ? null : atNewest[0] ?? null;
+
+    // "Read from" still names a row even when nothing was prefilled — the
+    // shortest candidate, which is the plain pellet line.
+    const fallbackLabel = [...candidates].sort((a, b) => a.label.length - b.label.length)[0]?.label ?? null;
 
     return {
       ...hop,
-      matchedLabel: match?.label ?? null,
-      ambiguous: Boolean(match?.ambiguous),
+      matchedLabel: chosen?.label ?? fallbackLabel,
+      ambiguous,
+      conflict,
       available,
       price: chosen?.price ?? null,
       year: chosen?.year ?? null,
