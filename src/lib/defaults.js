@@ -5,7 +5,7 @@ export const defMalts = [
   ["Pils",0],["2-Row",0],["Maris Otter",0],["Caramunich I",0],
   ["Carafoam",0],["Chocolate",0],["Black Patent",0],["Roasted Barley",0],
   ["White Wheat",0],["Aromatic",0],["Flaked Wheat",0],["Flaked Corn",0],
-  ["Vienna",0],["Munich",0],["Carafa III",0],["Carafa Special III",0],
+  ["Vienna",0],["Munich",0],["Carafa Special III",0],
   ["Biscuit Malt",0],["Crystal 80",0],["Flaked Oat",0],["Midnight Wheat",0]
 ];
 export const defHops = [

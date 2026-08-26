@@ -4,7 +4,7 @@ import InvTable from './InvTable';
 
 const items = [
   { n: '2-Row', q: 100, cpu: 0.72 },
-  { n: 'Carafa III', q: 10 },   // unpriced
+  { n: 'Chocolate', q: 10 },   // unpriced
 ];
 
 const props = { items, unit: 'lbs', category: 'malt', costUnit: 'lb' };
@@ -19,22 +19,22 @@ describe('InvTable pricing column', () => {
   it('says "unpriced" instead of $0.00 for a row with no price', () => {
     render(<InvTable {...props} setter={vi.fn()} setInvCost={vi.fn()} />);
     expect(screen.getByText('unpriced')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cost per lb of Carafa III')).toHaveValue(null);
+    expect(screen.getByLabelText('Cost per lb of Chocolate')).toHaveValue(null);
   });
 
   it('writes an edited price through setInvCost, by name and category', () => {
     const setInvCost = vi.fn();
     render(<InvTable {...props} setter={vi.fn()} setInvCost={setInvCost} />);
-    fireEvent.change(screen.getByLabelText('Cost per lb of Carafa III'), { target: { value: '1.85' } });
-    expect(setInvCost).toHaveBeenCalledWith('malt', 'Carafa III', '1.85', undefined);
+    fireEvent.change(screen.getByLabelText('Cost per lb of Chocolate'), { target: { value: '1.85' } });
+    expect(setInvCost).toHaveBeenCalledWith('malt', 'Chocolate', '1.85', undefined);
   });
 
   it('still edits quantity by index', () => {
     let rows = items;
     const setter = (fn) => { rows = fn(rows); };
     render(<InvTable {...props} setter={setter} setInvCost={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText('On hand, Carafa III'), { target: { value: '25' } });
-    expect(rows[1]).toEqual({ n: 'Carafa III', q: 25 });
+    fireEvent.change(screen.getByLabelText('On hand, Chocolate'), { target: { value: '25' } });
+    expect(rows[1]).toEqual({ n: 'Chocolate', q: 25 });
     expect(rows[0].q).toBe(100);
   });
 });
