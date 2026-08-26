@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { batchVolume, computeRecipeCost, priceMapFrom, GAL_PER_KEG } from "../../lib/cogs";
+import { priceAsOf } from "../../lib/inventoryValue";
+import PriceInput from "../../components/PriceInput";
 import { card, hdr, cell, num, th, inp } from "../../styles";
 
 // Cost panel (Recipes ▸ Cost): ingredient COGS for the selected recipe — batch
@@ -24,10 +26,6 @@ const CATS = [
 // Values arrive from computeRecipeCost() already rounded up to the cent, so
 // toFixed(2) is exact rather than a second rounding.
 const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
-// Prices are stored rounded to the cent (see setInvCost / applyPrices), so two
-// decimals here is the whole value, not a truncation of it — the field always
-// agrees with the extended cost beside it.
-const perUnit = (n) => n == null ? "" : n.toFixed(2);
 // What the brewery default works out to in kegs, shown as the yield field's
 // placeholder — the units the field asks for, not the percentage behind them.
 const kegsFromLoss = (gal, lossPct) => (gal * (1 - lossPct / 100)) / GAL_PER_KEG;
@@ -58,13 +56,8 @@ export default function CostPanel({ recipe, ri, setRecs, dbl, setDbl, malts, hop
   );
 
   // Oldest price behind this number — a year-old figure should look like one.
-  const asOf = useMemo(() => {
-    const dates = [...malts, ...hops, ...yeast, ...adj]
-      .filter(i => Number.isFinite(i?.cpu) && i?.pricedAt)
-      .map(i => i.pricedAt)
-      .sort();
-    return dates[0] || null;
-  }, [malts, hops, yeast, adj]);
+  // Shared with the Inventory tab, which prints the same date under its total.
+  const asOf = useMemo(() => priceAsOf({ malts, hops, yeast, adj }), [malts, hops, yeast, adj]);
 
   if (!recipe) return null;
   const linesFor = (cat) => r.lines.filter(l => l.category === cat);
@@ -165,13 +158,11 @@ export default function CostPanel({ recipe, ri, setRecs, dbl, setDbl, malts, hop
                     <td style={cell}>{l.name}</td>
                     <td style={num}>{l.qty} {l.unit}</td>
                     <td style={num}>
-                      <input
-                        style={{ ...inp, width: 96 }}
-                        type="number" step="0.01" min="0"
-                        value={perUnit(l.costPerUnit)}
-                        placeholder="—"
+                      <PriceInput
+                        style={{ width: 96 }}
+                        value={l.costPerUnit}
                         aria-label={`Cost per ${l.unit} of ${l.name}`}
-                        onChange={(e) => setInvCost(key, l.name, e.target.value, l.unit)}
+                        onCommit={(v) => setInvCost(key, l.name, v, l.unit)}
                       />
                     </td>
                     <td style={{ ...num, fontWeight: 600 }}>
