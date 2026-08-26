@@ -57,7 +57,7 @@ export default function App() {
       {/* Keyed by tab so switching tabs clears a crashed panel — the nav stays
           outside the boundary, so a broken tab is always escapable. */}
       <ErrorBoundary key={tab}>
-        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
+        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost}/>}
         {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings}/>}
         {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
         {tab===3 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}

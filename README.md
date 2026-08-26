@@ -12,7 +12,11 @@ either way.
 ## Features
 
 - **Inventory** — track on-hand stock of malts (lbs), hops (oz), yeast (packs),
-  and adjuncts (per-item units).
+  and adjuncts (per-item units), with each ingredient's cost per unit and what
+  the stock on hand is worth — subtotalled per category and totalled for the
+  whole shelf. An ingredient with no price reads "unpriced" and stays out of the
+  total rather than counting as free. Prices live on the ingredient, so editing
+  one here also changes every recipe's cost.
 - **Recipes** — pick a recipe once, then switch between four views of it:
   - **Edit** — name, style, target gravities, mash and fermentation temps, plus
     the ingredient lists per recipe; add or remove ingredients across malts,
