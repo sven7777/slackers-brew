@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import RecEditTable from "../../components/RecEditTable";
+import CatalogBrowser from "../../components/CatalogBrowser";
 import ScheduleEditTable from "../../components/ScheduleEditTable";
 import ImportBeerSmith from "./ImportBeerSmith";
 import BrewSheetPanel from "./BrewSheetPanel";
@@ -8,6 +9,7 @@ import CostPanel from "./CostPanel";
 import StyleSelect from "../../components/StyleSelect";
 import { defRecipes, maltNames, hopNames, yeastNames, adjNames, saltNames } from "../../lib/defaults";
 import { sortedWithIndex } from "../../lib/sortNames";
+import { addIngredient } from "../../lib/recipeRows";
 import { card, hdr, btn, inp } from "../../styles";
 
 // Sub-views of the Recipes tab, all driven by the one recipe dropdown below.
@@ -26,16 +28,38 @@ const segBtn = (active) => ({
   boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
 });
 
+// Which inventory category each recipe table draws from, for the catalog
+// browser opened out of that table's Add picker.
+const CAT_OF = { m: "malt", h: "hop", y: "yeast", a: "adj" };
+
 // Recipes tab: pick a recipe once, then switch between editing it (targets, mash
 // temp, ingredient lists with stage/time, water salts, cellar schedule), its
 // printable Brew Sheet, and its printable Cellar Sheet. Reset to preset / import
 // .bsmx live in the Edit view.
-export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, yeast, adj, setInvCost, settings }) {
+export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, yeast, adj, setInvCost, settings, adopt }) {
   const [addSel, setAddSel] = useState({ m: "", h: "", y: "", a: "", sa: "", sc: "" });
   const [importing, setImporting] = useState(false);
+  const [browsing, setBrowsing] = useState(null); // which table opened the catalog
   const [view, setView] = useState("edit");
   const [costDbl, setCostDbl] = useState(false);
   const r = recs[selR];
+
+  // The Add pickers offer the BREWERY'S ingredients, not the built-in defaults.
+  // That is what makes adopting from the catalog worth anything: a malt that has
+  // just landed on the shelf has to be addable to a beer. Archived rows stay
+  // offered — archiving means "we stopped buying it", and a recipe that calls
+  // for one still calls for it (see lib/archive.js).
+  //
+  // Falling back to the defaults for an empty category is the same rule the
+  // Supabase backend loads by: an empty table means "not seeded yet", never
+  // "the brewery has no malts".
+  const pick = (rows, fallback) => (rows?.length ? rows.map((it) => it.n) : fallback);
+  const invNames = useMemo(() => ({
+    m: pick(malts, maltNames),
+    h: pick(hops, hopNames),
+    y: pick(yeast, yeastNames),
+    a: pick(adj, adjNames),
+  }), [malts, hops, yeast, adj]);
 
   // The picker reads alphabetically; `selR` still indexes the stored list, so
   // each option carries the position it came from rather than its rank here.
@@ -144,18 +168,31 @@ export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, 
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div style={card}><div style={hdr}>🌾 Malts (lbs)</div>
-            <RecEditTable items={r.m} cat="m" names={maltNames} unit="lbs" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />
+            <RecEditTable items={r.m} cat="m" names={invNames.m} unit="lbs" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} onBrowse={adopt ? setBrowsing : undefined} />
           </div>
           <div style={card}><div style={hdr}>🌿 Hops (oz)</div>
-            <RecEditTable items={r.h} cat="h" names={hopNames} unit="oz" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />
+            <RecEditTable items={r.h} cat="h" names={invNames.h} unit="oz" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} onBrowse={adopt ? setBrowsing : undefined} />
           </div>
           <div style={card}><div style={hdr}>🧫 Yeast (packs)</div>
-            <RecEditTable items={r.y} cat="y" names={yeastNames} unit="packs" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />
+            <RecEditTable items={r.y} cat="y" names={invNames.y} unit="packs" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} onBrowse={adopt ? setBrowsing : undefined} />
           </div>
           <div style={card}><div style={hdr}>🧪 Adjuncts</div>
-            <RecEditTable items={r.a} cat="a" names={adjNames} unit="" ri={selR} showUnit setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />
+            <RecEditTable items={r.a} cat="a" names={invNames.a} unit="" ri={selR} showUnit setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} onBrowse={adopt ? setBrowsing : undefined} />
           </div>
         </div>
+
+        {/* Adopting from a recipe is one action: the ingredient lands on the
+            shelf AND in the beer being edited. The category is already answered
+            by which table asked, so the dialog doesn't ask again. */}
+        <CatalogBrowser open={!!browsing} category={CAT_OF[browsing]}
+          inventory={{ malts, hops, yeast, adj }}
+          addLabel="Add to inventory and this recipe"
+          onAdopt={(category, row) => {
+            adopt(category, row);
+            addIngredient(setRecs, selR, browsing, row.n, row.u);
+            setBrowsing(null);
+          }}
+          onClose={() => setBrowsing(null)} />
 
         <div style={{ ...card, marginTop: 12 }}><div style={hdr}>🧂 Water Salts (g)</div>
           <RecEditTable items={r.sa} cat="sa" names={saltNames} unit="g" ri={selR} setRecs={setRecs} addSel={addSel} setAddSel={setAddSel} />

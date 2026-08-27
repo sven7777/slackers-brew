@@ -36,6 +36,17 @@ export default function App() {
   useEffect(() => watchFreshness(), []);
 
   const SETTER = { malt: setMalts, hop: setHops, yeast: setYeast, adj: setAdj };
+
+  // Adopting a product from the vendor catalog: the one bridge from what the
+  // vendor sells to what we stock. Everything that makes it a judgement call —
+  // the name, the category, the pack — is answered in the dialog; by the time
+  // it gets here it is an ordinary inventory row (see lib/adopt.js).
+  //
+  // Appended, never merged: the dialog warns about a name already on the shelf
+  // and the brewer decides, because two products really can share a short name
+  // and only they know whether this is the Carafa case.
+  const adoptIngredient = (category, row) => SETTER[category]?.(prev => [...prev, row]);
+
   const setInvCost = (category, name, raw, unit) => {
     const v = raw === "" ? null : parseFloat(raw);
     // Prices are money: two decimals, so what's shown is what's stored.
@@ -66,8 +77,8 @@ export default function App() {
       {/* Keyed by tab so switching tabs clears a crashed panel — the nav stays
           outside the boundary, so a broken tab is always escapable. */}
       <ErrorBoundary key={tab}>
-        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost}/>}
-        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings}/>}
+        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost} adopt={adoptIngredient}/>}
+        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings} adopt={adoptIngredient}/>}
         {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
         {tab===3 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
       </ErrorBoundary>

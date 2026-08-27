@@ -11,8 +11,8 @@
 // move, and neither is the same as one we have no product mapping for at all —
 // collapsing them is how a half-applied import passes for a complete one.
 
-import { applyPrices } from "./applyPrices";
-import { defaultProductMap, productsBySku } from "./products";
+import { applyPrices, skuFor } from "./applyPrices";
+import { productsBySku } from "./products";
 
 const CATEGORIES = [
   ["malt", "malts"],
@@ -25,12 +25,17 @@ export const categoryLabels = { malt: "Malts", hop: "Hops", yeast: "Yeast", adj:
 
 // Compare current inventory against a {sku: {price}} map.
 //
+// `catalog` is the optional {sku: entry} lookup applyPrices() uses for products
+// products.js has never heard of — every ingredient adopted from the vendor
+// catalog. Without it those rows would report as `unmapped` forever, which is
+// the one word this function exists to stop meaning three different things.
+//
 // Returns the priced inventory (`next`, ready to save) alongside:
 //   changes   — priced differently than before (`from` null = newly priced)
 //   unchanged — covered by the file, same price to the cent
 //   skipped   — not covered, with why ("unmapped" | "absent")
-export function priceChanges(inventory, priceBySku) {
-  const next = applyPrices(inventory, priceBySku || {});
+export function priceChanges(inventory, priceBySku, catalog = {}) {
+  const next = applyPrices(inventory, priceBySku || {}, catalog);
   const changes = [];
   const unchanged = [];
   const skipped = [];
@@ -40,12 +45,12 @@ export function priceChanges(inventory, priceBySku) {
     const after = next[key] || [];
     before.forEach((row, i) => {
       const name = row?.n;
-      const sku = defaultProductMap[category]?.[name] || null;
+      const sku = skuFor(category, row);
       const entry = {
         category,
         name,
         sku,
-        vendor: sku ? productsBySku[sku]?.vendor ?? null : null,
+        vendor: sku ? (productsBySku[sku] ?? catalog?.[sku])?.vendor ?? null : null,
         from: Number.isFinite(row?.cpu) ? row.cpu : null,
         to: Number.isFinite(after[i]?.cpu) ? after[i].cpu : null,
       };
