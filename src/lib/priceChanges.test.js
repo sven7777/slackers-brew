@@ -13,7 +13,7 @@ const inventory = {
 
 const priceBySku = {
   MRAH1102: { price: 1, effective: '2025-06-19' },   // 2-Row → new price
-  MRAH1105: { price: 5, effective: '2025-06-19' },   // Pils  → unchanged
+  MRAH1190: { price: 5, effective: '2025-06-19' },   // Pils  → unchanged
   BZZZ1971: { price: 40, effective: '2025-06-19' },  // K97   → new price
 };
 
@@ -32,7 +32,7 @@ describe('priceChanges', () => {
   });
 
   it('reports a repriced ingredient with both numbers', () => {
-    const dearer = { ...priceBySku, MRAH1105: { price: 6 } };
+    const dearer = { ...priceBySku, MRAH1190: { price: 6 } };
     const { changes } = priceChanges(inventory, dearer);
     expect(changes).toContainEqual(expect.objectContaining({ name: 'Pils', from: 5, to: 6 }));
   });
