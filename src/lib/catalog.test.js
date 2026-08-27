@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalog, catalogEntry, classify, parsePack, vendorFromSku } from "./catalog";
+import { buildCatalog, catalogEntry, classify, parsePack, stripPack, vendorFromSku } from "./catalog";
 
 // ⚠️ Fabricated prices only — real vendor prices never enter this repo. The
 // NAMES here are real, because the names are what the parsing rules are about:
@@ -141,5 +141,25 @@ describe("buildCatalog", () => {
   it("handles an empty file without inventing anything", () => {
     expect(buildCatalog([]).counts).toEqual({ total: 0, byCategory: {}, unclassified: 0, unpacked: 0 });
     expect(buildCatalog(null).entries).toEqual([]);
+  });
+});
+
+// Same regex as parsePack, so the suffix read as a pack is always the suffix
+// removed. Two things depend on that agreeing: the name suggested by the adopt
+// dialog, and the key that groups one product's pack sizes together.
+describe("stripPack", () => {
+  it("removes the pack the vendor wrote into the name", () => {
+    expect(stripPack("Fermentis SafAle™ K-97 - 500 g")).toBe("Fermentis SafAle™ K-97 -");
+    expect(stripPack("Alphonso Mango Puree - 44 lb")).toBe("Alphonso Mango Puree -");
+    expect(stripPack("Blackstrap Molasses - 3000 lb (Tote)")).toBe("Blackstrap Molasses -");
+  });
+
+  it("leaves a name that ends in dimensions alone, exactly as parsePack does", () => {
+    expect(stripPack('1 lb Nylon Bag 11" x 8"')).toBe('1 lb Nylon Bag 11" x 8"');
+  });
+
+  it("leaves a name with no pack in it alone", () => {
+    expect(stripPack("Rahr North Star Pils™")).toBe("Rahr North Star Pils™");
+    expect(stripPack(null)).toBe("");
   });
 });

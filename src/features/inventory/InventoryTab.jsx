@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import InvTable from "../../components/InvTable";
+import CatalogBrowser from "../../components/CatalogBrowser";
 import { inventoryValue, priceAsOf } from "../../lib/inventoryValue";
 import { totalArchived, visibleInventory } from "../../lib/archive";
 import { card, hdr, btn } from "../../styles";
@@ -22,10 +23,11 @@ const CatTotal = ({ v }) => (
 // The price column edits the SAME value as the Recipes ▸ Cost view and the
 // Settings price import: it lives on the ingredient, so a change here moves
 // every recipe's COGS. The footer says so.
-export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, setYeast, adj, setAdj, setInvCost }) {
+export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, setYeast, adj, setAdj, setInvCost, adopt }) {
   // Local state, not persisted — like the Recipes sub-nav. "Show me the ones I
   // stopped buying" is a thing you do for a moment, not a preference.
   const [showArchived, setShowArchived] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
 
   // ⚠️ Value is computed over the rows that are actually SHOWN, so the column
   // adds up to the total beside it — the same invariant inventoryValue.js and
@@ -64,6 +66,7 @@ export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, se
               {showArchived ? 'Hide archived' : `Show archived (${nArchived})`}
             </button>
           )}
+          <button style={btn} onClick={()=>setBrowsing(true)}>+ Add ingredient</button>
           <button style={btn} onClick={clearAll}>Clear Inventory</button>
         </div>
       </div>
@@ -87,6 +90,12 @@ export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, se
           <InvTable items={adj} setter={setAdj} unit="" category="adj" setInvCost={setInvCost} showArchived={showArchived}/>
         </div>
       </div>
+      {/* The shelf is a counting sheet; the vendor catalog is 563 products.
+          Adopting one is the only way a row gets on here, and it is where the
+          name, the category and the pack size get decided. */}
+      <CatalogBrowser open={browsing} inventory={{malts,hops,yeast,adj}}
+        onAdopt={(category,row)=>{ adopt(category,row); setBrowsing(false); }}
+        onClose={()=>setBrowsing(false)}/>
       <div style={{fontSize:12,color:'#64748b',padding:'0 2px 8px'}}>
         Value is what's on the shelf at the price beside it; an ingredient with no price is
         left out of the total rather than counted as free. Archiving one (📦) hides it here

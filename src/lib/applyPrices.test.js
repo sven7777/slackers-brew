@@ -109,3 +109,51 @@ describe("applyPrices", () => {
     expect(res.skipped).toBe(5);
   });
 });
+
+// An ingredient adopted from the vendor catalog is in none of products.js's
+// hand-curated maps: it carries its own SKU, and the price import passes the
+// rows it just parsed as the product lookup. Without both halves an adopted
+// ingredient's price would freeze at whatever the list said the day it was
+// adopted — silently, which is the failure that hid a discontinued Pils SKU for
+// a year.
+//
+// The SKUs here are real rows on the August 2026 Houston list that products.js
+// does NOT carry, which is the point: they are exactly the kind of thing a
+// brewer adopts.
+describe("adopted ingredients", () => {
+  const adopted = {
+    malts: [{ n: "To Thee Pils", q: 0, cpu: 0.8, sku: "MRAH1173" }],
+    hops: [], yeast: [], adj: [],
+  };
+  const catalog = { MRAH1173: { sku: "MRAH1173", vendor: "Rahr", packQty: 1, packUnit: "lb" } };
+
+  it("reprices a row by the SKU the brewer adopted", () => {
+    const res = applyPrices(adopted, { MRAH1173: { price: 0.9, effective: "2026-08-24" } }, catalog);
+    expect(res.malts[0]).toMatchObject({ cpu: 0.9, sku: "MRAH1173", vendor: "Rahr", pricedAt: "2026-08-24" });
+  });
+
+  it("divides by the pack size the file quotes, so the pack is never assumed", () => {
+    const res = applyPrices(
+      { malts: [], hops: [], yeast: [], adj: [{ n: "Clover Honey", q: 0, u: "lbs", sku: "AZZZ4101" }] },
+      { AZZZ4101: { price: 120 } },
+      { AZZZ4101: { packQty: 60, packUnit: "lb" } },
+    );
+    expect(res.adj[0].cpu).toBe(2);
+  });
+
+  it("leaves a row alone when nothing knows its product", () => {
+    const res = applyPrices(adopted, { MRAH1173: { price: 0.9 } }, {});
+    expect(res.malts[0].cpu).toBe(0.8);
+  });
+
+  // The curated map is an editorial decision in code ("our Pils is now North
+  // Star"), so where it has an opinion it wins — that is what let #83 repoint
+  // Pils by editing one line rather than by rewriting every stored row.
+  it("still lets the curated map win for an ingredient it names", () => {
+    const res = applyPrices(
+      { malts: [{ n: "Pils", q: 0, sku: "MRAH1105" }], hops: [], yeast: [], adj: [] },
+      { MRAH1190: { price: 2 }, MRAH1105: { price: 9 } },
+    );
+    expect(res.malts[0]).toMatchObject({ cpu: 2, sku: "MRAH1190" });
+  });
+});

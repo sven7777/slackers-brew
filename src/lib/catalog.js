@@ -112,6 +112,17 @@ const UNIT_ALIASES = {
   lbs: "lb", gallon: "gal", pack: "each", ct: "each", l: "L",
 };
 
+// The name with its pack suffix removed: "Fermentis SafAle™ K-97 - 500 g" →
+// "Fermentis SafAle™ K-97". Two things need this and they need it to agree.
+// The adopt dialog suggests a short name from it, and it is what groups the
+// SKUs that are the SAME product in different sizes — Coriander Powder is sold
+// at 2 lb and 50 lb under two SKUs, and a brewer adopting it is choosing a
+// size, not choosing between two ingredients. Same regex as parsePack(), so a
+// suffix that is read as a pack is always the suffix that is stripped.
+export function stripPack(name) {
+  return String(name ?? "").replace(PACK_RE, "").replace(/\s+/g, " ").trim();
+}
+
 // Pack size for one row, or null when the file doesn't say.
 //
 // Returning null rather than a default is the same rule `costPerUnit()` keeps:

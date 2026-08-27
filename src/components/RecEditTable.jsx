@@ -1,4 +1,5 @@
-import { adjUnits, brewDayStages, cellarStages, saltStages, stageLabels } from "../lib/defaults";
+import { brewDayStages, cellarStages, saltStages, stageLabels } from "../lib/defaults";
+import { addIngredient } from "../lib/recipeRows";
 import { sortedNames, sortedWithIndex } from "../lib/sortNames";
 import { cell, num, th, inp, rmBtn, addRow, sel, addBtn } from "../styles";
 
@@ -25,18 +26,10 @@ const setField = (setRecs, ri, cat, ii, idx, val) =>
 const rmItem = (setRecs, ri, cat, ii) =>
   setRecs((p) => p.map((r, i) => (i !== ri ? r : { ...r, [cat]: r[cat].filter((_, j) => j !== ii) })));
 
-// New rows are seeded with the category's default stage/time so they print
-// somewhere sensible until edited.
-const newRow = (cat, name) => {
-  if (cat === "h") return [name, 0, "boil", 0];
-  if (cat === "a") return [name, 0, adjUnits[name] || "each", "boil", 0];
-  if (cat === "sa") return [name, 0, "mash"];
-  return [name, 0];
-};
-const addItem = (setRecs, ri, cat, name) => {
-  if (!name) return;
-  setRecs((p) => p.map((r, i) => (i !== ri ? r : { ...r, [cat]: [...(r[cat] ?? []), newRow(cat, name)] })));
-};
+// The picker's last entry, when a catalog browser is wired up. It is a VALUE
+// rather than a name so it can never collide with an ingredient called
+// something similar.
+const BROWSE = "\u0000browse";
 
 // Editable ingredient table for one recipe category. Hops/adjuncts/salts gain
 // Stage (and, for hops/adjuncts, Time) columns; staged categories allow the
@@ -48,7 +41,7 @@ const addItem = (setRecs, ri, cat, name) => {
 // order only: the stored array keeps its own order (which is what the printable
 // sheets group by stage and time), so every edit still addresses `row.index`,
 // the position in that array, not the position on screen.
-export default function RecEditTable({ items = [], cat, names, unit, ri, showUnit, setRecs, addSel, setAddSel }) {
+export default function RecEditTable({ items = [], cat, names, unit, ri, showUnit, setRecs, addSel, setAddSel, onBrowse }) {
   const cfg = CFG[cat];
   const used = new Set(items.map((x) => x[0]));
   const avail = sortedNames(cfg.dups ? names : names.filter((n) => !used.has(n)));
@@ -106,13 +99,25 @@ export default function RecEditTable({ items = [], cat, names, unit, ri, showUni
           ))}
         </tbody>
       </table>
-      {avail.length > 0 && (
+      {(avail.length > 0 || onBrowse) && (
         <div style={addRow}>
-          <select value={addSel[cat]} onChange={(e) => setAddSel((p) => ({ ...p, [cat]: e.target.value }))} style={sel}>
+          {/* ⚠️ The picker stays what it was: the brewery's own ingredients, in
+              alphabetical order. Dumping the vendor's 563 products in here would
+              undo exactly what that sort was for. Browsing the catalog is one
+              entry at the BOTTOM, and it goes through the adopt dialog, which is
+              where a vendor product acquires a name we would put on a brew
+              sheet. */}
+          <select value={addSel[cat]} style={sel}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === BROWSE) { setAddSel((p) => ({ ...p, [cat]: "" })); onBrowse(cat); return; }
+              setAddSel((p) => ({ ...p, [cat]: v }));
+            }}>
             <option value="">Add {cat === "sa" ? "salt" : "ingredient"}...</option>
             {avail.map((n) => <option key={n} value={n}>{n}</option>)}
+            {onBrowse && <option value={BROWSE}>Browse catalog…</option>}
           </select>
-          <button style={addBtn} onClick={() => { addItem(setRecs, ri, cat, addSel[cat]); setAddSel((p) => ({ ...p, [cat]: "" })); }}>+ Add</button>
+          <button style={addBtn} onClick={() => { addIngredient(setRecs, ri, cat, addSel[cat]); setAddSel((p) => ({ ...p, [cat]: "" })); }}>+ Add</button>
         </div>
       )}
     </div>

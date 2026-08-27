@@ -67,3 +67,25 @@ describe('priceChanges', () => {
     expect(skipped).toHaveLength(5);
   });
 });
+
+describe('priceChanges with adopted ingredients', () => {
+  const inv = { malts: [{ n: 'To Thee Pils', q: 0, sku: 'MRAH1173' }], hops: [], yeast: [], adj: [] };
+  const catalog = { MRAH1173: { sku: 'MRAH1173', vendor: 'Rahr', packQty: 1, packUnit: 'lb' } };
+
+  // "unmapped" has to keep meaning one thing. An adopted ingredient is mapped —
+  // by the brewer, at the moment they adopted it — so reporting it as unmapped
+  // forever would put a permanent false negative in the one report that exists
+  // to say honestly what an import did NOT cover.
+  it('reports an adopted ingredient as a change, not as unmapped', () => {
+    const { changes, skipped } = priceChanges(inv, { MRAH1173: { price: 0.9 } }, catalog);
+    expect(changes).toContainEqual(
+      expect.objectContaining({ name: 'To Thee Pils', sku: 'MRAH1173', vendor: 'Rahr', to: 0.9 }),
+    );
+    expect(skipped).toEqual([]);
+  });
+
+  it('reports it as absent — not unmapped — when this file does not carry it', () => {
+    const { skipped } = priceChanges(inv, { MRAH1102: { price: 1 } }, catalog);
+    expect(skipped).toEqual([expect.objectContaining({ name: 'To Thee Pils', reason: 'absent' })]);
+  });
+});

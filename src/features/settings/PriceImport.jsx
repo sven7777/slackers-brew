@@ -65,6 +65,15 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     return [...skus];
   };
 
+  // The product lookup priceChanges() needs for ingredients products.js has
+  // never heard of — every one adopted from the vendor catalog. Their pack size
+  // lives in the catalog, and without it their price would not move on an
+  // import at all. Stored rows cover an ingredient this file doesn't mention;
+  // freshly parsed rows win, because a pack quoted today is newer than one
+  // stored last month.
+  const bySku = (entries = []) => Object.fromEntries((entries ?? []).map((e) => [e.sku, e]));
+  const storedCatalog = async () => { try { return await loadKey("catalog", []); } catch { return []; } };
+
   // Ingest the whole parsed list as the catalog, alongside the price change set.
   //
   // Failing softly on purpose: pricing is what the brewer came here to do, and
@@ -86,7 +95,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
   const fail = (msg) => { setBusy(null); setPending(null); setHopPending(null); setStatus({ ok: false, msg }); };
 
   // A parsed {sku: {price}} map → the change set the review screen shows.
-  const propose = (priceBySku, source, catalog = null) => {
+  const propose = (priceBySku, source, catalog = null, products = {}) => {
     const count = Object.keys(priceBySku).length;
     if (!count) {
       fail("No prices found in that file.");
@@ -94,12 +103,12 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     }
     setBusy(null);
     setStatus(null);
-    setPending({ source, result: priceChanges(inventory, priceBySku), catalog });
+    setPending({ source, result: priceChanges(inventory, priceBySku, products), catalog });
   };
 
   const readJson = (file) => {
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       let parsed;
       try {
         parsed = JSON.parse(String(reader.result));
@@ -107,7 +116,9 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
         fail("That file isn't valid JSON.");
         return;
       }
-      propose(readPriceFile(parsed), { label: file.name });
+      // A bare price file carries no pack sizes, so adopted ingredients are
+      // costed against the packs already in the stored catalog.
+      propose(readPriceFile(parsed), { label: file.name }, null, bySku(await storedCatalog()));
     };
     reader.onerror = () => fail("Couldn't read that file.");
     reader.readAsText(file);
@@ -222,7 +233,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
           effective: dateLabel(parsed.effective),
           count: parsed.count,
           conflicts: parsed.conflicts,
-        }, catalog);
+        }, catalog, bySku(catalog?.next ?? await storedCatalog()));
         return;
       }
 

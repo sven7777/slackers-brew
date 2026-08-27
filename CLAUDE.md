@@ -24,8 +24,9 @@ npm run test:watch # Vitest watch mode
 src/
   components/   # reusable tables: InvTable, RecEditTable, ScheduleEditTable
                 #   — plus StyleSelect (BJCP style picker), PriceInput (the one
-                #   cost-per-unit field) and the three failure surfaces:
-                #   ErrorBoundary, SaveErrorBanner, StaleDataBanner
+                #   cost-per-unit field), CatalogBrowser + AdoptDialog (the one
+                #   bridge from vendor catalog to shelf) and the three failure
+                #   surfaces: ErrorBoundary, SaveErrorBanner, StaleDataBanner
   features/     # one folder per tab: inventory/, recipes/, order/, settings/
                 #   — plus auth/ (Supabase session + login gate). recipes/ also
                 #   holds the BrewSheetPanel + CellarPanel sub-views.
@@ -33,6 +34,8 @@ src/
   lib/          # pure logic + data + the data-access seam (see below)
                 #   — incl. sortNames.js, the one alphabetical comparator
                 #   — incl. archive.js (stopped-buying rows: hidden, not deleted)
+                #   — incl. adopt.js + catalogSearch.js (catalog → inventory)
+                #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
@@ -62,7 +65,10 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   prices — a cleared shelf is still a priced one. An ingredient the brewery has
   stopped buying is **archived, never deleted** ([archive.js](src/lib/archive.js),
   migration 0017): the row, its quantity and its price all survive, the tab hides
-  it and says how many it hid, and a toggle brings them back. Deleting was the
+  it and says how many it hid, and a toggle brings them back. **Add ingredient**
+  opens the vendor catalog browser (below) — until now the tab had no add control
+  at all, and the only way a row was ever created was `setInvCost` doing it
+  implicitly. Deleting was the
   only way to say "we don't stock this" and it threw away the price, the one field
   on an inventory row that's expensive to re-acquire. ⚠️ `computeOrder()`
   deliberately ignores the flag — a recipe calling for an archived ingredient
@@ -74,7 +80,7 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   opposite
 - **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between four views of it:
   - **Everything a brewer scans for a name is alphabetical**, via the one comparator in [src/lib/sortNames.js](src/lib/sortNames.js) (`Intl.Collator`, case-insensitive + numeric, so `Cascade` precedes `CTZ` and `Crystal 8` precedes `Crystal 80`): the recipe picker here and on the Order Calculator, every ingredient table and its Add picker in the Edit view, the cellar-schedule action picker, and the Cost view's line items. The ingredient sorts are **display-only** — `sortedWithIndex()` hands back each row's index in the STORED array, and every edit still addresses that, because the stored order is what the printable sheets group by stage and time. What stays in process order stays that way: the schedule ROWS (day order), the Brew Sheet's additions (stage, then descending time), the Cellar Sheet's boxes.
-  - **Edit** — recipe header (name, style, target OG/FG/ABV, mash + ferm temp) then the ingredient lists; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only. Name is free text, style comes from [StyleSelect](src/components/StyleSelect.jsx); an empty name renders as `(untitled)` in the picker so a mid-edit recipe stays selectable.
+  - **Edit** — recipe header (name, style, target OG/FG/ABV, mash + ferm temp) then the ingredient lists; add/remove ingredients (the Add picker offers the BREWERY'S OWN inventory, archived rows included — it used to offer `defaults.js`, which meant an adopted ingredient could never reach a recipe — with `Browse catalog…` as its last entry); edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only. Name is free text, style comes from [StyleSelect](src/components/StyleSelect.jsx); an empty name renders as `(untitled)` in the picker so a mid-edit recipe stays selectable.
   - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
@@ -140,6 +146,53 @@ Nothing is applied until it's confirmed: [src/lib/priceChanges.js](src/lib/price
 ⚠️ **The SKU is the identity; the name is an attribute.** Vendors rename, repack and drop things, and each means something different: `MRAH1102` "Rahr Standard 2-Row" → "Rahr The Brewer's Standard™ 2-Row" is cosmetic, while `AZZZ2901` "Mango Puree - 44.1 lb" → "- 44 lb" moves every derived cost, because pack size is the denominator. Matching on names instead would turn every rebrand into a duplicate product. A repack is only reported when **both** packs are known — a pack going from unreadable to readable is the parser learning something, not the vendor changing anything.
 
 ⚠️ **`discontinued` is scoped to SKU families the file actually covers**, and that scoping is the whole point. `MRAH1105` (Slackers' Pils) is on the June 2025 list and gone from the August 2026 one; a mapped SKU that stops appearing reads to `priceChanges()` as `skipped: "absent"` — identical to a hop list not carrying malts — so the price froze at its last quote for a year and nothing said so (fixed for that ingredient by migration 0015). But the Houston list carries no hops at all, so an unscoped check would report every hop as discontinued the moment a malt list was imported — re-creating that exact confusion in a louder font. A SKU counts as missing only when other SKUs of its own family (`MRAH`, `BZZZ`, our synthetic `HOP-*`) are present to be missing from.
+
+**Adopting from the catalog — the one bridge to the shelf.** The catalog is
+reference data; inventory is the counting sheet. [src/components/CatalogBrowser.jsx](src/components/CatalogBrowser.jsx)
+searches it (name / vendor / SKU, bucket chips, `other` behind a "show everything"
+toggle) and [AdoptDialog](src/components/AdoptDialog.jsx) turns one row into an
+inventory row, via the pure [src/lib/adopt.js](src/lib/adopt.js) +
+[src/lib/catalogSearch.js](src/lib/catalogSearch.js). It is reached from the
+Inventory tab's **Add ingredient** and from `Browse catalog…` at the bottom of
+each recipe Add picker (from a recipe it adds to the shelf AND to the beer, in
+one action). The catalog is loaded when the panel opens, never into App state —
+hundreds of rows nothing else needs at mount.
+
+The dialog asks the three things a parser cannot answer, and **each answer is
+load-bearing**: the NAME (suggested with the vendor prefix, ™/® and pack suffix
+stripped, then EDITABLE — "Rahr The Brewer's Standard™ 2-Row" verbatim would
+print on a brew sheet and sit beside the existing "2-Row"; this is the Carafa
+lesson, so a name already on the shelf raises a plain warning, never a block);
+the CATEGORY (prefilled where `classify()` was sure, required where it wasn't —
+that is the payoff of leaving ~311 rows unclassified: nobody classifies 311
+things, but a brewer classifies the one they are buying); and the PACK, where
+several SKUs share a base name (79 of them do — Coriander Powder ships at 2 lb
+and 50 lb, a 500 g yeast brick is one pitch and a 100 g one is a fifth of one).
+The derived cost is SHOWN before committing, with the reason printed when it
+can't be worked out (`unpriced` / `nopack` / `unconvertible`), so an
+unconvertible unit is a sentence on screen rather than a silent null found later
+inside a COGS total. Adopting lands the row at **qty 0** (Derek's call — no
+quantity prompt).
+
+⚠️ **An adopted row carries its `sku`, and that is what keeps it alive.**
+`skuFor()` in applyPrices.js resolves a row's product as `defaultProductMap`
+first (a deliberate editorial decision in code — how #83 repointed Pils by
+editing one line) then the row's own SKU, and `priceRows`/`priceChanges` take an
+optional `{sku: entry}` catalog lookup for products `products.js` has never heard
+of. PriceImport passes the rows it just parsed (falling back to the stored
+catalog). Without both halves an adopted ingredient would report as
+`skipped: "unmapped"` forever and its price would freeze at the day it was
+adopted — silently, which is exactly the failure that hid a dead Pils SKU for a
+year. `products.js` still wins where it has an entry: it is hand-checked and
+carries things a parsed row cannot (Whirlfloc's tablet mass, without which
+"each" has no size).
+
+⚠️ **A category-locked browser carries the `unsorted` pile with it.** Opening it
+from the Hops or Adjuncts table filtered to that bucket alone showed ZERO
+products, because `classify()` never returns `hop` or `adj` — the mango purée,
+the honey and the coriander all sit in `unsorted` (311 of 563). "The list didn't
+say" has never meant "not an adjunct". Chips still narrow it, and an unsorted row
+is labelled as such so a nylon bag in the malt list isn't implicitly a malt.
 
 ⚠️ **`classify()` has deliberately few rules and returns `null` freely.** Category decides which recipe table an ingredient may join, so a wrong guess files a malt under hops, and nothing downstream re-checks it. Only what the list demonstrates outright: the whole `M` range is malt (163/163 rows, all quoted per lb), `SafAle`/`Fermentis`/`LalBrew`/`DADY` are yeast, `E`/`X` are equipment and merchandise and are fenced off from every ingredient picker. That leaves ~311 of 563 unclassified, reported as its own number. **Do not widen these to raise the classified count** — the obvious brand sweep was wrong twice: the list's "Yeast Nutrients" section holds Yeastex® 61, and the Kerry Pathfinder range ends in "Pathfinder N-Pure Seltzer Nutrient". Both are nutrients named like yeast. A human assigns the category when the ingredient is adopted, and `catalogChanges()` preserves a corrected category across re-imports rather than overwriting it with the guess.
 

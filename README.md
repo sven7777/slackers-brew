@@ -19,12 +19,17 @@ either way.
   one here also changes every recipe's cost. An ingredient you've stopped buying
   can be **archived** instead of deleted: it leaves the shelf but keeps its price,
   a toggle shows the archived ones again, and recipes and the Order Calculator
-  still see it.
+  still see it. **Add ingredient** browses the vendor catalog — search the whole
+  price list by name, vendor or SKU, then adopt one onto the shelf: you name it,
+  say which kind of ingredient it is and pick the pack size you buy, and the
+  price per pound (or ounce, or pitch) is worked out and shown before you commit.
 - **Recipes** — pick a recipe once, then switch between four views of it:
   - **Edit** — name, style, target gravities, mash and fermentation temps, plus
     the ingredient lists per recipe; add or remove ingredients across malts,
     hops, yeast, and adjuncts; edit the per-recipe cellar schedule; import
-    recipes straight from a BeerSmith `.bsmx` file. Style is picked from the
+    recipes straight from a BeerSmith `.bsmx` file. The Add picker lists your own
+    ingredients, with **Browse catalog…** at the bottom for something you've
+    never bought — adopting there adds it to the shelf and to the beer at once. Style is picked from the
     BJCP style list, or typed in for a house style.
   - **Brew Sheet** — generate a printable brew-day sheet, with staged
     additions, mash details, water salts, and planned process readings in a
@@ -52,8 +57,9 @@ either way.
   it's a scan, with every price shown against the page it came from and editable
   before anything is saved). The same upload also builds the **vendor product
   catalog** — every product on the list, not only the ones you stock, so a recipe
-  can call for something the brewery has never bought — and tells you what the
-  vendor renamed, repacked, or stopped selling. Finally, a
+  can call for something the brewery has never bought (browsed and adopted from
+  the Inventory tab or a recipe's Add picker) — and tells you what the vendor
+  renamed, repacked, or stopped selling. Finally, a
   full export/import of all app data as JSON.
 
 ## Running Locally

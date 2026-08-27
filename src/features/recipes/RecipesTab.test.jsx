@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import RecipesTab from './RecipesTab';
+import { setBackend, resetBackend } from '../../lib/repo';
 
 // Regression for the 2026-07-14 white screen: selR is device-local while the
 // recipe list is shared, so a stale index can point past the list (shorter
@@ -90,5 +91,47 @@ describe('RecipesTab alphabetical recipe picker', () => {
     expect([...picker().options].map((o) => o.value)).toEqual(['2', '1', '3', '0']);
     fireEvent.change(picker(), { target: { value: '3' } });
     expect(setSelR).toHaveBeenCalledWith(3);
+  });
+});
+
+// The Add pickers used to offer the built-in defaults, which meant an
+// ingredient adopted from the vendor catalog could never be put in a beer. They
+// offer the brewery's own inventory now — archived rows included, since
+// archiving means "we stopped buying it" and a recipe that calls for one still
+// calls for it.
+describe('RecipesTab ingredient pickers', () => {
+  const recs = [{ n: 'Pale', s: 'Ale', m: [], h: [], y: [], a: [], sa: [], sc: [] }];
+  // The four ingredient tables render in grid order; malts is the first.
+  const maltPicker = () => screen.getAllByText(/^Add ingredient/)[0].closest('select');
+
+  afterEach(() => resetBackend());
+
+  it('offers the inventory, not the built-in defaults', () => {
+    render(<RecipesTab recs={recs} setRecs={vi.fn()} selR={0} setSelR={vi.fn()}
+      malts={[{ n: 'North Star Pils', q: 0 }, { n: 'Old Stock', q: 0, archived: true }]} />);
+    expect([...maltPicker().options].map((o) => o.text))
+      .toEqual(['Add ingredient...', 'North Star Pils', 'Old Stock']);
+  });
+
+  it('falls back to the defaults when a category has not been seeded yet', () => {
+    render(<RecipesTab recs={recs} setRecs={vi.fn()} selR={0} setSelR={vi.fn()} malts={[]} />);
+    expect([...maltPicker().options].map((o) => o.text)).toContain('2-Row');
+  });
+
+  // One entry at the BOTTOM of the picker, never 563 options inside it.
+  it('opens the catalog from the bottom of the picker, leaving the picker alone', async () => {
+    setBackend({ load: (key, fallback) => (key === 'catalog' ? [] : fallback), save: () => {} });
+    render(<RecipesTab recs={recs} setRecs={vi.fn()} selR={0} setSelR={vi.fn()}
+      malts={[{ n: 'North Star Pils', q: 0 }]} adopt={vi.fn()} />);
+    const opts = [...maltPicker().options].map((o) => o.text);
+    expect(opts[opts.length - 1]).toBe('Browse catalog…');
+
+    fireEvent.change(maltPicker(), { target: { value: maltPicker().options[2].value } });
+    expect(await screen.findByRole('dialog', { name: 'Vendor catalog' })).toBeInTheDocument();
+  });
+
+  it('has no catalog entry when nothing can be adopted', () => {
+    render(<RecipesTab recs={recs} setRecs={vi.fn()} selR={0} setSelR={vi.fn()} malts={[{ n: 'Pils', q: 0 }]} />);
+    expect([...maltPicker().options].map((o) => o.text)).not.toContain('Browse catalog…');
   });
 });
