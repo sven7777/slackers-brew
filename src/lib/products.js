@@ -31,7 +31,13 @@
 export const products = [
   // ---- Malts (quoted $/lb, ship in 55 lb sacks) -----------------------------
   { sku: "MRAH1102", vendor: "Rahr",      name: "Rahr Standard 2-Row",                        packQty: 1, packUnit: "lb", orderPack: "55 lb" },
-  { sku: "MRAH1105", vendor: "Rahr",      name: "Rahr Premium Pilsner",                       packQty: 1, packUnit: "lb", orderPack: "55 lb" },
+  // Was MRAH1105 "Rahr Premium Pilsner", which Rahr discontinued: it is on the
+  // June 2025 Houston list and gone from the August 2026 one. Derek confirmed
+  // 2026-08-27 that Slackers now buys North Star. A dead SKU is invisible on an
+  // import — it just reads as `skipped: "absent"`, the same as a list that
+  // doesn't carry malts at all — so the Pils price sat frozen at its June 2025
+  // quote for a year. Migration 0015 repoints prod's row.
+  { sku: "MRAH1190", vendor: "Rahr",      name: "Rahr North Star Pils™",                     packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MCRI1001", vendor: "Crisp",     name: "Crisp Finest Maris Otter®",                  packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1031", vendor: "Weyermann", name: "Weyermann® CARAMUNICH® Type 1",              packQty: 1, packUnit: "lb", orderPack: "55 lb" },
   { sku: "MWEY1056", vendor: "Weyermann", name: "Weyermann® CARAFOAM®",                       packQty: 1, packUnit: "lb", orderPack: "55 lb" },
@@ -115,7 +121,7 @@ export const UNPRICEABLE = ["adj/Brewzyme D"];
 // distinct in inventory and merge only when computing an order.
 export const defaultProductMap = {
   malt: {
-    "Pils": "MRAH1105",
+    "Pils": "MRAH1190",
     "2-Row": "MRAH1102",
     "Maris Otter": "MCRI1001",
     "Caramunich I": "MWEY1031",
