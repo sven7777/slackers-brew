@@ -15,6 +15,15 @@ const setArchived = (setter, i, archived) =>
 
 const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
 
+// Inventory sits two cards to a 900px page, so each of these tables gets ~442px
+// for five columns, two of which hold fixed-width inputs. That is the whole
+// width budget, and the Adjuncts table was 7px over it before today — enough to
+// clip the archive button off the right edge. 2px off each side of every cell
+// buys 20px back and is imperceptible.
+const c = { ...cell, padding: '6px 8px' };
+const n = { ...num, padding: '6px 8px' };
+const h = { ...th, padding: '6px 8px' };
+
 // ⚠️ NOT a red "×". That glyph already means permanent removal in this app —
 // it's `rmBtn`, which deletes a recipe ingredient — and archiving is the
 // opposite promise: the row and, more to the point, its price both survive.
@@ -58,17 +67,13 @@ export default function InvTable({ items, setter, unit, category, setInvCost, co
     <div style={{overflowX:'auto'}}>
       <table style={{width:'100%',borderCollapse:'collapse'}}>
         <thead><tr>
-          <th style={th}>Ingredient</th>
+          <th style={h}>Ingredient</th>
           {/* Adjuncts have no table-wide unit (each row carries its own), so the
               header drops the parens rather than printing an empty pair. */}
-          <th style={{...th,textAlign:'right'}}>On Hand{unit ? ` (${unit})` : ''}</th>
-          <th style={{...th,textAlign:'right'}}>Cost / {costUnit || 'unit'}</th>
-          <th style={{...th,textAlign:'right'}}>Value</th>
-          {/* Which vendor product this ingredient IS. It has always been stored
-              and never shown, so a row pointing at nothing — and therefore
-              costed at nothing forever — was invisible. */}
-          {onLink && <th style={th}>Product</th>}
-          <th style={{...th,width:32}} aria-label="Archive"></th>
+          <th style={{...h,textAlign:'right'}}>On Hand{unit ? ` (${unit})` : ''}</th>
+          <th style={{...h,textAlign:'right'}}>Cost / {costUnit || 'unit'}</th>
+          <th style={{...h,textAlign:'right'}}>Value</th>
+          <th style={{...h,width:32}} aria-label="Archive"></th>
         </tr></thead>
         <tbody>{rows.map(({it,index})=>{
           const u = costUnit || it.u || 'unit';
@@ -78,25 +83,28 @@ export default function InvTable({ items, setter, unit, category, setInvCost, co
           return (
           <tr key={index} style={archived ? {background:'#f8fafc',color:'#94a3b8'}
                                           : Number.isFinite(it.cpu) ? null : {background:'#fffbeb'}}>
-            <td style={cell}>
+            {/* ⚠️ The product goes in the NAME cell and only where there is
+                something to do about it. Two earlier tries were both wrong on
+                screen: a column of its own pushed these tables from 442px to
+                ~525 and shoved the archive button off the right edge (two cards
+                on a 900px page is the whole width budget), and printing the SKU
+                beside every name wrapped 53 of 55 rows onto two lines and broke
+                `HOP-CAS` across the line break. So a mapped row shows exactly
+                what it always showed, and carries its product in the tooltip;
+                only a row whose OWN sku decides gets a visible control. There
+                are two of those on the whole shelf. */}
+            <td style={c} title={sku ? `Priced as ${sku}` : undefined}>
               {it.n}{it.u?<span style={{color:'#94a3b8',fontSize:11}}> ({it.u})</span>:null}
               {archived && <span style={{color:'#94a3b8',fontSize:11,fontStyle:'italic'}}> · archived</span>}
+              {onLink && isLinkable(category, it) && (
+                <> <button type="button" style={linkBtn} onClick={()=>onLink(category, it)}
+                     title={`Say which vendor product ${it.n} is`}>{sku || 'Link…'}</button></>
+              )}
             </td>
-            <td style={num}><input type="number" step="0.5" value={it.q} onChange={e=>updInv(setter,index,e.target.value)} style={inp} aria-label={`On hand, ${it.n}`}/></td>
-            <td style={num}><PriceInput value={it.cpu} onCommit={v=>setInvCost(category, it.n, v, it.u)} style={{width:80}} aria-label={`Cost per ${u} of ${it.n}`}/></td>
-            <td style={{...num,fontWeight:600}}>{val == null ? <span style={{color:'#b45309'}}>unpriced</span> : money(val)}</td>
-            {onLink && <td style={cell}>{
-              // A button only where the row's own SKU is what decides — the
-              // curated map in products.js wins everywhere else, so offering to
-              // change those would be offering something that does nothing.
-              isLinkable(category, it)
-                ? <button type="button" style={linkBtn} onClick={()=>onLink(category, it)}
-                    title={`Say which vendor product ${it.n} is`}>
-                    {sku ? sku : 'Link…'}
-                  </button>
-                : <span style={{color:'#94a3b8',fontSize:11}}>{sku || '—'}</span>
-            }</td>}
-            <td style={{...cell,textAlign:'right'}}>
+            <td style={n}><input type="number" step="0.5" value={it.q} onChange={e=>updInv(setter,index,e.target.value)} style={inp} aria-label={`On hand, ${it.n}`}/></td>
+            <td style={n}><PriceInput value={it.cpu} onCommit={v=>setInvCost(category, it.n, v, it.u)} style={{width:80}} aria-label={`Cost per ${u} of ${it.n}`}/></td>
+            <td style={{...n,fontWeight:600}}>{val == null ? <span style={{color:'#b45309'}}>unpriced</span> : money(val)}</td>
+            <td style={{...c,textAlign:'right'}}>
               <button type="button" style={archived ? iconBtn : archiveBtn}
                 onClick={()=>setArchived(setter,index,!archived)}
                 title={archived ? `Restore ${it.n} to the shelf` : `Archive ${it.n} — keeps its price`}

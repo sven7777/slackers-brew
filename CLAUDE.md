@@ -179,10 +179,19 @@ already exists at a product. Same act, different moment, and the second one is
 needed because a row can arrive with no product at all — typed in by hand, or
 created implicitly by the price field (the Whirlfloc case). Prod carried
 `Candi Sugar, Dark` exactly like that: no SKU, no price, uncostable for good,
-with nothing on screen saying which product it should be. The Inventory tab now
-has a **Product** column (the SKU an import will price the row by — stored since
-the COGS work and never shown), and where the row's own SKU is what decides, it
-is a `Link…` button that opens the same browser in link mode.
+with nothing on screen saying which product it should be. On the Inventory tab, a row
+whose own SKU decides carries a small `Link…` control beside its name, opening
+the same browser in link mode; a mapped row is untouched and names its product
+in the tooltip.
+
+⚠️ **That control is in the NAME cell, and only on rows that need it, because
+the inventory tables have no width left.** Two cards on a 900px page gives each
+table ~442px for four columns plus the archive button, and it was already 7px
+over on Adjuncts. A Product column of its own took them to ~525px and pushed the
+archive button off the right edge; printing the SKU beside every name wrapped 53
+of 55 rows onto two lines and broke `HOP-CAS` across the break. Both were
+obvious on screen and invisible to `innerText`. Anything new in these tables has
+to come out of that budget.
 
 ⚠️ **Linking is offered only where `isLinkable()` says the row's own SKU
 decides** — i.e. `defaultProductMap` has no entry for that name. The curated map

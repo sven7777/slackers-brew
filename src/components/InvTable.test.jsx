@@ -55,39 +55,43 @@ describe('InvTable with per-row units', () => {
   });
 });
 
-// The vendor product a row points at has always been stored and never shown, so
-// a row pointing at nothing — and therefore costed at nothing forever — was
-// invisible. Prod carried "Candi Sugar, Dark" exactly like that.
-describe('InvTable product column', () => {
-  const onLink = vi.fn();
-
-  it('is absent entirely when linking is not wired up', () => {
+// Which vendor product a row is priced by has always been stored and never
+// shown, so a row pointing at NOTHING — and therefore costed at nothing forever
+// — was invisible. Prod carried "Candi Sugar, Dark" exactly like that.
+//
+// ⚠️ Shown only where there is something to do about it. Two earlier attempts
+// were both wrong on screen: a Product column of its own pushed these tables
+// past the 442px each card gets and shoved the archive button off the right
+// edge, and printing the SKU beside every name wrapped 53 of 55 rows onto two
+// lines. A mapped row now looks exactly as it always did and carries its
+// product in the tooltip.
+describe('InvTable product linking', () => {
+  it('shows no control at all when linking is not wired up', () => {
     render(<InvTable {...props} setter={vi.fn()} setInvCost={vi.fn()} />);
-    expect(screen.queryByText('Product')).not.toBeInTheDocument();
-  });
-
-  it('shows the SKU an import will price each row by', () => {
-    render(<InvTable {...props} setter={vi.fn()} setInvCost={vi.fn()} onLink={onLink} />);
-    expect(screen.getByText('MRAH1102')).toBeInTheDocument();   // 2-Row, from the curated map
-  });
-
-  // ⚠️ A button only where the row's own SKU decides. products.js wins for every
-  // name it maps, so offering to change those would offer something that does
-  // nothing.
-  it('offers Link… only on a row nothing maps, and reports the row it clicked', () => {
-    const setLink = vi.fn();
-    render(<InvTable items={[{ n: '2-Row', q: 1 }, { n: 'Candi Sugar, Dark', q: 0, u: 'each' }]}
-      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={setLink} />);
-    // In the adjunct category "2-Row" is mapped by nothing either, so both rows
-    // are linkable here — what matters is that the click carries the whole row.
-    fireEvent.click(screen.getAllByText('Link…')[1]);
-    expect(setLink).toHaveBeenCalledWith('adj', { n: 'Candi Sugar, Dark', q: 0, u: 'each' });
-  });
-
-  it('shows a mapped row as plain text, with no control', () => {
-    render(<InvTable items={[{ n: 'Candi Syrup', q: 45, u: 'lbs' }]}
-      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={onLink} />);
-    expect(screen.getByText('AZZZ1772')).toBeInTheDocument();
     expect(screen.queryByText('Link…')).not.toBeInTheDocument();
+  });
+
+  it('leaves a mapped row exactly as it was, product in the tooltip', () => {
+    render(<InvTable {...props} setter={vi.fn()} setInvCost={vi.fn()} onLink={vi.fn()} />);
+    expect(screen.getByText('2-Row')).toHaveAttribute('title', 'Priced as MRAH1102');
+    expect(screen.queryByText('Link…')).not.toBeInTheDocument();
+  });
+
+  // ⚠️ A control only where the row's own SKU decides. products.js wins for
+  // every name it maps, so offering to change those would offer something that
+  // does nothing.
+  it('offers Link… on a row nothing maps, and reports the whole row', () => {
+    const onLink = vi.fn();
+    render(<InvTable items={[{ n: 'Candi Syrup', q: 45, u: 'lbs' }, { n: 'Candi Sugar, Dark', q: 0, u: 'each' }]}
+      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={onLink} />);
+    expect(screen.getAllByText('Link…')).toHaveLength(1);
+    fireEvent.click(screen.getByText('Link…'));
+    expect(onLink).toHaveBeenCalledWith('adj', { n: 'Candi Sugar, Dark', q: 0, u: 'each' });
+  });
+
+  it('shows the linked SKU on the control once a row has one', () => {
+    render(<InvTable items={[{ n: 'Candi Sugar, Dark', q: 0, u: 'lbs', sku: 'AZZZ1771' }]}
+      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={vi.fn()} />);
+    expect(screen.getByText('AZZZ1771')).toBeInTheDocument();
   });
 });
