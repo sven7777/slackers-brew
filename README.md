@@ -62,7 +62,9 @@ either way.
   catalog** — every product on the list, not only the ones you stock, so a recipe
   can call for something the brewery has never bought (browsed and adopted from
   the Inventory tab or a recipe's Add picker) — and tells you what the vendor
-  renamed, repacked, or stopped selling. Finally, a
+  renamed, repacked, or stopped selling. The spot hop list feeds it too: every
+  variety on the page, not just the ones you buy, each priced at the newest crop
+  year the list carries. Finally, a
   full export/import of all app data as JSON.
 
 ## Running Locally

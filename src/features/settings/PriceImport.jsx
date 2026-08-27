@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { readPriceFile } from "../../lib/applyPrices";
+import { readPriceFile, skuFor } from "../../lib/applyPrices";
 import { priceChanges } from "../../lib/priceChanges";
 import { parsePriceList } from "../../lib/parsePriceList";
 import { buildCatalog } from "../../lib/catalog";
 import { catalogChanges } from "../../lib/catalogChanges";
 import { defaultProductMap } from "../../lib/products";
 import { load as loadKey, save as saveKey } from "../../lib/repo";
-import { parseSpotHopPages, parseSpotHopDate, matchSpotHopPrices } from "../../lib/spotHops";
+import { parseSpotHopPages, parseSpotHopDate, matchSpotHopPrices, ourHops } from "../../lib/spotHops";
+import { buildHopCatalog, newVarieties } from "../../lib/hopCatalog";
 import PriceReview from "./PriceReview";
 import HopPriceReview from "./HopPriceReview";
 import { card, hdr, btn } from "../../styles";
@@ -55,14 +56,60 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
   // to the curated default map. Only these are worth a "no longer on the list"
   // alarm — the vendor drops products constantly and almost none are ours.
   const mappedSkus = () => {
+    // ⚠️ An ingredient the brewery has ARCHIVED is one it stopped buying, so its
+    // absence from a list is not news — reporting it would put a red "no longer
+    // on this list" line against every hop Derek archived, every single import.
+    // Archiving already means "we don't stock this"; the alarm is for a product
+    // we depend on quietly disappearing.
+    const archived = new Set();
+    for (const rows of Object.values(inventory)) {
+      for (const r of rows ?? []) if (r?.archived) archived.add(r.n);
+    }
     const skus = new Set();
     for (const map of Object.values(defaultProductMap)) {
-      for (const sku of Object.values(map)) if (sku) skus.add(sku);
+      for (const [name, sku] of Object.entries(map)) if (sku && !archived.has(name)) skus.add(sku);
     }
     for (const rows of Object.values(inventory)) {
-      for (const r of rows ?? []) if (r?.sku) skus.add(r.sku);
+      for (const r of rows ?? []) if (r?.sku && !r.archived) skus.add(r.sku);
     }
     return [...skus];
+  };
+
+  // Which hops the spot-hop review asks the list about.
+  //
+  // ⚠️ Inventory, not the built-in map. `ourHops()` reads defaultProductMap,
+  // which knows the fourteen hops the brewery started with and nothing else —
+  // so a hop ADOPTED from this very list would never appear on the next
+  // month's review and its price would freeze at the day it was adopted. Same
+  // failure the malt path had before `skuFor()`, in the one place that couldn't
+  // reuse it, because this review is built from a list of hops rather than by
+  // walking inventory.
+  //
+  // Archived hops are left out: "we stopped buying it" is already the answer to
+  // "why isn't this priced".
+  const hopTargets = () => {
+    const rows = (hops ?? [])
+      .filter((h) => !h.archived)
+      .map((h) => ({ name: h.n, sku: skuFor("hop", h) }))
+      .filter((h) => h.sku);
+    return rows.length ? rows : ourHops();
+  };
+
+  // The spot hop list as catalog entries. Same diff, same storage, different
+  // key: the hop list carries no SKUs, so hopCatalog.js merges on the VARIETY
+  // and synthesises the SKU (see that module). Fails soft for the same reason
+  // the malt path does — pricing is what the brewer came here to do.
+  const proposeHopCatalog = async (rows, label, effective) => {
+    try {
+      const { entries, counts } = buildHopCatalog(rows, { source: label ?? null, effective: effective ?? null });
+      const stored = await loadKey("catalog", []);
+      return {
+        ...catalogChanges(stored, entries, mappedSkus()),
+        counts: { ...counts, unfamiliar: newVarieties(entries).length },
+      };
+    } catch {
+      return null;
+    }
   };
 
   // The product lookup priceChanges() needs for ingredients products.js has
@@ -127,7 +174,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
   // The image-only path: render each page, OCR it, and match the varieties we
   // buy against the crop-year columns. Nothing here is trusted — it all lands in
   // HopPriceReview for a human to check against the page it came from.
-  const readHopList = async (data, pageCount) => {
+  const readHopList = async (data, pageCount, label) => {
     // The engine and language model download on first use (then the browser
     // caches them), so name the wait rather than hanging silently.
     setBusy("Loading the text reader…");
@@ -158,12 +205,14 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
       return;
     }
     const listDate = parseSpotHopDate(pageWords);
+    const catalog = await proposeHopCatalog(rows, label, listDate);
 
     setBusy(null);
     setStatus(null);
     setHopPending({
       source: "ocr",
-      hops: matchSpotHopPrices(rows),
+      catalog,
+      hops: matchSpotHopPrices(rows, hopTargets()),
       effective: dateLabel(listDate),
       rawEffective: listDate,
       pages: previews,
@@ -174,7 +223,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
   // The spot hop list with a real text layer. Same table, same parser, exact
   // numbers instead of OCR guesses — so this path reads it directly and never
   // starts the OCR engine. Returns whether it recognised the document.
-  const readHopText = async (data, pageCount) => {
+  const readHopText = async (data, pageCount, label) => {
     const { extractPdfWords, renderPdfPages } = await import("../../lib/pdfText");
     const { pages: pageWords } = await extractPdfWords(data);
     const { rows } = parseSpotHopPages(pageWords);
@@ -188,11 +237,13 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     const previews = await renderPdfPages(data, { scale: 2 });
 
     const listDate = parseSpotHopDate(pageWords);
+    const catalog = await proposeHopCatalog(rows, label, listDate);
     setBusy(null);
     setStatus(null);
     setHopPending({
       source: "text",
-      hops: matchSpotHopPrices(rows),
+      catalog,
+      hops: matchSpotHopPrices(rows, hopTargets()),
       effective: dateLabel(listDate),
       rawEffective: listDate,
       pages: previews,
@@ -212,7 +263,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
       // just pixels — so it goes to OCR. Only the spot hop list has ever arrived
       // that way.
       if (!hasText) {
-        await readHopList(data, pageCount);
+        await readHopList(data, pageCount, file.name);
         return;
       }
 
@@ -237,7 +288,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
         return;
       }
 
-      if (await readHopText(data, pageCount)) return;
+      if (await readHopText(data, pageCount, file.name)) return;
 
       fail("Couldn't find any prices in that PDF. Is it a BSG/Rahr price list or spot hop list?");
     } catch (err) {
@@ -284,18 +335,31 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
 
   // Confirmed hop prices → the same {sku: {price}} map every other import
   // produces, so they take the identical path into inventory.
-  const applyHops = (confirmed) => {
+  const applyHops = async (confirmed) => {
     const priceBySku = Object.fromEntries(
       confirmed.filter((r) => Number.isFinite(r.perLb) && r.perLb > 0)
         .map((r) => [r.sku, { price: r.perLb, effective: hopPending.rawEffective }]),
     );
-    const { next, changes } = priceChanges(inventory, priceBySku);
+    const catalog = hopPending.catalog;
+    const { next, changes } = priceChanges(inventory, priceBySku, bySku(catalog?.next));
     setMalts(next.malts);
     setHops(next.hops);
     setYeast(next.yeast);
     setAdj(next.adj);
     setHopPending(null);
-    setStatus({ ok: true, msg: `Applied ${changes.length} hop price${changes.length === 1 ? "" : "s"}.` });
+    const priced = `Applied ${changes.length} hop price${changes.length === 1 ? "" : "s"}.`;
+
+    // Reported separately for the same reason the malt path does it: a catalog
+    // that failed to save must not hide inside a message about prices that
+    // succeeded.
+    if (!catalog) { setStatus({ ok: true, msg: priced }); return; }
+    try {
+      await saveKey("catalog", catalog.next);
+      const added = catalog.added.length;
+      setStatus({ ok: true, msg: `${priced} Catalog now lists ${catalog.next.length} products${added ? ` (${added} new)` : ""}.` });
+    } catch (err) {
+      setStatus({ ok: false, msg: `${priced} But the product catalog couldn't be saved: ${err?.message || "unknown error"}. Reload and import again to retry it.` });
+    }
   };
 
   return (

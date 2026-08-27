@@ -35,6 +35,7 @@ src/
                 #   — incl. sortNames.js, the one alphabetical comparator
                 #   — incl. archive.js (stopped-buying rows: hidden, not deleted)
                 #   — incl. adopt.js + catalogSearch.js (catalog → inventory)
+                #   — incl. hopCatalog.js (the spot hop list as catalog rows)
                 #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
@@ -140,6 +141,38 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 **Price-list upload.** Both sources reduce to the same `{sku: {price}}` map before anything is written. [src/lib/pdfText.js](src/lib/pdfText.js) is the only module that touches pdf.js and is imported **dynamically** — the parser plus its worker are larger than the whole app, so they load on the first PDF and never at app start; a static import of it from anywhere in the tree silently undoes that. It hands lines to [src/lib/parsePriceList.js](src/lib/parsePriceList.js) (pure): a row is a line that STARTS with a vendor SKU (`[A-Z]{3,4}\d{3,4}[A-Z]?`) and carries a `$` amount, and the **first** price column is the one taken — the rest are 40+/200+/480+ quantity breaks Slackers never hits, the same assumption `products.js` documents. Prose that merely mentions money ("Pallet fee: $12.50") is not a product row. A SKU repeated at the SAME price is fine (the "New and Notable" block repeats rows); repeated at a DIFFERENT price it goes to `conflicts` and is surfaced, never silently resolved. [src/lib/pdfLines.js](src/lib/pdfLines.js) rebuilds lines from pdf.js's positioned fragments, re-emitting a wide x-gap as a double space so a description stays separable from its unit label.
 
 Nothing is applied until it's confirmed: [src/lib/priceChanges.js](src/lib/priceChanges.js) diffs the parsed map against current inventory and [PriceReview.jsx](src/features/settings/PriceReview.jsx) renders it. It reports **three** outcomes, not a success count — `changes`, `unchanged`, and `skipped` (with a reason: `absent` from this list / `unmapped` to any product / `unconvertible` units) — because an ingredient a list doesn't price is not the same as one whose price didn't move, and collapsing them is how a half-applied import passes for a complete one.
+
+**Hops in the catalog.** The spot hop list feeds the same catalog, through
+[src/lib/hopCatalog.js](src/lib/hopCatalog.js), and it merges on a **different
+key** — which is why it is its own module. The Houston list gives every product
+a vendor SKU; the spot list has none at all, so identity here is the VARIETY and
+the SKU is synthesised from it (`hopSku()`), extending the trick products.js
+already plays with `HOP-CAS`. ⚠️ A variety we already buy MUST resolve to the SKU
+products.js assigned it — a generated `HOP-CASCADE` beside `HOP-CAS` would be two
+identities for one hop, and every rename/repack/discontinued check is keyed on
+exactly that. `varietyOf()` reads the name by cutting the label at the product
+form or the pack ("Cascade Pellet - 11lb", "Bravo™ Hop Pellet 44 lb",
+"Strata® - 11lb", "Czech Saaz 11 lb/5 kg" — four shapes on one list), which also
+drops the origin that trails some rows; **case is preserved here** unlike
+everywhere else in the hop parse, because this name gets stored and printed.
+Every row is quoted per pound, so entries are 1 lb packs with the box in
+`orderPack`. Cryo/Enriched/CO2-extract rows are dropped and counted (extract is
+priced per CAN); a 44 lb box is KEPT, unlike in the pricing path, because it is a
+real product quoted per pound and on the April 2026 list it is the only way
+Lemondrop appears at all. Prices are pooled per variety through the shared
+`newestQuote()` in spotHops.js, so the number a brewer confirms on the review
+screen and the number stored in the catalog are read the same way. On the April
+2026 list: 69 rows → **57 varieties**, 46 of them hops Slackers doesn't stock.
+
+⚠️ **Two places assumed the fourteen hops in `defaultProductMap` were all the
+hops there are**, and both would have frozen an adopted hop's price silently.
+The review is built from a LIST of hops rather than by walking inventory, so it
+takes its targets from inventory now (archived rows excluded — "we stopped buying
+it" already answers "why isn't this priced"); and `perOunce()` in
+[HopPriceReview](src/features/settings/HopPriceReview.jsx) looked its SKU up in
+`productsBySku` and gave up, leaving the New column blank for exactly the hops
+the ingest had just added — it falls back to a 1 lb pack, which is the one thing
+a spot hop list guarantees.
 
 **The vendor catalog — everything the vendor sells, not just what we stock.** `products.js` describes the ~30 SKUs Slackers buys; the same price list carries 563 product rows, and all of them are now kept, so a recipe can call for a malt the brewery has never had. [src/lib/catalog.js](src/lib/catalog.js) turns `parsePriceList().rows` into catalog entries (vendor from the SKU's own code, pack size from the name, a category *when the list makes one obvious*) and [src/lib/catalogChanges.js](src/lib/catalogChanges.js) diffs them against what's stored. It rides along with the price import rather than being its own upload — it is the same file. Stored under the `catalog` key through the same `repo.js` seam as everything else (so it gets the CAS staleness guard), but **deliberately not in App.jsx state**: it is hundreds of rows only Settings and the ingredient picker need, and loading it at every mount would be a real cost for a list that changes monthly. Migration 0016 makes the `products` table able to hold it (adds `category`, drops the NOT NULL on `pack_qty`/`pack_unit`); prod's `products` table had been **empty** since 0008 created it.
 

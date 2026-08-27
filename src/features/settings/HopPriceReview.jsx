@@ -36,14 +36,64 @@ const money = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
 
 // $/lb as typed → $/oz as stored, through the same conversion the rest of the
 // app uses, so what this screen previews is exactly what gets saved.
+//
+// ⚠️ A hop ADOPTED from this list has no row in products.js — its SKU was
+// synthesised from the variety (hopCatalog.js) — and looking it up there and
+// giving up left the New column blank for exactly the hops this feature exists
+// to add. Every row on a spot hop list is quoted per pound, so that is the
+// fallback pack: it is what the catalog entry says too, and it is the one thing
+// the document guarantees.
+const PER_POUND = { packQty: 1, packUnit: "lb" };
 const perOunce = (sku, perLb) => {
-  const product = productsBySku[sku];
-  if (!product || !Number.isFinite(perLb)) return null;
-  const raw = costPerUnit({ ...product, price: perLb }, "oz");
+  if (!Number.isFinite(perLb)) return null;
+  const raw = costPerUnit({ ...(productsBySku[sku] ?? PER_POUND), price: perLb }, "oz");
   return raw == null ? null : Math.round(raw * 100) / 100;
 };
 
-export default function HopPriceReview({ hops, pages, currentByName, effective, source = "ocr", onApply, onCancel }) {
+// What ingesting the rest of the list would do to the vendor catalog.
+//
+// The table above is the fourteen hops Slackers buys. This is the other
+// fifty-odd varieties on the same page — the ones it *could* buy — and it is
+// the whole reason the hop list feeds the catalog at all: without it, a hop the
+// brewery has never bought can never reach a recipe.
+function HopCatalogSummary({ catalog }) {
+  const { added, discontinued, counts, next } = catalog;
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e2e8f0" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+        Hop catalog
+      </div>
+      <p style={{ margin: "0 0 6px", fontSize: 13, color: "#475569" }}>
+        {added.length === 0
+          ? `No new varieties — the catalog already lists all ${counts.varieties} on this list.`
+          : `${added.length} variet${added.length === 1 ? "y" : "ies"} would be added, for ${next.length} products in total. These are what you can pick from when building a recipe.`}
+      </p>
+
+      {discontinued.length > 0 && (
+        <p style={{ margin: "0 0 6px", fontSize: 12, color: "#b91c1c", fontWeight: 600 }}>
+          ⚠️ {discontinued.length} hop{discontinued.length === 1 ? "" : "s"} you buy{" "}
+          {discontinued.length === 1 ? "is" : "are"} not on this list:{" "}
+          {discontinued.map((d) => d.name).join(", ")}.{" "}
+          {discontinued.length === 1 ? "Its price" : "Their prices"} will stay at the last quote.
+        </p>
+      )}
+
+      {/* The same honesty the price table keeps: say what was left out and why,
+          rather than folding it into a success count. Cryo, Enriched and CO2
+          extract are different products at their own money — extract is not even
+          quoted per pound — so they are read and then deliberately dropped. */}
+      <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>
+        {counts.varieties} varieties read from {counts.rows} rows
+        {counts.unfamiliar > 0 && ` · ${counts.unfamiliar} you don't stock`}
+        {counts.unpriced > 0 && ` · ${counts.unpriced} without a clean price`}
+        {counts.skippedVariants > 0 && ` · ${counts.skippedVariants} Cryo/extract rows skipped`}
+      </p>
+    </div>
+  );
+}
+
+export default function HopPriceReview({ hops, pages, currentByName, effective, source = "ocr", catalog, onApply, onCancel }) {
   const scanned = source !== "text";
   // One editable $/lb per hop, seeded from OCR (blank where it found nothing).
   const [entered, setEntered] = useState(() =>
@@ -139,13 +189,19 @@ export default function HopPriceReview({ hops, pages, currentByName, effective, 
         </tbody>
       </table>
 
+      {catalog && <HopCatalogSummary catalog={catalog} />}
+
       <div style={{ display: "flex", gap: 8, marginTop: 14, alignItems: "center", flexWrap: "wrap" }}>
+        {/* The catalog can have work to do when no price moved at all — a list
+            carrying new varieties and no change to what we stock. So the button
+            is enabled on either. */}
         <button type="button" onClick={() => onApply(rows.filter((r) => r.to != null))}
-          disabled={changes.length === 0}
-          style={{ ...btn, borderColor: "#f59e0b", background: changes.length ? "#fef3c7" : "#f1f5f9",
-                   color: changes.length ? "#92400e" : "#94a3b8", fontWeight: 700,
-                   cursor: changes.length ? "pointer" : "not-allowed" }}>
+          disabled={changes.length === 0 && !catalog?.added.length}
+          style={{ ...btn, borderColor: "#f59e0b", background: changes.length || catalog?.added.length ? "#fef3c7" : "#f1f5f9",
+                   color: changes.length || catalog?.added.length ? "#92400e" : "#94a3b8", fontWeight: 700,
+                   cursor: changes.length || catalog?.added.length ? "pointer" : "not-allowed" }}>
           Apply {changes.length || "no"} hop price{changes.length === 1 ? "" : "s"}
+          {catalog?.added.length ? ` + ${catalog.added.length} varieties` : ""}
         </button>
         <button type="button" onClick={onCancel} style={btn}>Cancel</button>
         {pages?.length > 0 && (
