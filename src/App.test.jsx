@@ -135,10 +135,16 @@ describe('pricing an ingredient with no inventory row', () => {
     expect(screen.queryByText(/ingredient unpriced/)).not.toBeInTheDocument();
   });
 
+  // What's typed stays on screen while typing (PriceInput's draft — a field
+  // that reformatted per keystroke ate the digits after the first). What's
+  // STORED is still rounded to the cent, which the line cost proves: 4 × $2.57.
   it('stores the price to the cent', () => {
     seedPhantomRecipe();
     openCostView();
     fireEvent.change(field(), { target: { value: '2.567' } });
+    const row = screen.getByText('Phantom Adjunct').closest('tr');
+    expect(within(row).getByText('$10.28')).toBeInTheDocument();
+    fireEvent.blur(field());
     expect(field()).toHaveValue(2.57);
   });
 });

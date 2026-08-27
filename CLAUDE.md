@@ -23,14 +23,16 @@ npm run test:watch # Vitest watch mode
 ```
 src/
   components/   # reusable tables: InvTable, RecEditTable, ScheduleEditTable
-                #   — plus StyleSelect (BJCP style picker) and the two failure
-                #   surfaces: ErrorBoundary, SaveErrorBanner
+                #   — plus StyleSelect (BJCP style picker), PriceInput (the one
+                #   cost-per-unit field) and the three failure surfaces:
+                #   ErrorBoundary, SaveErrorBanner, StaleDataBanner
   features/     # one folder per tab: inventory/, recipes/, order/, settings/
                 #   — plus auth/ (Supabase session + login gate). recipes/ also
                 #   holds the BrewSheetPanel + CellarPanel sub-views.
   hooks/        # usePersistentState (async-aware; routes through repo.js)
   lib/          # pure logic + data + the data-access seam (see below)
                 #   — incl. sortNames.js, the one alphabetical comparator
+                #   — incl. inventoryValue.js (stock on hand × its price)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
                 #   and the hop-list path: pdfText words (or ocr, when the PDF
@@ -38,13 +40,23 @@ src/
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
-supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0011)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0014)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
 
 **Four tabs:**
-- **Inventory** — editable quantity inputs for all ingredients
+- **Inventory** — editable quantity inputs for all ingredients, **plus each
+  one's cost per unit and what that stock is worth** (`q × cpu`, via
+  [inventoryValue.js](src/lib/inventoryValue.js)): per-category subtotals and a
+  running total for the whole shelf. The price column is the *same* value the
+  Cost view edits and the Settings price import writes — it lives on the
+  inventory row, not on a recipe — so both surfaces share one writer
+  (`setInvCost` in App.jsx) and one field ([PriceInput](src/components/PriceInput.jsx)).
+  It keeps cogs.js's rule: an unpriced ingredient reads "unpriced" and is left
+  OUT of the total rather than valued at $0, with the count of what's missing
+  printed next to every subtotal. Clearing inventory zeroes quantities and keeps
+  prices — a cleared shelf is still a priced one
 - **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between four views of it:
   - **Everything a brewer scans for a name is alphabetical**, via the one comparator in [src/lib/sortNames.js](src/lib/sortNames.js) (`Intl.Collator`, case-insensitive + numeric, so `Cascade` precedes `CTZ` and `Crystal 8` precedes `Crystal 80`): the recipe picker here and on the Order Calculator, every ingredient table and its Add picker in the Edit view, the cellar-schedule action picker, and the Cost view's line items. The ingredient sorts are **display-only** — `sortedWithIndex()` hands back each row's index in the STORED array, and every edit still addresses that, because the stored order is what the printable sheets group by stage and time. What stays in process order stays that way: the schedule ROWS (day order), the Brew Sheet's additions (stage, then descending time), the Cellar Sheet's boxes.
   - **Edit** — recipe header (name, style, target OG/FG/ABV, mash + ferm temp) then the ingredient lists; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only. Name is free text, style comes from [StyleSelect](src/components/StyleSelect.jsx); an empty name renders as `(untitled)` in the picker so a mid-edit recipe stays selectable.
@@ -58,13 +70,29 @@ The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop
 
 **Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
 
+⚠️ **A long-open tab is stale, and a stale save used to be able to delete data.** The app reads each key once on mount and never refetches — no polling, no realtime — so a tab open since before an edit shows the data as of the moment it opened (2026-08-27: a tab predating an import was still offering the old recipe list, and the two imported recipes looked lost). The display was the harmless half: every save is a whole-list delete-then-insert, so editing anything in that tab would have written the old list over the new recipes and deleted them. Two members share one database; this needs two windows, not a day-old tab. Two mechanisms, in [src/lib/freshness.js](src/lib/freshness.js) and migration 0014:
+
+- **Say so.** On tab focus (and on becoming visible), `repo.staleKeys()` asks the backend which loaded keys have moved, and [StaleDataBanner](src/components/StaleDataBanner.jsx) offers a reload. It **reports, never refetches** — silently swapping the data under an open editor would throw away whatever is half-typed.
+- **Refuse the write.** `data_versions` holds one counter per shared key. A writer claims its slot with a compare-and-swap (`update … where key = $1 and version = $expected`) and touches data rows only if that matched, so a losing writer never reaches the delete. A refusal raises `StaleWriteError` ([src/lib/staleWrite.js](src/lib/staleWrite.js)), which SaveErrorBanner renders with **Reload instead of Retry** — retrying a stale write is precisely the overwrite being prevented. It is a compare-and-swap, not a lock: a crash between claim and insert leaves the version bumped and the data half-written, exactly as a crash mid-save does today.
+
+The localStorage backend implements the same `staleKeys()` (two tabs share one origin's storage; there the stored string *is* the version) but has no CAS — a local save can't fail, and that path stays synchronous.
+
 **Crash containment.** [ErrorBoundary](src/components/ErrorBoundary.jsx) wraps the tab panel in App.jsx (keyed by `tab`, so switching tabs clears a crashed panel and the nav — which sits outside it — is always usable) and the whole tree in main.jsx. Three white screens have shipped, each a *different* unguarded read (a missing recipe array, a column prod hadn't migrated yet, a stale `selR` indexing past the end of the list), so the guard is deliberately generic rather than another targeted null check. Keep it that way: prefer fixing the class of failure over adding the next specific check.
 
 ## Data Model
 
 Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
-- `defMalts` — 20 malts, quantity in lbs (Carafa III and Carafa Special III are
-  distinct entries — "Special" is the dehusked malt; don't collapse them)
+- `defMalts` — 19 malts, quantity in lbs. ⚠️ **One Carafa entry, not two.**
+  Weyermann makes both a husked Carafa III and a dehusked "Special" — but
+  Slackers only ever buys the dehusked one (Derek, 2026-08-26), so the catalog
+  carries `Carafa Special III` alone and every other spelling folds onto it
+  (the `.bsmx` importer aliases `Carafa III` / `Carafe III` / the "Type 3"
+  forms). Migration 0007 split them on the theory that both were stocked, which
+  left prod with THREE rows for one sack — its rename was guarded against the
+  unique index and so skipped instead of merging, orphaning the misspelled row.
+  **0013 merged them back**; don't re-split without the brewery saying it now
+  buys both, because an unaliased name here becomes a second inventory row for
+  the same malt
 - `defHops` — 14 hops, quantity in oz
 - `defYeast` — 8 yeast strains, quantity in packs
 - `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)
@@ -85,6 +113,8 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 [src/lib/pricing.js](src/lib/pricing.js) owns every vendor-pack → recipe-unit conversion (malt $/lb, hops $/lb→$/oz, yeast one 500 g brick = one `pack`, adjuncts per their own lbs/oz/ml/each). `costPerUnit()` returns **null**, never 0, when a product has no price or the units don't reconcile — an unpriced ingredient must surface in the UI rather than silently understate a cost. Derived prices are **stored rounded to the cent**: a vendor quote can carry more precision (malt at $0.724/lb, hops at $0.874375/oz once converted), but a price the UI shows to two decimals has to *be* two decimals or the cost column stops reconciling with the price beside it. Costs round *up*; a price rounds to *nearest* — it's a quote, not a cost. Worth at most ~$1.30 on a batch.
 
 **COGS.** `computeRecipeCost()` in [src/lib/cogs.js](src/lib/cogs.js) totals a recipe's ingredient cost, splits it by category, and derives cost/bbl, cost/keg, and cost per 16 oz pint. Two invariants: an unpriced ingredient goes to `missing` and is **excluded** from the total, never costed at $0 (the Cost view reports the gap — a confidently wrong COGS is worse than an obviously incomplete one); and only one volume is stored, since a half-barrel keg is exactly ½ bbl, so cost/keg and cost/pint are derived from that one volume rather than tracked separately. **Every money figure is rounded UP to the cent** (`ceilCents`) — costing should never come in under what a batch actually costs. Line costs are rounded first and the subtotals/total built from the rounded lines, so the column on screen adds up to the total on screen; the three per-unit figures are each rounded independently, so they can sit a penny off exact halving. Cost per pint is of *packaged* beer and excludes taproom pour loss (foam, line purge, tasters), which the panel states. Packaged volume is `postBoilYield × (1 − lossPct) ÷ 31`, resolved in one place by `batchVolume()` — recipe `process.postBoilYield` (through the tolerant `parseVolume()`, since that field is free text) → the `settings` value → the `defSettings` default, for **both** fields. A recipe may override the brewery loss % with `process.avgKegs`, **what that beer actually yields**: kegs is the number a brewer counts on the floor, so the field asks for the measurement and `batchVolume()` back-solves the percentage (7 kegs off a 150 gal boil = 27.7% loss). The **brewery-wide default is the same field** (`settings.avgKegs`), back-solved the same way — but always against the SETTINGS kettle volume, never the recipe's: the setting is a ratio measured on the house batch, so dividing the house keg count into a recipe that boils 300 gal would read it as losing two thirds of its beer. It returns `lossPct` either way, so the cost math stays one number wide and double batches still scale by volume. A yield larger than the boil is a typo, not a yield — it's rejected back to the brewery default with a note on the panel, since costing must never divide by beer the brewery didn't make. An unset or cleared value means "use the brewery default", never 0% loss: the Cost panel used to fall back to 0 while Settings' preview fell back to 33, so a settings record saved before these fields existed (as prod's was) costed every batch against the full kettle volume — $90/bbl where the truth was $135. Defaults (150 gal, 33% loss) are Slackers' measured numbers and yield ~6.5 kegs; the Cost panel prints the whole basis (`150 gal less 33% loss = 3.24 bbl ≈ 6.5 kegs`) under the stat tiles so a per-bbl figure is never read against the kettle. Water salts are excluded — no price source, dosed in grams. [src/lib/applyPrices.js](src/lib/applyPrices.js) joins a `{sku: price}` file to the catalog and writes `cpu` onto inventory rows; [PriceImport.jsx](src/features/settings/PriceImport.jsx) is that flow in the UI.
+
+⚠️ **A cost-per-unit field cannot be a plain controlled input**, which is why both surfaces go through [PriceInput](src/components/PriceInput.jsx). A stored price is rounded to the cent and displayed as `toFixed(2)`, so re-rendering it on every keystroke rewrites what's being typed: after the "1" of "1.09" the field became "1.00", the caret sat at the end, and the rest appended to give "1.0009" → **$1.01**. Every price with a non-zero second decimal was silently mistyped. The keystrokes own the field while it has focus; the stored value owns it on blur (which is also what normalizes "1.5" to "1.50").
 
 **Price-list upload.** Both sources reduce to the same `{sku: {price}}` map before anything is written. [src/lib/pdfText.js](src/lib/pdfText.js) is the only module that touches pdf.js and is imported **dynamically** — the parser plus its worker are larger than the whole app, so they load on the first PDF and never at app start; a static import of it from anywhere in the tree silently undoes that. It hands lines to [src/lib/parsePriceList.js](src/lib/parsePriceList.js) (pure): a row is a line that STARTS with a vendor SKU (`[A-Z]{3,4}\d{3,4}[A-Z]?`) and carries a `$` amount, and the **first** price column is the one taken — the rest are 40+/200+/480+ quantity breaks Slackers never hits, the same assumption `products.js` documents. Prose that merely mentions money ("Pallet fee: $12.50") is not a product row. A SKU repeated at the SAME price is fine (the "New and Notable" block repeats rows); repeated at a DIFFERENT price it goes to `conflicts` and is surfaced, never silently resolved. [src/lib/pdfLines.js](src/lib/pdfLines.js) rebuilds lines from pdf.js's positioned fragments, re-emitting a wide x-gap as a double space so a description stays separable from its unit label.
 

@@ -26,6 +26,7 @@
 // groundwork.
 
 import { localStorageBackend } from "./storage";
+import { StaleWriteError } from "./staleWrite";
 
 // supabase-js refuses an unfiltered delete; this matches every real (uuid) row.
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
@@ -52,21 +53,86 @@ const SHARED_KEYS = new Set([...Object.keys(CATEGORY), "recipes", "settings"]);
 const SETTINGS_PREFS = ["postBoilYield", "lossPct", "avgKegs"];
 
 export function createSupabaseBackend(client, localBackend = localStorageBackend) {
+  // The version each key was at when THIS tab last read or wrote it. Everything
+  // about staleness is a comparison against these numbers — see
+  // supabase/migrations/0014_data_versions.sql for why they exist.
+  const seen = new Map();
+  let inFlight = null;
+
+  // All versions in one query, and concurrent callers share it: the app mounts
+  // six keys at once, and six identical round trips to a six-row table would be
+  // silly. Read BEFORE the data it describes, never after — recording a version
+  // newer than the rows we then read would make a stale tab look current, which
+  // is the one direction this must never be wrong in.
+  async function readVersions() {
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
+      const { data, error } = await client.from("data_versions").select("key,version");
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map((r) => [r.key, Number(r.version)]));
+    })().finally(() => { inFlight = null; });
+    return inFlight;
+  }
+
   async function load(key, fallback) {
     if (!SHARED_KEYS.has(key)) return localBackend.load(key, fallback);
+    const versions = await readVersions();
+    seen.set(key, versions[key] ?? 0);
     if (key === "recipes") return loadRecipes(client, fallback);
     if (key === "settings") return loadSettings(client, fallback);
     return loadInventory(client, CATEGORY[key], key === "adj", fallback);
   }
 
+  // Claim the right to rewrite this key: bump the version only if it still
+  // holds the value this tab last saw. No match means somebody else wrote in
+  // the meantime, and the caller must not touch a single data row.
+  async function claim(key) {
+    const expected = seen.has(key) ? seen.get(key) : (await readVersions())[key] ?? 0;
+    const { data, error } = await client
+      .from("data_versions")
+      .update({ version: expected + 1, updated_at: new Date().toISOString() })
+      .eq("key", key)
+      .eq("version", expected)
+      .select("version");
+    if (error) throw error;
+    if (data?.length) {
+      seen.set(key, expected + 1);
+      return;
+    }
+    // No row matched. Either the key has no version row at all (a database that
+    // predates migration 0014, or a key added since) — in which case create it
+    // and carry on, since there is no history to be stale against — or the
+    // version moved, which is the refusal this whole mechanism exists for.
+    const { data: existing, error: readErr } = await client
+      .from("data_versions").select("version").eq("key", key).maybeSingle();
+    if (readErr) throw readErr;
+    if (existing) throw new StaleWriteError(key);
+    const { error: insErr } = await client
+      .from("data_versions").insert({ key, version: 1 });
+    if (insErr) throw insErr;
+    seen.set(key, 1);
+  }
+
   async function save(key, value) {
     if (!SHARED_KEYS.has(key)) return localBackend.save(key, value);
+    await claim(key);
     if (key === "recipes") return saveRecipes(client, value);
     if (key === "settings") return saveSettings(client, value);
     return saveInventory(client, CATEGORY[key], value);
   }
 
-  return { load, save };
+  // Which of the keys this tab is showing have moved on the server since it
+  // read them. Only keys actually loaded here are reported — a key this tab
+  // never read can't be displaying anything out of date.
+  async function staleKeys() {
+    if (seen.size === 0) return [];
+    const versions = await readVersions();
+    return [...seen.entries()]
+      .filter(([key, v]) => (versions[key] ?? 0) > v)
+      .map(([key]) => key);
+  }
+
+  return { load, save, staleKeys };
 }
 
 // --- inventory (malts/hops/yeast/adj) -------------------------------------
