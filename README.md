@@ -16,7 +16,10 @@ either way.
   the stock on hand is worth — subtotalled per category and totalled for the
   whole shelf. An ingredient with no price reads "unpriced" and stays out of the
   total rather than counting as free. Prices live on the ingredient, so editing
-  one here also changes every recipe's cost.
+  one here also changes every recipe's cost. An ingredient you've stopped buying
+  can be **archived** instead of deleted: it leaves the shelf but keeps its price,
+  a toggle shows the archived ones again, and recipes and the Order Calculator
+  still see it.
 - **Recipes** — pick a recipe once, then switch between four views of it:
   - **Edit** — name, style, target gravities, mash and fermentation temps, plus
     the ingredient lists per recipe; add or remove ingredients across malts,

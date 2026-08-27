@@ -32,6 +32,7 @@ src/
   hooks/        # usePersistentState (async-aware; routes through repo.js)
   lib/          # pure logic + data + the data-access seam (see below)
                 #   — incl. sortNames.js, the one alphabetical comparator
+                #   — incl. archive.js (stopped-buying rows: hidden, not deleted)
                 #   — incl. inventoryValue.js (stock on hand × its price)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
@@ -42,7 +43,7 @@ src/
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
-supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0014)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0017)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
@@ -58,7 +59,19 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   It keeps cogs.js's rule: an unpriced ingredient reads "unpriced" and is left
   OUT of the total rather than valued at $0, with the count of what's missing
   printed next to every subtotal. Clearing inventory zeroes quantities and keeps
-  prices — a cleared shelf is still a priced one
+  prices — a cleared shelf is still a priced one. An ingredient the brewery has
+  stopped buying is **archived, never deleted** ([archive.js](src/lib/archive.js),
+  migration 0017): the row, its quantity and its price all survive, the tab hides
+  it and says how many it hid, and a toggle brings them back. Deleting was the
+  only way to say "we don't stock this" and it threw away the price, the one field
+  on an inventory row that's expensive to re-acquire. ⚠️ `computeOrder()`
+  deliberately ignores the flag — a recipe calling for an archived ingredient
+  still needs it bought, and hiding a row from the shelf must never quietly change
+  what the brewery orders. The value total is computed over the rows actually
+  SHOWN, so the column still adds up to the total beside it. ⚠️ The archive
+  control is **not** a red `×`: that glyph already means permanent removal
+  (`rmBtn`, which deletes a recipe ingredient), and archiving promises the
+  opposite
 - **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between four views of it:
   - **Everything a brewer scans for a name is alphabetical**, via the one comparator in [src/lib/sortNames.js](src/lib/sortNames.js) (`Intl.Collator`, case-insensitive + numeric, so `Cascade` precedes `CTZ` and `Crystal 8` precedes `Crystal 80`): the recipe picker here and on the Order Calculator, every ingredient table and its Add picker in the Edit view, the cellar-schedule action picker, and the Cost view's line items. The ingredient sorts are **display-only** — `sortedWithIndex()` hands back each row's index in the STORED array, and every edit still addresses that, because the stored order is what the printable sheets group by stage and time. What stays in process order stays that way: the schedule ROWS (day order), the Brew Sheet's additions (stage, then descending time), the Cellar Sheet's boxes.
   - **Edit** — recipe header (name, style, target OG/FG/ABV, mash + ferm temp) then the ingredient lists; add/remove ingredients; edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only. Name is free text, style comes from [StyleSelect](src/components/StyleSelect.jsx); an empty name renders as `(untitled)` in the picker so a mid-edit recipe stays selectable.
