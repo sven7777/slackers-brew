@@ -10,6 +10,7 @@ const CATALOG = [
   { sku: "MGAM1016", name: "Gambrinus Munich Light", vendor: "Gambrinus", category: "malt", price: 2, packQty: 1, packUnit: "lb" },
   { sku: "AZZZ4101", name: "Honey - Clover (USA) - 60 lb", vendor: null, category: null, price: 120, packQty: 60, packUnit: "lb" },
   { sku: "AZZZ4102", name: "Honey - Clover (USA) - 5 lb", vendor: null, category: null, price: 15, packQty: 5, packUnit: "lb" },
+  { sku: "AZZZ1771", name: "Candi Syrup Dark - 25 kg", vendor: null, category: null, price: 100, packQty: 25, packUnit: "kg", effective: "2026-08-24" },
   { sku: "XZZZ0100", name: "Xtratuf Boots", vendor: null, category: "other", price: 100, packQty: null, packUnit: null },
 ];
 
@@ -127,5 +128,57 @@ describe("CatalogBrowser", () => {
     fireEvent.click(screen.getByText("Add…"));
     expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
     expect(screen.getByText(/the table you're adding to/)).toBeInTheDocument();
+  });
+
+  // Linking is the other direction: a row already on the shelf being told which
+  // product it is. Prod's "Candi Sugar, Dark" was typed in by hand — no
+  // product, no price, counted in "each" — and there was no way to say so.
+  describe("link mode", () => {
+    const row = { n: "Candi Sugar, Dark", q: 0, u: "each" };
+    const openLink = (onLink) => render(
+      <CatalogBrowser open category="adj" linkTo={row} inventory={inventory}
+        onLink={onLink} onClose={vi.fn()} />,
+    );
+
+    it("asks which product the row is, not for a name or a category", async () => {
+      withCatalog(CATALOG);
+      openLink(vi.fn());
+      expect(await screen.findByText("Which product is Candi Sugar, Dark?")).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Search the catalog"), { target: { value: "candi" } });
+      fireEvent.click(screen.getByText("Choose"));
+      expect(screen.queryByLabelText("Short name")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+      expect(screen.getByText("Link Candi Sugar, Dark")).toBeInTheDocument();
+    });
+
+    // ⚠️ The unit is the other half of the fix. A 25 kg pack against a row
+    // counted in "each" reconciles to nothing, so the row would stay unpriced
+    // however well it was linked.
+    it("lets the unit be corrected, and says the cost follows it", async () => {
+      withCatalog(CATALOG);
+      const onLink = vi.fn();
+      openLink(onLink);
+      fireEvent.change(await screen.findByLabelText("Search the catalog"), { target: { value: "candi" } });
+      fireEvent.click(screen.getByText("Choose"));
+      expect(screen.getByText(/unpriced/)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("Counted in"), { target: { value: "lbs" } });
+      expect(screen.getByText("$1.81")).toBeInTheDocument();      // 25 kg = 55.1 lb at $100
+      expect(screen.getByText(/Changes what this ingredient is counted in/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("Link Candi Sugar, Dark"));
+      expect(onLink).toHaveBeenCalledWith("adj", "Candi Sugar, Dark",
+        { sku: "AZZZ1771", vendor: null, cpu: 1.81, pricedAt: "2026-08-24", u: "lbs" },
+        expect.objectContaining({ sku: "AZZZ1771" }));
+    });
+
+    it("does not warn about a duplicate name — the row is the one being linked", async () => {
+      withCatalog(CATALOG);
+      render(<CatalogBrowser open category="malt" linkTo={{ n: "Pils", q: 0 }} inventory={inventory}
+        onLink={vi.fn()} onClose={vi.fn()} />);
+      fireEvent.change(await screen.findByLabelText("Search the catalog"), { target: { value: "munich" } });
+      fireEvent.click(screen.getByText("Choose"));
+      expect(screen.queryByText(/You already stock/)).not.toBeInTheDocument();
+    });
   });
 });
