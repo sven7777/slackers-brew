@@ -50,7 +50,7 @@ const PRICE_RE = /^\$?(\d{1,3}(?:,\d{3})*\.\d{2})(?:\s*[/|]\s*[a-zA-Z0-9]{1,3}\.
 // "Cascade - CO2 Hop Extract (150GMA)", but only while BOTH are on the list; a
 // month where a variety shows up as extract only would otherwise price a batch
 // off a $44 can as though it were $44/lb.
-const NOT_OURS = /\b(cryo|enriched)\b|\b(44|22)\s?[l1I]b\b|\bco2\b|\bextract\b/i;
+export const NOT_OURS = /\b(cryo|enriched)\b|\b(44|22)\s?[l1I]b\b|\bco2\b|\bextract\b/i;
 
 // Fold OCR punctuation noise: trademark marks, en/em dashes, doubled spaces.
 export function normalizeVariety(text) {
@@ -303,49 +303,58 @@ function startsWithVariety(rowVariety, variety) {
   return first.length <= 2 && rest.join(" ").startsWith(want);
 }
 
-export function matchSpotHopPrices(rows, hops = ourHops()) {
-  return hops.map((hop) => {
-    const candidates = (rows || []).filter(
-      (r) => startsWithVariety(r.variety, hop.name) && !NOT_OURS.test(r.label),
-    );
-
-    // Every (year, price) this variety is quoted at anywhere on the list, each
-    // remembering the row it came from so a brewer can tell two rows apart.
-    // Deduped on year+price: a repeated block quoting the same number twice is
-    // agreement, not a conflict.
-    const seen = new Set();
-    const available = [];
-    for (const row of candidates) {
-      for (const p of row.prices) {
-        const key = `${p.year}:${p.price}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        available.push({ ...p, label: row.label, ambiguous: Boolean(row.ambiguous) });
-      }
+// The newest clean quote across a set of rows for one variety.
+//
+// Exported because two things need it and must never disagree: pricing the hops
+// we stock (below) and building the catalog entry for a variety we don't
+// (hopCatalog.js). If they picked prices differently, a brewer would see one
+// number on the review screen and another on the ingredient they adopted from
+// the same file.
+export function newestQuote(candidates = []) {
+  // Every (year, price) this variety is quoted at anywhere on the list, each
+  // remembering the row it came from so a brewer can tell two rows apart.
+  // Deduped on year+price: a repeated block quoting the same number twice is
+  // agreement, not a conflict.
+  const seen = new Set();
+  const available = [];
+  for (const row of candidates) {
+    for (const p of row.prices) {
+      const key = `${p.year}:${p.price}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      available.push({ ...p, label: row.label, ambiguous: Boolean(row.ambiguous) });
     }
-    available.sort((a, b) => a.year - b.year || a.price - b.price);
+  }
+  available.sort((a, b) => a.year - b.year || a.price - b.price);
 
-    const newestYear = available.length ? available[available.length - 1].year : null;
-    const atNewest = available.filter((p) => p.year === newestYear);
-    // Two different prices for the same crop year, or a row whose columns didn't
-    // add up: prefill nothing and say so.
-    const conflict = atNewest.length > 1;
-    const ambiguous = atNewest.some((p) => p.ambiguous);
-    const chosen = conflict || ambiguous ? null : atNewest[0] ?? null;
+  const newestYear = available.length ? available[available.length - 1].year : null;
+  const atNewest = available.filter((p) => p.year === newestYear);
+  // Two different prices for the same crop year, or a row whose columns didn't
+  // add up: prefill nothing and say so.
+  const conflict = atNewest.length > 1;
+  const ambiguous = atNewest.some((p) => p.ambiguous);
+  const chosen = conflict || ambiguous ? null : atNewest[0] ?? null;
 
-    // "Read from" still names a row even when nothing was prefilled — the
-    // shortest candidate, which is the plain pellet line.
-    const fallbackLabel = [...candidates].sort((a, b) => a.label.length - b.label.length)[0]?.label ?? null;
+  // "Read from" still names a row even when nothing was prefilled — the
+  // shortest candidate, which is the plain pellet line.
+  const fallbackLabel = [...candidates].sort((a, b) => a.label.length - b.label.length)[0]?.label ?? null;
 
-    return {
-      ...hop,
-      matchedLabel: chosen?.label ?? fallbackLabel,
-      ambiguous,
-      conflict,
-      available,
-      price: chosen?.price ?? null,
-      year: chosen?.year ?? null,
-      confidence: chosen?.confidence ?? null,
-    };
-  });
+  return {
+    matchedLabel: chosen?.label ?? fallbackLabel,
+    ambiguous,
+    conflict,
+    available,
+    price: chosen?.price ?? null,
+    year: chosen?.year ?? null,
+    confidence: chosen?.confidence ?? null,
+  };
+}
+
+export function matchSpotHopPrices(rows, hops = ourHops()) {
+  return hops.map((hop) => ({
+    ...hop,
+    ...newestQuote((rows || []).filter(
+      (r) => startsWithVariety(r.variety, hop.name) && !NOT_OURS.test(r.label),
+    )),
+  }));
 }

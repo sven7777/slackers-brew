@@ -69,10 +69,21 @@ function Browser({ category = null, inventory = {}, linkTo = null, addLabel, onA
   useEffect(() => {
     let alive = true;
     Promise.resolve(loadKey("catalog", []))
-      .then((v) => { if (alive) setEntries(Array.isArray(v) ? v : []); })
+      .then((v) => {
+        if (!alive) return;
+        const rows = Array.isArray(v) ? v : [];
+        setEntries(rows);
+        // ⚠️ A locked browser opens on its OWN category when that category has
+        // anything in it, and on everything (category + unsorted) when it does
+        // not. Both halves are needed: before the hop list was ingested the Hops
+        // table opened onto zero products, and now that it holds 57 varieties,
+        // defaulting to "everything" would bury them under 311 unsorted rows
+        // from the malt list. The chips make it one click either way.
+        if (category && rows.some((e) => bucketOf(e) === category)) setBucket(category);
+      })
       .catch((e) => { if (alive) { setEntries([]); setError(e?.message || "couldn't be loaded"); } });
     return () => { alive = false; };
-  }, []);
+  }, [category]);
 
   const counts = useMemo(() => catalogCounts(entries ?? []), [entries]);
   const results = useMemo(
