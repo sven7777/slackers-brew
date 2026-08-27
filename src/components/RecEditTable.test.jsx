@@ -84,3 +84,31 @@ describe('RecEditTable alphabetical display order', () => {
     expect(opts).toEqual(['Add ingredient...', 'Amarillo', 'Cascade', 'CTZ', 'Simcoe']);
   });
 });
+
+// ⚠️ Structural guard for a layout bug jsdom cannot see. These tables live two
+// to a 900px page, so each gets ~442px, and the Hops one — ingredient, quantity,
+// a stage dropdown wide enough to tell "Dry Hop 1" from "Dry Hop 2", minutes,
+// and the remove button — wanted 461. The card clips (`overflow: hidden`), so
+// the remove button was cut in half and there was no way to reach it. Cell
+// padding now buys the difference back; this container is the backstop for
+// content that still overflows, because a button you can scroll to beats a
+// button that is silently sliced.
+describe('RecEditTable overflow', () => {
+  it('keeps the table in a scroll container, not loose in the clipped card', () => {
+    const { container } = render(
+      <RecEditTable items={[['Cascade', 12, 'boil', 10]]} cat="h" names={['Cascade']} unit="oz"
+        ri={0} setRecs={vi.fn()} addSel={{ h: '' }} setAddSel={vi.fn()} />,
+    );
+    const table = container.querySelector('table');
+    expect(table.parentElement).toHaveStyle({ overflowX: 'auto' });
+  });
+
+  it('leaves the Add row outside it, so the picker never scrolls away', () => {
+    const { container } = render(
+      <RecEditTable items={[]} cat="h" names={['Cascade']} unit="oz"
+        ri={0} setRecs={vi.fn()} addSel={{ h: '' }} setAddSel={vi.fn()} />,
+    );
+    const scroller = container.querySelector('table').parentElement;
+    expect(scroller.querySelector('select')).toBeNull();
+  });
+});

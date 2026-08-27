@@ -226,6 +226,16 @@ of 55 rows onto two lines and broke `HOP-CAS` across the break. Both were
 obvious on screen and invisible to `innerText`. Anything new in these tables has
 to come out of that budget.
 
+⚠️ **The same 442px budget binds the recipe ingredient tables, and the Hops one
+was already over it** (461px: ingredient, quantity, a stage dropdown wide enough
+to tell "Dry Hop 1" from "Dry Hop 2", minutes, remove) — so the red `×` was cut
+in half by the card's `overflow: hidden` and could not be clicked. Both table
+families now use 8px cell padding rather than 10px, which buys back ~20px, and
+RecEditTable keeps its table in an `overflowX: auto` container so content that
+still overflows scrolls instead of being sliced. **Measure `scrollWidth` against
+`clientWidth` per card after touching either — jsdom has no layout, so no unit
+test will catch this.**
+
 ⚠️ **Linking is offered only where `isLinkable()` says the row's own SKU
 decides** — i.e. `defaultProductMap` has no entry for that name. The curated map
 is a brewery-wide editorial decision that wins over a row's `sku` (that is how

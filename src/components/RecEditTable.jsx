@@ -3,6 +3,17 @@ import { addIngredient } from "../lib/recipeRows";
 import { sortedNames, sortedWithIndex } from "../lib/sortNames";
 import { cell, num, th, inp, rmBtn, addRow, sel, addBtn } from "../styles";
 
+// ⚠️ These tables live two to a 900px page, so each gets ~442px — and the Hops
+// one wanted 461: ingredient, quantity, a stage dropdown wide enough to tell
+// "Dry Hop 1" from "Dry Hop 2", minutes, and the remove button. The last column
+// is what fell off the edge, half-clipped by the card's `overflow: hidden`.
+// 2px off each side of every cell buys back the 20px. The scroll container
+// below is the safety net for content that still doesn't fit — a button you can
+// scroll to beats a button that is silently cut in half.
+const c = { ...cell, padding: '6px 8px' };
+const n = { ...num, padding: '6px 8px' };
+const h = { ...th, padding: '6px 8px' };
+
 const ALL_STAGES = [...brewDayStages, ...cellarStages];
 
 // Per-category tuple layout. `stageAt`/`timeAt` are the tuple indices a staged
@@ -51,31 +62,32 @@ export default function RecEditTable({ items = [], cat, names, unit, ri, showUni
 
   return (
     <div>
+      <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={th}>Ingredient</th>
-            <th style={{ ...th, textAlign: "right" }}>{unit}</th>
-            {hasStage && <th style={th}>Stage</th>}
-            {hasTime && <th style={{ ...th, textAlign: "right" }}>Min</th>}
-            <th style={{ ...th, width: 36 }}></th>
+            <th style={h}>Ingredient</th>
+            <th style={{ ...h, textAlign: "right" }}>{unit}</th>
+            {hasStage && <th style={h}>Stage</th>}
+            {hasTime && <th style={{ ...h, textAlign: "right" }}>Min</th>}
+            <th style={{ ...h, width: 36 }}></th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ item: it, index: i }) => (
             <tr key={i}>
-              <td style={cell}>
+              <td style={c}>
                 {it[0]}
                 {showUnit && it[cfg.unitAt] ? (
                   <span style={{ color: "#94a3b8", fontSize: 11 }}> ({it[cfg.unitAt]})</span>
                 ) : null}
               </td>
-              <td style={num}>
+              <td style={n}>
                 <input type="number" step={cfg.step} value={it[1]}
                   onChange={(e) => setField(setRecs, ri, cat, i, 1, parseFloat(e.target.value) || 0)} style={inp} />
               </td>
               {hasStage && (
-                <td style={cell}>
+                <td style={c}>
                   {/* minWidth, not a column width: with auto table layout the
                       column sized to whatever fit and clipped the label. Fine
                       when it read "whirlp", not fine when "Dry Hop 1" and
@@ -87,18 +99,19 @@ export default function RecEditTable({ items = [], cat, names, unit, ri, showUni
                 </td>
               )}
               {hasTime && (
-                <td style={num}>
+                <td style={n}>
                   <input type="number" step={1} value={it[cfg.timeAt] ?? 0}
                     onChange={(e) => setField(setRecs, ri, cat, i, cfg.timeAt, parseFloat(e.target.value) || 0)} style={inp} />
                 </td>
               )}
-              <td style={{ ...cell, textAlign: "center" }}>
+              <td style={{ ...c, textAlign: "center" }}>
                 <button style={rmBtn} onClick={() => rmItem(setRecs, ri, cat, i)} title="Remove">×</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
       {(avail.length > 0 || onBrowse) && (
         <div style={addRow}>
           {/* ⚠️ The picker stays what it was: the brewery's own ingredients, in
