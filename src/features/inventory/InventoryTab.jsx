@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import InvTable from "../../components/InvTable";
 import { inventoryValue, priceAsOf } from "../../lib/inventoryValue";
+import { totalArchived, visibleInventory } from "../../lib/archive";
 import { card, hdr, btn } from "../../styles";
 
 const money = (n) => n == null ? "—" : `$${n.toFixed(2)}`;
@@ -22,8 +23,20 @@ const CatTotal = ({ v }) => (
 // Settings price import: it lives on the ingredient, so a change here moves
 // every recipe's COGS. The footer says so.
 export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, setYeast, adj, setAdj, setInvCost }) {
-  const val = useMemo(() => inventoryValue({ malts, hops, yeast, adj }), [malts, hops, yeast, adj]);
-  const asOf = useMemo(() => priceAsOf({ malts, hops, yeast, adj }), [malts, hops, yeast, adj]);
+  // Local state, not persisted — like the Recipes sub-nav. "Show me the ones I
+  // stopped buying" is a thing you do for a moment, not a preference.
+  const [showArchived, setShowArchived] = useState(false);
+
+  // ⚠️ Value is computed over the rows that are actually SHOWN, so the column
+  // adds up to the total beside it — the same invariant inventoryValue.js and
+  // cogs.js keep by rounding lines before summing them. Toggling therefore
+  // moves the total, which is correct: it is the value of what you are looking
+  // at, and the archived count below says what is missing from it.
+  const shown = useMemo(() => visibleInventory({ malts, hops, yeast, adj }, showArchived),
+    [malts, hops, yeast, adj, showArchived]);
+  const val = useMemo(() => inventoryValue(shown), [shown]);
+  const asOf = useMemo(() => priceAsOf(shown), [shown]);
+  const nArchived = useMemo(() => totalArchived({ malts, hops, yeast, adj }), [malts, hops, yeast, adj]);
 
   // Quantities only — prices survive, since a cleared shelf is still priced.
   const clearAll = () => {
@@ -42,33 +55,43 @@ export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, se
           <span style={{color:'#64748b'}}>
             {' '}— {val.priced} of {val.priced + val.unpriced} ingredients priced
             {asOf && <> · as of {asOf}</>}
+            {nArchived > 0 && !showArchived && <> · {nArchived} archived, not counted</>}
           </span>
         </div>
-        <button style={btn} onClick={clearAll}>Clear Inventory</button>
+        <div style={{display:'flex',gap:8}}>
+          {nArchived > 0 && (
+            <button style={btn} onClick={()=>setShowArchived(v=>!v)}>
+              {showArchived ? 'Hide archived' : `Show archived (${nArchived})`}
+            </button>
+          )}
+          <button style={btn} onClick={clearAll}>Clear Inventory</button>
+        </div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(430px,1fr))',gap:12}}>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🌾 Malts</span><CatTotal v={val.byCategory.malt}/></div>
-          <InvTable items={malts} setter={setMalts} unit="lbs" category="malt" setInvCost={setInvCost} costUnit="lb"/>
+          <InvTable items={malts} setter={setMalts} unit="lbs" category="malt" setInvCost={setInvCost} costUnit="lb" showArchived={showArchived}/>
         </div>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🌿 Hops</span><CatTotal v={val.byCategory.hop}/></div>
-          <InvTable items={hops} setter={setHops} unit="oz" category="hop" setInvCost={setInvCost} costUnit="oz"/>
+          <InvTable items={hops} setter={setHops} unit="oz" category="hop" setInvCost={setInvCost} costUnit="oz" showArchived={showArchived}/>
         </div>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🧫 Yeast</span><CatTotal v={val.byCategory.yeast}/></div>
-          <InvTable items={yeast} setter={setYeast} unit="packs" category="yeast" setInvCost={setInvCost} costUnit="pack"/>
+          <InvTable items={yeast} setter={setYeast} unit="packs" category="yeast" setInvCost={setInvCost} costUnit="pack" showArchived={showArchived}/>
         </div>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🧪 Adjuncts</span><CatTotal v={val.byCategory.adj}/></div>
           {/* No single unit: each adjunct carries its own (lbs/oz/ml/each), so
               the price column takes the row's rather than the table's. */}
-          <InvTable items={adj} setter={setAdj} unit="" category="adj" setInvCost={setInvCost}/>
+          <InvTable items={adj} setter={setAdj} unit="" category="adj" setInvCost={setInvCost} showArchived={showArchived}/>
         </div>
       </div>
       <div style={{fontSize:12,color:'#64748b',padding:'0 2px 8px'}}>
         Value is what's on the shelf at the price beside it; an ingredient with no price is
-        left out of the total rather than counted as free. Editing a price here changes it for{" "}
+        left out of the total rather than counted as free. Archiving one (📦) hides it here
+        and keeps its price — it stays available to recipes and still counts on the Order
+        Calculator, because a beer that calls for it still needs it. Editing a price here changes it for{" "}
         <strong>every</strong> recipe's cost, since prices live on the ingredient, not the
         recipe — the same field the Settings price import writes.
       </div>

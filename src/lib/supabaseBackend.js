@@ -142,7 +142,7 @@ export function createSupabaseBackend(client, localBackend = localStorageBackend
 async function loadInventory(client, category, withUnit, fallback) {
   const { data, error } = await client
     .from("inventory")
-    .select("name,qty,unit,ord,cost_per_unit,product_sku,vendor,price_effective")
+    .select("name,qty,unit,ord,cost_per_unit,product_sku,vendor,price_effective,archived")
     .eq("category", category)
     .order("ord");
   if (error) throw error;
@@ -155,6 +155,9 @@ async function loadInventory(client, category, withUnit, fallback) {
     n: r.name,
     q: r.qty,
     ...(withUnit ? { u: r.unit } : null),
+    // Attached only when true, so a stocked row stays the plain {n, q} shape
+    // the rest of the app has always seen.
+    ...(r.archived ? { archived: true } : null),
     ...(r.cost_per_unit == null && r.product_sku == null ? null : {
       cpu: r.cost_per_unit,
       sku: r.product_sku,
@@ -178,6 +181,7 @@ async function saveInventory(client, category, items) {
     product_sku: it.sku ?? null,
     vendor: it.vendor ?? null,
     price_effective: it.pricedAt ?? null,
+    archived: it.archived === true,
   }));
   const { error } = await client.from("inventory").insert(rows);
   if (error) throw error;
