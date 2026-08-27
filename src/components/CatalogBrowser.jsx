@@ -54,7 +54,7 @@ export default function CatalogBrowser({ open, ...props }) {
   return open ? <Browser {...props} /> : null;
 }
 
-function Browser({ category = null, inventory = {}, addLabel, onAdopt, onClose }) {
+function Browser({ category = null, inventory = {}, linkTo = null, addLabel, onAdopt, onLink, onClose }) {
   const [entries, setEntries] = useState(null);   // null = still loading
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
@@ -91,8 +91,9 @@ function Browser({ category = null, inventory = {}, addLabel, onAdopt, onClose }
       <div style={panel}>
         <div style={head}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>
-            {picked ? "Add to your ingredients" : "Vendor catalog"}
-            {!picked && category && <span style={{ fontWeight: 400, color: "#64748b" }}> · {categoryLabels[category]}s</span>}
+            {picked ? (linkTo ? "Link to a product" : "Add to your ingredients")
+              : linkTo ? `Which product is ${linkTo.n}?` : "Vendor catalog"}
+            {!picked && !linkTo && category && <span style={{ fontWeight: 400, color: "#64748b" }}> · {categoryLabels[category]}s</span>}
           </div>
           <button type="button" style={btn} onClick={onClose} aria-label="Close">Close</button>
         </div>
@@ -106,8 +107,10 @@ function Browser({ category = null, inventory = {}, addLabel, onAdopt, onClose }
                 siblings={packSiblings(entries ?? [], picked)}
                 inventory={inventory}
                 lockedCategory={category}
+                linkTo={linkTo}
                 addLabel={addLabel}
                 onAdopt={onAdopt}
+                onLink={onLink}
                 onCancel={() => setPicked(null)}
               />
             </>
@@ -161,7 +164,10 @@ function Browser({ category = null, inventory = {}, addLabel, onAdopt, onClose }
                         {(!category || bucketOf(e) === "unsorted") && ` · ${bucketLabels[bucketOf(e)]}`}
                       </div>
                     </div>
-                    <button type="button" style={btn} onClick={() => setPicked(e)}>Add…</button>
+                    {/* The row action names what it does in THIS mode: linking
+                        picks a product for a row that already exists, and
+                        "Add…" there reads like it would create a second one. */}
+                    <button type="button" style={btn} onClick={() => setPicked(e)}>{linkTo ? "Choose" : "Add…"}</button>
                   </div>
                 ))}
                 {/* Three different nothings, and blaming the wrong one sends a

@@ -28,9 +28,10 @@
 // Everything here is pure. The dialog that collects those three answers is
 // components/AdoptDialog.jsx.
 
+import { skuFor } from "./applyPrices";
 import { stripPack } from "./catalog";
 import { costPerUnit } from "./pricing";
-import { categoryUnit } from "./products";
+import { categoryUnit, defaultProductMap } from "./products";
 import { compareNames } from "./sortNames";
 
 // The categories an adopted row can land in. `other` (equipment, merchandise)
@@ -157,6 +158,45 @@ export function findDuplicate(inventory = {}, name) {
     if (item) return { category, item };
   }
   return null;
+}
+
+// --- linking an existing row ----------------------------------------------
+//
+// Adopting creates a row; linking points one that already exists at a product.
+// They are the same act at two different times, and the second one is needed
+// because a row can arrive with no product at all: typed in by hand, or created
+// implicitly by the price field (the Whirlfloc case). Such a row is costed at
+// nothing forever, and nothing on screen says which product it should be —
+// prod carried "Candi Sugar, Dark" exactly like that.
+
+// The vendor product a row resolves to today, or null. Same resolution the
+// price import uses, so what the Inventory tab shows is what an import will act
+// on rather than a second opinion.
+export const productSku = (category, row) => skuFor(category, row);
+
+// Is this row's OWN sku what decides which product it is?
+//
+// ⚠️ Only then is linking offered. `defaultProductMap` is a brewery-wide
+// editorial decision that lives in code and wins over a row's sku (that is what
+// let #83 repoint Pils by editing one line), so a per-row link on a name the map
+// covers would appear to work and change nothing. The rows that need linking are
+// exactly the ones the map has never heard of: hand-typed names, and anything
+// adopted from the catalog.
+export const isLinkable = (category, row) => !defaultProductMap[category]?.[row?.n];
+
+// What linking writes onto the row.
+//
+// ⚠️ The price is written ONLY when one could be derived. A product with no
+// price on this list, or a pack that doesn't reconcile with the unit, must not
+// blank a number somebody typed in by hand — the same rule a partial price
+// import keeps.
+export function linkFields(entry, unit) {
+  const { cpu } = derivedCost(entry, unit);
+  return {
+    sku: entry?.sku ?? null,
+    vendor: entry?.vendor ?? null,
+    ...(cpu == null ? null : { cpu, pricedAt: entry?.effective ?? null }),
+  };
 }
 
 // The inventory row an adoption produces.

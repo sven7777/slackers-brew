@@ -174,6 +174,28 @@ unconvertible unit is a sentence on screen rather than a silent null found later
 inside a COGS total. Adopting lands the row at **qty 0** (Derek's call — no
 quantity prompt).
 
+**Linking an existing row.** Adopting creates a row; **linking** points one that
+already exists at a product. Same act, different moment, and the second one is
+needed because a row can arrive with no product at all — typed in by hand, or
+created implicitly by the price field (the Whirlfloc case). Prod carried
+`Candi Sugar, Dark` exactly like that: no SKU, no price, uncostable for good,
+with nothing on screen saying which product it should be. The Inventory tab now
+has a **Product** column (the SKU an import will price the row by — stored since
+the COGS work and never shown), and where the row's own SKU is what decides, it
+is a `Link…` button that opens the same browser in link mode.
+
+⚠️ **Linking is offered only where `isLinkable()` says the row's own SKU
+decides** — i.e. `defaultProductMap` has no entry for that name. The curated map
+is a brewery-wide editorial decision that wins over a row's `sku` (that is how
+#83 repointed Pils by editing one line), so a per-row link on a mapped name
+would look like it worked and change nothing. Two more rules: the dialog keeps
+the **unit** editable for adjuncts, because a 25 kg pack against a row counted in
+`each` reconciles to nothing however well it is linked (that was the actual
+blocker on Candi Sugar, Dark) and it states the change rather than making it
+quietly; and `linkFields()` writes a price **only when it derived one**, so
+linking never blanks a number typed in by hand — the same rule a partial price
+import keeps.
+
 ⚠️ **An adopted row carries its `sku`, and that is what keeps it alive.**
 `skuFor()` in applyPrices.js resolves a row's product as `defaultProductMap`
 first (a deliberate editorial decision in code — how #83 repointed Pils by

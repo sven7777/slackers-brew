@@ -47,6 +47,15 @@ export default function App() {
   // and only they know whether this is the Carafa case.
   const adoptIngredient = (category, row) => SETTER[category]?.(prev => [...prev, row]);
 
+  // Linking is the same act on a row that already exists: it says which vendor
+  // product an ingredient IS, so the next price import can price it. The fields
+  // are merged rather than replacing the row — quantity, archived state and
+  // anything else on it are none of the catalog's business, and `linkFields`
+  // omits the price entirely when it couldn't derive one, so a number typed in
+  // by hand survives being linked.
+  const linkIngredient = (category, name, fields) =>
+    SETTER[category]?.(prev => prev.map(it => it.n === name ? { ...it, ...fields } : it));
+
   const setInvCost = (category, name, raw, unit) => {
     const v = raw === "" ? null : parseFloat(raw);
     // Prices are money: two decimals, so what's shown is what's stored.
@@ -77,7 +86,7 @@ export default function App() {
       {/* Keyed by tab so switching tabs clears a crashed panel — the nav stays
           outside the boundary, so a broken tab is always escapable. */}
       <ErrorBoundary key={tab}>
-        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost} adopt={adoptIngredient}/>}
+        {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost} adopt={adoptIngredient} link={linkIngredient}/>}
         {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings} adopt={adoptIngredient}/>}
         {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
         {tab===3 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}

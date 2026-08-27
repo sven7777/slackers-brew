@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  adoptedRow, derivedCost, findDuplicate, packBase, packLabel, packSiblings,
-  suggestName, suggestUnit,
+  adoptedRow, derivedCost, findDuplicate, isLinkable, linkFields, packBase,
+  packLabel, packSiblings, productSku, suggestName, suggestUnit,
 } from "./adopt";
 
 // ⚠️ Fabricated prices only — real vendor prices never enter this repo (BSG
@@ -158,5 +158,47 @@ describe("adoptedRow", () => {
 
   it("keeps an unpriceable row adoptable, with no price rather than a wrong one", () => {
     expect(adoptedRow(entry({ packQty: null, packUnit: null }), { name: "Nylon Bag", category: "adj" }).cpu).toBeNull();
+  });
+});
+
+// Linking points a row that ALREADY EXISTS at a vendor product. Prod carried
+// "Candi Sugar, Dark" with no product and no price — created by hand, costed at
+// nothing forever, with nothing on screen saying which product it should be.
+describe("linking an existing row", () => {
+  const entry = {
+    sku: "AZZZ1771", name: "Candi Syrup Dark - 25 kg", vendor: null,
+    price: 100, packQty: 25, packUnit: "kg", effective: "2026-08-24",
+  };
+
+  it("reports the product a row resolves to, curated map first", () => {
+    expect(productSku("malt", { n: "2-Row" })).toBe("MRAH1102");
+    expect(productSku("adj", { n: "Candi Sugar, Dark", sku: "AZZZ1771" })).toBe("AZZZ1771");
+    expect(productSku("adj", { n: "Candi Sugar, Dark" })).toBeNull();
+  });
+
+  // ⚠️ Offering to link a name products.js already maps would offer something
+  // that does nothing: the curated map wins, by design (it is how #83 repointed
+  // Pils by editing one line).
+  it("offers linking only where the row's own SKU is what decides", () => {
+    expect(isLinkable("malt", { n: "2-Row" })).toBe(false);
+    expect(isLinkable("adj", { n: "Candi Sugar, Dark" })).toBe(true);
+    // Mapped to null — no vendor product at all — is still linkable, because
+    // that is precisely a row waiting for one.
+    expect(isLinkable("adj", { n: "Brewzyme D" })).toBe(true);
+  });
+
+  it("writes the product and the price it derives", () => {
+    // 25 kg = 55.1 lb, so $100 the pack is $1.81/lb.
+    expect(linkFields(entry, "lbs")).toEqual({
+      sku: "AZZZ1771", vendor: null, cpu: 1.81, pricedAt: "2026-08-24",
+    });
+  });
+
+  // ⚠️ The same rule a partial price import keeps: never blank a number
+  // somebody typed in by hand. A pack of 25 kg against a row counted in "each"
+  // reconciles to nothing — the link is still worth storing, the price is not.
+  it("leaves the price alone when it can't derive one", () => {
+    expect(linkFields(entry, "each")).toEqual({ sku: "AZZZ1771", vendor: null });
+    expect(linkFields({ ...entry, price: null }, "lbs")).toEqual({ sku: "AZZZ1771", vendor: null });
   });
 });

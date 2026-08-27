@@ -23,6 +23,10 @@ either way.
   price list by name, vendor or SKU, then adopt one onto the shelf: you name it,
   say which kind of ingredient it is and pick the pack size you buy, and the
   price per pound (or ounce, or pitch) is worked out and shown before you commit.
+  The **Product** column shows which vendor product each ingredient is priced by;
+  an ingredient nothing maps — one you typed in yourself — says **Link…**, and
+  pointing it at a product on the list prices it and keeps it priced on every
+  import after that.
 - **Recipes** — pick a recipe once, then switch between four views of it:
   - **Edit** — name, style, target gravities, mash and fermentation temps, plus
     the ingredient lists per recipe; add or remove ingredients across malts,

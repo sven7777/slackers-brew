@@ -23,11 +23,12 @@ const CatTotal = ({ v }) => (
 // The price column edits the SAME value as the Recipes ▸ Cost view and the
 // Settings price import: it lives on the ingredient, so a change here moves
 // every recipe's COGS. The footer says so.
-export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, setYeast, adj, setAdj, setInvCost, adopt }) {
+export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, setYeast, adj, setAdj, setInvCost, adopt, link }) {
   // Local state, not persisted — like the Recipes sub-nav. "Show me the ones I
   // stopped buying" is a thing you do for a moment, not a preference.
   const [showArchived, setShowArchived] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  const [linking, setLinking] = useState(null); // {category, item} being pointed at a product
 
   // ⚠️ Value is computed over the rows that are actually SHOWN, so the column
   // adds up to the total beside it — the same invariant inventoryValue.js and
@@ -73,21 +74,21 @@ export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, se
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(430px,1fr))',gap:12}}>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🌾 Malts</span><CatTotal v={val.byCategory.malt}/></div>
-          <InvTable items={malts} setter={setMalts} unit="lbs" category="malt" setInvCost={setInvCost} costUnit="lb" showArchived={showArchived}/>
+          <InvTable items={malts} setter={setMalts} unit="lbs" category="malt" setInvCost={setInvCost} onLink={link ? (c,it)=>setLinking({category:c,item:it}) : undefined} costUnit="lb" showArchived={showArchived}/>
         </div>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🌿 Hops</span><CatTotal v={val.byCategory.hop}/></div>
-          <InvTable items={hops} setter={setHops} unit="oz" category="hop" setInvCost={setInvCost} costUnit="oz" showArchived={showArchived}/>
+          <InvTable items={hops} setter={setHops} unit="oz" category="hop" setInvCost={setInvCost} onLink={link ? (c,it)=>setLinking({category:c,item:it}) : undefined} costUnit="oz" showArchived={showArchived}/>
         </div>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🧫 Yeast</span><CatTotal v={val.byCategory.yeast}/></div>
-          <InvTable items={yeast} setter={setYeast} unit="packs" category="yeast" setInvCost={setInvCost} costUnit="pack" showArchived={showArchived}/>
+          <InvTable items={yeast} setter={setYeast} unit="packs" category="yeast" setInvCost={setInvCost} onLink={link ? (c,it)=>setLinking({category:c,item:it}) : undefined} costUnit="pack" showArchived={showArchived}/>
         </div>
         <div style={card}>
           <div style={{...hdr,display:'flex',justifyContent:'space-between'}}><span>🧪 Adjuncts</span><CatTotal v={val.byCategory.adj}/></div>
           {/* No single unit: each adjunct carries its own (lbs/oz/ml/each), so
               the price column takes the row's rather than the table's. */}
-          <InvTable items={adj} setter={setAdj} unit="" category="adj" setInvCost={setInvCost} showArchived={showArchived}/>
+          <InvTable items={adj} setter={setAdj} unit="" category="adj" setInvCost={setInvCost} onLink={link ? (c,it)=>setLinking({category:c,item:it}) : undefined} showArchived={showArchived}/>
         </div>
       </div>
       {/* The shelf is a counting sheet; the vendor catalog is 563 products.
@@ -96,6 +97,14 @@ export default function InventoryTab({ malts, setMalts, hops, setHops, yeast, se
       <CatalogBrowser open={browsing} inventory={{malts,hops,yeast,adj}}
         onAdopt={(category,row)=>{ adopt(category,row); setBrowsing(false); }}
         onClose={()=>setBrowsing(false)}/>
+
+      {/* Same panel, other direction: a row that is already on the shelf being
+          told which vendor product it is. Until now that link could only be
+          made in code, so a hand-typed ingredient was uncostable for good. */}
+      <CatalogBrowser open={!!linking} category={linking?.category} linkTo={linking?.item}
+        inventory={{malts,hops,yeast,adj}}
+        onLink={(category,name,fields)=>{ link(category,name,fields); setLinking(null); }}
+        onClose={()=>setLinking(null)}/>
       <div style={{fontSize:12,color:'#64748b',padding:'0 2px 8px'}}>
         Value is what's on the shelf at the price beside it; an ingredient with no price is
         left out of the total rather than counted as free. Archiving one (📦) hides it here

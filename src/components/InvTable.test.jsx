@@ -54,3 +54,40 @@ describe('InvTable with per-row units', () => {
     expect(setInvCost).toHaveBeenCalledWith('adj', 'Lactic Acid', '0.05', 'ml');
   });
 });
+
+// The vendor product a row points at has always been stored and never shown, so
+// a row pointing at nothing — and therefore costed at nothing forever — was
+// invisible. Prod carried "Candi Sugar, Dark" exactly like that.
+describe('InvTable product column', () => {
+  const onLink = vi.fn();
+
+  it('is absent entirely when linking is not wired up', () => {
+    render(<InvTable {...props} setter={vi.fn()} setInvCost={vi.fn()} />);
+    expect(screen.queryByText('Product')).not.toBeInTheDocument();
+  });
+
+  it('shows the SKU an import will price each row by', () => {
+    render(<InvTable {...props} setter={vi.fn()} setInvCost={vi.fn()} onLink={onLink} />);
+    expect(screen.getByText('MRAH1102')).toBeInTheDocument();   // 2-Row, from the curated map
+  });
+
+  // ⚠️ A button only where the row's own SKU decides. products.js wins for every
+  // name it maps, so offering to change those would offer something that does
+  // nothing.
+  it('offers Link… only on a row nothing maps, and reports the row it clicked', () => {
+    const setLink = vi.fn();
+    render(<InvTable items={[{ n: '2-Row', q: 1 }, { n: 'Candi Sugar, Dark', q: 0, u: 'each' }]}
+      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={setLink} />);
+    // In the adjunct category "2-Row" is mapped by nothing either, so both rows
+    // are linkable here — what matters is that the click carries the whole row.
+    fireEvent.click(screen.getAllByText('Link…')[1]);
+    expect(setLink).toHaveBeenCalledWith('adj', { n: 'Candi Sugar, Dark', q: 0, u: 'each' });
+  });
+
+  it('shows a mapped row as plain text, with no control', () => {
+    render(<InvTable items={[{ n: 'Candi Syrup', q: 45, u: 'lbs' }]}
+      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={onLink} />);
+    expect(screen.getByText('AZZZ1772')).toBeInTheDocument();
+    expect(screen.queryByText('Link…')).not.toBeInTheDocument();
+  });
+});
