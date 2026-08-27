@@ -2,6 +2,10 @@ import { useState } from "react";
 import { readPriceFile } from "../../lib/applyPrices";
 import { priceChanges } from "../../lib/priceChanges";
 import { parsePriceList } from "../../lib/parsePriceList";
+import { buildCatalog } from "../../lib/catalog";
+import { catalogChanges } from "../../lib/catalogChanges";
+import { defaultProductMap } from "../../lib/products";
+import { load as loadKey, save as saveKey } from "../../lib/repo";
 import { parseSpotHopPages, parseSpotHopDate, matchSpotHopPrices } from "../../lib/spotHops";
 import PriceReview from "./PriceReview";
 import HopPriceReview from "./HopPriceReview";
@@ -23,6 +27,14 @@ import { card, hdr, btn } from "../../styles";
 //
 // pdf.js is imported dynamically, on the first PDF only: it is far larger than
 // the whole app, and nobody should download a PDF parser to edit their inventory.
+//
+// The same parse feeds two things. Pricing only ever asked the file about the
+// ~30 SKUs Slackers buys; the other five hundred rows were parsed and dropped.
+// They are now kept as the vendor CATALOG — what the brewery *could* buy — so a
+// recipe can call for a malt that has never been in the building. The catalog
+// rides along with the price import rather than being its own upload, because
+// it is the same file: asking for it twice would be asking the brewer to do
+// bookkeeping the parser already did.
 
 const dateLabel = (iso) => {
   if (!iso) return null;
@@ -39,10 +51,42 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
 
   const inventory = { malts, hops, yeast, adj };
 
+  // The SKUs the brewery actually buys: what inventory points at, falling back
+  // to the curated default map. Only these are worth a "no longer on the list"
+  // alarm — the vendor drops products constantly and almost none are ours.
+  const mappedSkus = () => {
+    const skus = new Set();
+    for (const map of Object.values(defaultProductMap)) {
+      for (const sku of Object.values(map)) if (sku) skus.add(sku);
+    }
+    for (const rows of Object.values(inventory)) {
+      for (const r of rows ?? []) if (r?.sku) skus.add(r.sku);
+    }
+    return [...skus];
+  };
+
+  // Ingest the whole parsed list as the catalog, alongside the price change set.
+  //
+  // Failing softly on purpose: pricing is what the brewer came here to do, and
+  // a catalog that can't be read is no reason to refuse to show them what their
+  // ingredients now cost. A null catalog simply isn't offered.
+  const proposeCatalog = async (parsed, label) => {
+    try {
+      const { entries, counts } = buildCatalog(parsed.rows, {
+        source: label ?? null,
+        effective: parsed.effective ?? null,
+      });
+      const stored = await loadKey("catalog", []);
+      return { ...catalogChanges(stored, entries, mappedSkus()), counts };
+    } catch {
+      return null;
+    }
+  };
+
   const fail = (msg) => { setBusy(null); setPending(null); setHopPending(null); setStatus({ ok: false, msg }); };
 
   // A parsed {sku: {price}} map → the change set the review screen shows.
-  const propose = (priceBySku, source) => {
+  const propose = (priceBySku, source, catalog = null) => {
     const count = Object.keys(priceBySku).length;
     if (!count) {
       fail("No prices found in that file.");
@@ -50,7 +94,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     }
     setBusy(null);
     setStatus(null);
-    setPending({ source, result: priceChanges(inventory, priceBySku) });
+    setPending({ source, result: priceChanges(inventory, priceBySku), catalog });
   };
 
   const readJson = (file) => {
@@ -172,12 +216,13 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
       // anything is called unrecognised.
       const parsed = parsePriceList(lines);
       if (parsed.count) {
+        const catalog = await proposeCatalog(parsed, file.name);
         propose(parsed.prices, {
           label: file.name,
           effective: dateLabel(parsed.effective),
           count: parsed.count,
           conflicts: parsed.conflicts,
-        });
+        }, catalog);
         return;
       }
 
@@ -200,15 +245,30 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
     else readJson(file);
   };
 
-  const apply = () => {
+  const apply = async () => {
     const { next } = pending.result;
     const n = pending.result.changes.length;
+    const catalog = pending.catalog;
     setMalts(next.malts);
     setHops(next.hops);
     setYeast(next.yeast);
     setAdj(next.adj);
     setPending(null);
-    setStatus({ ok: true, msg: `Applied ${n} price change${n === 1 ? "" : "s"}.` });
+    const priced = `Applied ${n} price change${n === 1 ? "" : "s"}.`;
+
+    // Prices are already in state and saving themselves through the usual hook;
+    // the catalog is written here because it is not App state (it is hundreds of
+    // rows nothing else needs at mount). Reported separately for the same
+    // reason the change set reports three outcomes: a catalog that failed to
+    // save must not hide inside a message about prices that succeeded.
+    if (!catalog) { setStatus({ ok: true, msg: priced }); return; }
+    try {
+      await saveKey("catalog", catalog.next);
+      const added = catalog.added.length;
+      setStatus({ ok: true, msg: `${priced} Catalog now lists ${catalog.next.length} products${added ? ` (${added} new)` : ""}.` });
+    } catch (err) {
+      setStatus({ ok: false, msg: `${priced} But the product catalog couldn't be saved: ${err?.message || "unknown error"}. Reload and import again to retry it.` });
+    }
   };
 
   // Confirmed hop prices → the same {sku: {price}} map every other import
@@ -252,7 +312,7 @@ export default function PriceImport({ malts, setMalts, hops, setHops, yeast, set
         )}
 
         {pending && (
-          <PriceReview source={pending.source} result={pending.result}
+          <PriceReview source={pending.source} result={pending.result} catalog={pending.catalog}
             onApply={apply} onCancel={() => setPending(null)} />
         )}
 

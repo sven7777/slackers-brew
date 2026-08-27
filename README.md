@@ -47,7 +47,10 @@ either way.
   vendor's PDF price list, see exactly which prices would change, then apply —
   the spot hop list is read too, from its text when it has one and by OCR when
   it's a scan, with every price shown against the page it came from and editable
-  before anything is saved), and a
+  before anything is saved). The same upload also builds the **vendor product
+  catalog** — every product on the list, not only the ones you stock, so a recipe
+  can call for something the brewery has never bought — and tells you what the
+  vendor renamed, repacked, or stopped selling. Finally, a
   full export/import of all app data as JSON.
 
 ## Running Locally

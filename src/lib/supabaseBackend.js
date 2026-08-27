@@ -37,7 +37,7 @@ const CATEGORY = { malts: "malt", hops: "hop", yeast: "yeast", adj: "adj" };
 const RECIPE_FIELDS = [["m", "malt"], ["h", "hop"], ["y", "yeast"], ["a", "adj"], ["sa", "salt"]];
 const FIELD_BY_CATEGORY = { malt: "m", hop: "h", yeast: "y", adj: "a", salt: "sa" };
 
-const SHARED_KEYS = new Set([...Object.keys(CATEGORY), "recipes", "settings"]);
+const SHARED_KEYS = new Set([...Object.keys(CATEGORY), "recipes", "settings", "catalog"]);
 
 // Settings fields that live in the `prefs` JSONB column rather than one of
 // their own. Brewery identity earned columns; these are small brewery
@@ -80,6 +80,7 @@ export function createSupabaseBackend(client, localBackend = localStorageBackend
     seen.set(key, versions[key] ?? 0);
     if (key === "recipes") return loadRecipes(client, fallback);
     if (key === "settings") return loadSettings(client, fallback);
+    if (key === "catalog") return loadCatalog(client, fallback);
     return loadInventory(client, CATEGORY[key], key === "adj", fallback);
   }
 
@@ -118,6 +119,7 @@ export function createSupabaseBackend(client, localBackend = localStorageBackend
     await claim(key);
     if (key === "recipes") return saveRecipes(client, value);
     if (key === "settings") return saveSettings(client, value);
+    if (key === "catalog") return saveCatalog(client, value);
     return saveInventory(client, CATEGORY[key], value);
   }
 
@@ -178,6 +180,63 @@ async function saveInventory(client, category, items) {
     price_effective: it.pricedAt ?? null,
   }));
   const { error } = await client.from("inventory").insert(rows);
+  if (error) throw error;
+}
+
+// --- catalog (the whole vendor range, in `products`) -----------------------
+//
+// The `products` table has existed since migration 0008 but was never written
+// to: prices lived entirely on `inventory.cost_per_unit`, and the ~30 products
+// Slackers buys were described in code by products.js. This is the first writer.
+//
+// Deliberately NOT wired into App.jsx state. Every other shared key is a
+// usePersistentState hook loaded at mount, but the catalog is hundreds of rows
+// that only the price import and the ingredient picker ever need, and paying
+// for it on every page load would be a real cost for a list that changes about
+// once a month. It still routes through repo.load/save, so it keeps the CAS
+// staleness guard and the save chain that come with a shared key.
+
+async function loadCatalog(client, fallback) {
+  const { data, error } = await client
+    .from("products")
+    .select("sku,vendor,name,price,pack_qty,pack_unit,order_pack,category,source,effective")
+    .order("sku");
+  if (error) throw error;
+  if (!data || data.length === 0) return fallback;
+  return data.map((r) => ({
+    sku: r.sku,
+    name: r.name,
+    vendor: r.vendor,
+    category: r.category,
+    price: r.price,
+    packQty: r.pack_qty,
+    packUnit: r.pack_unit,
+    orderPack: r.order_pack,
+    source: r.source,
+    effective: r.effective,
+  }));
+}
+
+async function saveCatalog(client, entries) {
+  const del = await client.from("products").delete().neq("id", ZERO_UUID);
+  if (del.error) throw del.error;
+  if (!entries || entries.length === 0) return;
+  const rows = entries.map((e) => ({
+    sku: e.sku,
+    name: e.name,
+    vendor: e.vendor ?? null,
+    category: e.category ?? null,
+    price: e.price ?? null,
+    // Null, not 1, when the list gave no pack size: migration 0016 drops the
+    // NOT NULL for exactly this. A made-up denominator under a real price is
+    // the confidently-wrong number costPerUnit() returns null to avoid.
+    pack_qty: e.packQty ?? null,
+    pack_unit: e.packUnit ?? null,
+    order_pack: e.orderPack ?? null,
+    source: e.source ?? null,
+    effective: e.effective ?? null,
+  }));
+  const { error } = await client.from("products").insert(rows);
   if (error) throw error;
 }
 

@@ -42,9 +42,80 @@ function ChangeRow({ c }) {
   );
 }
 
-export default function PriceReview({ source, result, onApply, onCancel }) {
+// What ingesting the rest of the file would do to the vendor catalog.
+//
+// The price table above concerns the ~30 SKUs the brewery buys. This concerns
+// the other five hundred rows on the same page — the products it *could* buy —
+// and it reports the same way: what is new, what the vendor renamed or
+// repacked, and what it has stopped selling.
+function CatalogSummary({ catalog }) {
+  const { added, renamed, repacked, discontinued, counts, next } = catalog;
+  const nothing = added.length + renamed.length + repacked.length === 0;
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e2e8f0" }}>
+      <div style={sect}>Product catalog</div>
+      <p style={{ margin: "0 0 6px", fontSize: 13, color: "#475569" }}>
+        {nothing
+          ? `No new products — the catalog already lists all ${counts.total} on this file.`
+          : `${added.length} new product${added.length === 1 ? "" : "s"} would be added, for ${next.length} in total. These are what you can pick from when building a recipe.`}
+      </p>
+
+      {/* A pack size that moved is a price change wearing a cosmetic disguise:
+          it is the denominator every derived cost is divided by. */}
+      {repacked.length > 0 && (
+        <p style={{ margin: "0 0 6px", fontSize: 12, color: "#b45309" }}>
+          ⚠️ {repacked.length} product{repacked.length === 1 ? " has" : "s have"} been repacked
+          ({repacked.slice(0, 3).map((r) => `${r.name} ${r.from.qty ?? "?"}${r.from.unit ?? ""} → ${r.to.qty ?? "?"}${r.to.unit ?? ""}`).join("; ")}
+          {repacked.length > 3 ? `; and ${repacked.length - 3} more` : ""}). Pack size sets the per-unit
+          cost, so check these.
+        </p>
+      )}
+
+      {/* The failure this whole section exists to make impossible to miss. A
+          SKU that quietly stops appearing freezes its price at the last quote
+          and reads, everywhere else, as simply "not on this list". */}
+      {discontinued.length > 0 && (
+        <p style={{ margin: "0 0 6px", fontSize: 12, color: "#b91c1c", fontWeight: 600 }}>
+          ⚠️ {discontinued.length} product{discontinued.length === 1 ? "" : "s"} you buy{" "}
+          {discontinued.length === 1 ? "is" : "are"} no longer on this list:{" "}
+          {discontinued.map((d) => d.name).join(", ")}.{" "}
+          {discontinued.length === 1 ? "Its price" : "Their prices"} will stay frozen at the last quote
+          until you pick a replacement.
+        </p>
+      )}
+
+      <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>
+        {counts.total} products read · {Object.entries(counts.byCategory).map(([c, n]) => `${n} ${c}`).join(" · ")}
+        {counts.unclassified > 0 && ` · ${counts.unclassified} not yet sorted into a category`}
+        {renamed.length > 0 && ` · ${renamed.length} renamed by the vendor`}
+      </p>
+    </div>
+  );
+}
+
+export default function PriceReview({ source, result, catalog, onApply, onCancel }) {
   const [showRest, setShowRest] = useState(false);
   const { changes, unchanged, skipped } = result;
+  // The catalog can have work to do when no price moved at all — re-importing
+  // the same file the day after applying its prices is exactly that — so the
+  // button follows both, not just the price count.
+  const catalogWork = catalog
+    ? catalog.added.length + catalog.renamed.length + catalog.repacked.length
+    : 0;
+  const total = changes.length + catalogWork;
+
+  // Name the two kinds of change rather than summing them. "Apply 586 changes"
+  // is arithmetically true and useless: 23 repriced ingredients and 563 new
+  // catalog products are different acts with different consequences, and a
+  // single number invites the brewer to read the small one as the big one.
+  const applyLabel = () => {
+    if (total === 0) return "Apply no changes";
+    const parts = [];
+    if (changes.length) parts.push(`${changes.length} price change${changes.length === 1 ? "" : "s"}`);
+    if (catalogWork) parts.push(`${catalogWork} product${catalogWork === 1 ? "" : "s"}`);
+    return `Apply ${parts.join(" + ")}`;
+  };
 
   // Group changes by category so the table reads like the inventory does.
   const byCategory = Object.keys(categoryLabels)
@@ -112,12 +183,14 @@ export default function PriceReview({ source, result, onApply, onCancel }) {
         </table>
       )}
 
+      {catalog && <CatalogSummary catalog={catalog} />}
+
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button type="button" onClick={onApply} disabled={changes.length === 0}
-          style={{ ...btn, borderColor: "#f59e0b", background: changes.length ? "#fef3c7" : "#f1f5f9",
-                   color: changes.length ? "#92400e" : "#94a3b8", fontWeight: 700,
-                   cursor: changes.length ? "pointer" : "not-allowed" }}>
-          Apply {changes.length || "no"} change{changes.length === 1 ? "" : "s"}
+        <button type="button" onClick={onApply} disabled={total === 0}
+          style={{ ...btn, borderColor: "#f59e0b", background: total ? "#fef3c7" : "#f1f5f9",
+                   color: total ? "#92400e" : "#94a3b8", fontWeight: 700,
+                   cursor: total ? "pointer" : "not-allowed" }}>
+          {applyLabel()}
         </button>
         <button type="button" onClick={onCancel} style={btn}>Cancel</button>
       </div>
