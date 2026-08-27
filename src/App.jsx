@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { defMalts, defHops, defYeast, defAdj, defRecipes, defSettings, tabNames } from "./lib/defaults";
 import { tabBtn } from "./styles";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SaveErrorBanner from "./components/SaveErrorBanner";
+import StaleDataBanner from "./components/StaleDataBanner";
+import { watchFreshness } from "./lib/freshness";
 import InventoryTab from "./features/inventory/InventoryTab";
 import RecipesTab from "./features/recipes/RecipesTab";
 import OrderTab from "./features/order/OrderTab";
@@ -27,6 +30,11 @@ export default function App() {
   // did exactly that with Whirlfloc, and any hand-typed name does it too. This
   // used to map over the list, match nothing, and silently do nothing, so the
   // price field simply refused to accept input. Create the row instead.
+  // A tab that has been open a while may be showing data somebody else has
+  // since changed. Ask when it comes back into view — never on a timer, and
+  // never by silently replacing what's on screen. See lib/freshness.js.
+  useEffect(() => watchFreshness(), []);
+
   const SETTER = { malt: setMalts, hop: setHops, yeast: setYeast, adj: setAdj };
   const setInvCost = (category, name, raw, unit) => {
     const v = raw === "" ? null : parseFloat(raw);
@@ -52,6 +60,7 @@ export default function App() {
         {tabNames.map((t,i)=><button key={i} style={tabBtn(tab===i)} onClick={()=>setTab(i)}>{t}</button>)}
       </div>
 
+      <StaleDataBanner/>
       <SaveErrorBanner/>
 
       {/* Keyed by tab so switching tabs clears a crashed panel — the nav stays

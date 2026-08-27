@@ -17,7 +17,10 @@ class Query {
     this.returnRows = false;
   }
   select(cols) {
-    if (this.op === "insert") this.returnRows = true;
+    // .select() after a write is "return the affected rows" (how the
+    // version compare-and-swap learns whether it matched anything), not a
+    // separate query.
+    if (this.op === "insert" || this.op === "update") this.returnRows = true;
     else this.op = "select";
     this.cols = cols;
     return this;
@@ -26,6 +29,7 @@ class Query {
   neq(c, v) { this.filters.push(["neq", c, v]); return this; }
   order(c) { this.orderCol = c; return this; }
   insert(rows) { this.op = "insert"; this.payload = rows; return this; }
+  update(row) { this.op = "update"; this.payload = row; return this; }
   upsert(row) { this.op = "upsert"; this.payload = row; return this; }
   delete() { this.op = "delete"; return this; }
   maybeSingle() { this.single = true; return this; }
@@ -77,6 +81,13 @@ class Query {
         ? { data: rows.map((r) => this.#project(r)), error: null }
         : { error: null };
     }
+    if (this.op === "update") {
+      const hit = t.filter((r) => this.#match(r));
+      for (const r of hit) Object.assign(r, this.payload);
+      return this.returnRows
+        ? { data: hit.map((r) => this.#project(r)), error: null }
+        : { error: null };
+    }
     if (this.op === "upsert") {
       const row = this.payload;
       const idx = t.findIndex((r) => r.id === row.id);
@@ -95,6 +106,11 @@ function fakeClient() {
     recipe_ingredients: [],
     recipe_schedule: [],
     settings: [],
+    data_versions: [
+      { key: "malts", version: 0 }, { key: "hops", version: 0 },
+      { key: "yeast", version: 0 }, { key: "adj", version: 0 },
+      { key: "recipes", version: 0 }, { key: "settings", version: 0 },
+    ],
     _seq: 0,
     _failNext: false,
   };
@@ -276,5 +292,79 @@ describe("errors", () => {
   it("save throws on a backend error", async () => {
     client.store._failNext = true;
     await expect(backend.save("settings", { name: "x" })).rejects.toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stale-write protection (migration 0014). The failure this prevents: a tab
+// loads the recipe list, someone else adds two recipes, and the first tab's
+// next save — a whole-list delete-then-insert — writes its old list over them.
+// ---------------------------------------------------------------------------
+
+describe("stale writes", () => {
+  const version = (key) => client.store.data_versions.find((r) => r.key === key)?.version;
+
+  it("bumps the key's version on a successful save", async () => {
+    await backend.load("malts", []);
+    await backend.save("malts", [{ n: "Pils", q: 1 }]);
+    expect(version("malts")).toBe(1);
+  });
+
+  it("refuses a save when the key moved after this tab read it", async () => {
+    await backend.load("recipes", []);
+    // Another writer, between this tab's load and its save.
+    client.store.data_versions.find((r) => r.key === "recipes").version = 7;
+    client.store.recipes = [{ id: "r1", name: "Imported By Someone Else", ord: 0 }];
+
+    await expect(backend.save("recipes", [{ n: "Stale List" }])).rejects.toMatchObject({ stale: true });
+  });
+
+  it("does not touch a single row when it refuses", async () => {
+    await backend.load("recipes", []);
+    client.store.recipes = [{ id: "r1", name: "Theirs", ord: 0 }];
+    client.store.recipe_ingredients = [{ recipe_id: "r1", category: "malt", name: "Pils", qty: 5, ord: 0 }];
+    client.store.data_versions.find((r) => r.key === "recipes").version = 7;
+
+    await expect(backend.save("recipes", [{ n: "Mine" }])).rejects.toThrow();
+    expect(client.store.recipes).toEqual([{ id: "r1", name: "Theirs", ord: 0 }]);
+    expect(client.store.recipe_ingredients).toHaveLength(1);
+  });
+
+  it("lets the same tab keep saving after its own writes", async () => {
+    await backend.load("hops", []);
+    await backend.save("hops", [{ n: "Citra", q: 1 }]);
+    await backend.save("hops", [{ n: "Citra", q: 2 }]);
+    await backend.save("hops", [{ n: "Citra", q: 3 }]);
+    expect(version("hops")).toBe(3);
+    expect(await backend.load("hops", null)).toEqual([{ n: "Citra", q: 3 }]);
+  });
+
+  it("writes anyway when the key has no version row — nothing to be stale against", async () => {
+    client.store.data_versions = [];
+    await backend.load("malts", []);
+    await backend.save("malts", [{ n: "Pils", q: 1 }]);
+    expect(client.store.inventory).toHaveLength(1);
+    expect(version("malts")).toBe(1);
+  });
+
+  it("reports which loaded keys have moved, and only those", async () => {
+    await backend.load("malts", []);
+    await backend.load("recipes", []);
+    expect(await backend.staleKeys()).toEqual([]);
+
+    client.store.data_versions.find((r) => r.key === "recipes").version = 3;
+    client.store.data_versions.find((r) => r.key === "yeast").version = 9; // never loaded here
+    expect(await backend.staleKeys()).toEqual(["recipes"]);
+  });
+
+  it("a tab's own save doesn't make it look stale to itself", async () => {
+    await backend.load("settings", { name: "X" });
+    await backend.save("settings", { name: "Y" });
+    expect(await backend.staleKeys()).toEqual([]);
+  });
+
+  it("leaves per-device keys alone — they never touch the version table", async () => {
+    await backend.save("tab", 2);
+    expect(client.store.data_versions.every((r) => r.version === 0)).toBe(true);
   });
 });

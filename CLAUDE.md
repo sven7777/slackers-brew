@@ -24,8 +24,8 @@ npm run test:watch # Vitest watch mode
 src/
   components/   # reusable tables: InvTable, RecEditTable, ScheduleEditTable
                 #   — plus StyleSelect (BJCP style picker), PriceInput (the one
-                #   cost-per-unit field) and the two failure surfaces:
-                #   ErrorBoundary, SaveErrorBanner
+                #   cost-per-unit field) and the three failure surfaces:
+                #   ErrorBoundary, SaveErrorBanner, StaleDataBanner
   features/     # one folder per tab: inventory/, recipes/, order/, settings/
                 #   — plus auth/ (Supabase session + login gate). recipes/ also
                 #   holds the BrewSheetPanel + CellarPanel sub-views.
@@ -40,7 +40,7 @@ src/
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
-supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0011)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0014)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
@@ -69,6 +69,13 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
 **Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
+
+⚠️ **A long-open tab is stale, and a stale save used to be able to delete data.** The app reads each key once on mount and never refetches — no polling, no realtime — so a tab open since before an edit shows the data as of the moment it opened (2026-08-27: a tab predating an import was still offering the old recipe list, and the two imported recipes looked lost). The display was the harmless half: every save is a whole-list delete-then-insert, so editing anything in that tab would have written the old list over the new recipes and deleted them. Two members share one database; this needs two windows, not a day-old tab. Two mechanisms, in [src/lib/freshness.js](src/lib/freshness.js) and migration 0014:
+
+- **Say so.** On tab focus (and on becoming visible), `repo.staleKeys()` asks the backend which loaded keys have moved, and [StaleDataBanner](src/components/StaleDataBanner.jsx) offers a reload. It **reports, never refetches** — silently swapping the data under an open editor would throw away whatever is half-typed.
+- **Refuse the write.** `data_versions` holds one counter per shared key. A writer claims its slot with a compare-and-swap (`update … where key = $1 and version = $expected`) and touches data rows only if that matched, so a losing writer never reaches the delete. A refusal raises `StaleWriteError` ([src/lib/staleWrite.js](src/lib/staleWrite.js)), which SaveErrorBanner renders with **Reload instead of Retry** — retrying a stale write is precisely the overwrite being prevented. It is a compare-and-swap, not a lock: a crash between claim and insert leaves the version bumped and the data half-written, exactly as a crash mid-save does today.
+
+The localStorage backend implements the same `staleKeys()` (two tabs share one origin's storage; there the stored string *is* the version) but has no CAS — a local save can't fail, and that path stays synchronous.
 
 **Crash containment.** [ErrorBoundary](src/components/ErrorBoundary.jsx) wraps the tab panel in App.jsx (keyed by `tab`, so switching tabs clears a crashed panel and the nav — which sits outside it — is always usable) and the whole tree in main.jsx. Three white screens have shipped, each a *different* unguarded read (a missing recipe array, a column prod hadn't migrated yet, a stale `selR` indexing past the end of the list), so the guard is deliberately generic rather than another targeted null check. Keep it that way: prefer fixing the class of failure over adding the next specific check.
 
