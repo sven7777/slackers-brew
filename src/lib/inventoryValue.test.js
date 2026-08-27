@@ -35,7 +35,7 @@ describe('categoryValue', () => {
   const malts = [
     { n: '2-Row', q: 100, cpu: 0.72 },
     { n: 'Munich', q: 55, cpu: 0.9 },
-    { n: 'Carafa III', q: 10 },        // unpriced
+    { n: 'Chocolate', q: 10 },        // unpriced
   ];
 
   it('sums the priced rows and counts the rest', () => {
