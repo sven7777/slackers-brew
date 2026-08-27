@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import SaveErrorBanner from "./SaveErrorBanner";
 import { reportFailure, clearFailure, resetFailures } from "../lib/saveStatus";
+import { StaleWriteError } from '../lib/staleWrite';
 
 beforeEach(() => act(() => resetFailures()));
 
@@ -46,5 +47,37 @@ describe("SaveErrorBanner", () => {
     expect(screen.getAllByRole("alert")).toHaveLength(2);
     expect(screen.getByText(/Recipes didn’t save/)).toBeInTheDocument();
     expect(screen.getByText(/Settings didn’t save/)).toBeInTheDocument();
+  });
+});
+
+// A refused write is not a failed write. Retrying a stale save is exactly the
+// act of overwriting somebody else's newer data — the thing migration 0014
+// exists to prevent — so this variant must never offer it.
+describe('SaveErrorBanner on a refused (stale) write', () => {
+  it('says the page is out of date and offers Reload, not Retry', () => {
+    const retry = vi.fn();
+    const onReload = vi.fn();
+    reportFailure('recipes', new StaleWriteError('recipes'), retry);
+    render(<SaveErrorBanner onReload={onReload} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(/out of date/i);
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    expect(onReload).toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();  // never the retry
+  });
+
+  it('warns that the unsaved edit goes with the reload', () => {
+    reportFailure('malts', new StaleWriteError('malts'), vi.fn());
+    render(<SaveErrorBanner />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/edit you just made will be lost/i);
+  });
+
+  it('still offers Retry for an ordinary failure', () => {
+    reportFailure('hops', new Error('network died'), vi.fn());
+    render(<SaveErrorBanner />);
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
 });
