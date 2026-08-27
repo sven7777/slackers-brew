@@ -26,15 +26,22 @@ import { maltNames, hopNames, yeastNames, adjNames, adjUnits, saltNames, dryHopC
 // Only non-identity mappings are listed; a raw name that already equals an app
 // catalog entry passes through unchanged. Keys are trimmed before lookup.
 //
-// Do not alias "Carafa III" and "Carafa Special III" onto each other: Special
-// is the dehusked malt, and they are separate catalog entries. (The catalog
-// once misspelled the dehusked one "Carafe III" and this map papered over it;
-// migration 0007 split them.)
+// Weyermann makes two Carafa III malts — husked, and "Special" (dehusked, color
+// without husk astringency) — but Slackers only ever buys the dehusked one, so
+// the catalog carries one entry and every spelling of the name folds onto it
+// (Derek, 2026-08-26). Migration 0007 split them apart on the theory that they
+// were two stocked malts; 0013 merged them back on the brewery's own answer.
+// Don't re-split without one: an unaliased name here becomes a second inventory
+// row for the same sack, which is the mess 0013 cleaned up.
 
 const ALIAS_MALT = {
   "Aromatic Malt": "Aromatic",
   "Black (Patent) Malt": "Black Patent",
   "Cara-Pils/Dextrine": "Carafoam",
+  "Carafa III": "Carafa Special III",
+  "Carafa Special Type 3": "Carafa Special III",
+  "Carafa Type 3": "Carafa Special III",
+  "Carafe III": "Carafa Special III",
   "Caramunich Type 1": "Caramunich I",
   "Chocolate Malt": "Chocolate",
   "Corn, Flaked": "Flaked Corn",

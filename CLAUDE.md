@@ -82,8 +82,17 @@ The localStorage backend implements the same `staleKeys()` (two tabs share one o
 ## Data Model
 
 Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
-- `defMalts` — 20 malts, quantity in lbs (Carafa III and Carafa Special III are
-  distinct entries — "Special" is the dehusked malt; don't collapse them)
+- `defMalts` — 19 malts, quantity in lbs. ⚠️ **One Carafa entry, not two.**
+  Weyermann makes both a husked Carafa III and a dehusked "Special" — but
+  Slackers only ever buys the dehusked one (Derek, 2026-08-26), so the catalog
+  carries `Carafa Special III` alone and every other spelling folds onto it
+  (the `.bsmx` importer aliases `Carafa III` / `Carafe III` / the "Type 3"
+  forms). Migration 0007 split them on the theory that both were stocked, which
+  left prod with THREE rows for one sack — its rename was guarded against the
+  unique index and so skipped instead of merging, orphaning the misspelled row.
+  **0013 merged them back**; don't re-split without the brewery saying it now
+  buys both, because an unaliased name here becomes a second inventory row for
+  the same malt
 - `defHops` — 14 hops, quantity in oz
 - `defYeast` — 8 yeast strains, quantity in packs
 - `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)
