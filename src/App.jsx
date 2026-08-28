@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { defMalts, defHops, defYeast, defAdj, defRecipes, defSettings, tabNames } from "./lib/defaults";
 import { tabBtn } from "./styles";
@@ -9,6 +9,7 @@ import { watchFreshness } from "./lib/freshness";
 import InventoryTab from "./features/inventory/InventoryTab";
 import RecipesTab from "./features/recipes/RecipesTab";
 import OrderTab from "./features/order/OrderTab";
+import AnalyticsTab from "./features/analytics/AnalyticsTab";
 import SettingsTab from "./features/settings/SettingsTab";
 
 export default function App() {
@@ -21,6 +22,15 @@ export default function App() {
   const [orders, setOrders] = usePersistentState("orders", () => defRecipes.map(()=>({sel:false,dbl:false})));
   const [recs, setRecs] = usePersistentState("recipes", () => structuredClone(defRecipes));
   const [settings, setSettings] = usePersistentState("settings", { ...defSettings });
+
+  // Which Recipes sub-view to open on. The tab owns its sub-nav (local state,
+  // reset each time the tab mounts), but Analytics needs to hand off INTO one
+  // view of it — a cost row that dropped you on the Edit form would make you
+  // find the recipe again. Deliberately not persisted: it is a handoff, not a
+  // preference, and the nav buttons below clear it so arriving by hand always
+  // starts where it always did.
+  const [recipeView, setRecipeView] = useState("edit");
+  const openRecipeCost = (i) => { setSelR(i); setRecipeView("cost"); setTab(1); };
 
   // Ingredient prices live on inventory rows, so the Cost view edits inventory
   // even though it renders inside a recipe. One setter keeps that in App.jsx
@@ -77,7 +87,7 @@ export default function App() {
         {settings.tagline && <p style={{margin:'2px 0 0',fontSize:13,color:'#64748b'}}>{settings.tagline}</p>}
       </div>
       <div style={{display:'flex',justifyContent:'center',borderBottom:'1px solid #e2e8f0',marginBottom:16}}>
-        {tabNames.map((t,i)=><button key={i} style={tabBtn(tab===i)} onClick={()=>setTab(i)}>{t}</button>)}
+        {tabNames.map((t,i)=><button key={i} style={tabBtn(tab===i)} onClick={()=>{setTab(i);setRecipeView("edit");}}>{t}</button>)}
       </div>
 
       <StaleDataBanner/>
@@ -87,9 +97,10 @@ export default function App() {
           outside the boundary, so a broken tab is always escapable. */}
       <ErrorBoundary key={tab}>
         {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost} adopt={adoptIngredient} link={linkIngredient}/>}
-        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings} adopt={adoptIngredient}/>}
+        {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings} adopt={adoptIngredient} initialView={recipeView}/>}
         {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
-        {tab===3 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
+        {tab===3 && <AnalyticsTab recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj} settings={settings} openRecipeCost={openRecipeCost}/>}
+        {tab===4 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
       </ErrorBoundary>
     </div>
   );
