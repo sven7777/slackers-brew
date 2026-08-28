@@ -39,12 +39,23 @@ const iconBtn = {
 };
 const archiveBtn = { ...iconBtn, opacity: 0.4 };
 
-// Reads as the value it sets, not as a command: an unlinked row says "Link…",
-// a linked one shows the SKU an import will price it by.
+// A row that needs an answer asks for one: "Link…", in words, because nothing
+// else on screen says this ingredient is priced by nothing.
+//
+// ⚠️ Once it HAS an answer the words go away. Printing the resolved SKU here
+// turned every linked and every adopted row into a permanent `AZZZ1771` button
+// sitting in the name cell — a vendor's internal code, shown as a control, in
+// the one column a brewer scans for ingredient names. The SKU is an attribute
+// of the row, not a thing to read off the shelf; it belongs in the tooltip,
+// exactly where a `defaultProductMap` row has always carried it. What stays is
+// the faint chain, in the archive button's idiom: an affordance, not data, so a
+// link pointed at the wrong product is still fixable without reading as a
+// column of codes.
 const linkBtn = {
   border: '1px solid #e2e8f0', background: '#fff', borderRadius: 6, cursor: 'pointer',
   color: '#64748b', fontSize: 11, lineHeight: 1, padding: '3px 7px', fontFamily: 'inherit',
 };
+const relinkBtn = { ...linkBtn, opacity: 0.4, padding: '3px 5px' };
 
 // Editable inventory table for one ingredient category: quantity on hand, the
 // price per unit, and what that stock is worth.
@@ -89,16 +100,19 @@ export default function InvTable({ items, setter, unit, category, setInvCost, co
                 ~525 and shoved the archive button off the right edge (two cards
                 on a 900px page is the whole width budget), and printing the SKU
                 beside every name wrapped 53 of 55 rows onto two lines and broke
-                `HOP-CAS` across the line break. So a mapped row shows exactly
-                what it always showed, and carries its product in the tooltip;
-                only a row whose OWN sku decides gets a visible control. There
-                are two of those on the whole shelf. */}
+                `HOP-CAS` across the line break. So a row that HAS its product
+                — mapped in code, adopted, or linked — shows exactly what it
+                always showed and carries the SKU in the tooltip; the words are
+                spent only on a row that still has no product at all. */}
             <td style={c} title={sku ? `Priced as ${sku}` : undefined}>
               {it.n}{it.u?<span style={{color:'#94a3b8',fontSize:11}}> ({it.u})</span>:null}
               {archived && <span style={{color:'#94a3b8',fontSize:11,fontStyle:'italic'}}> · archived</span>}
               {onLink && isLinkable(category, it) && (
-                <> <button type="button" style={linkBtn} onClick={()=>onLink(category, it)}
-                     title={`Say which vendor product ${it.n} is`}>{sku || 'Link…'}</button></>
+                <> <button type="button" style={sku ? relinkBtn : linkBtn} onClick={()=>onLink(category, it)}
+                     title={sku ? `Priced as ${sku} — change which product ${it.n} is`
+                                : `Say which vendor product ${it.n} is`}
+                     aria-label={sku ? `Change the vendor product for ${it.n}` : `Link ${it.n} to a vendor product`}>
+                     {sku ? '🔗' : 'Link…'}</button></>
               )}
             </td>
             <td style={n}><input type="number" step="0.5" value={it.q} onChange={e=>updInv(setter,index,e.target.value)} style={inp} aria-label={`On hand, ${it.n}`}/></td>

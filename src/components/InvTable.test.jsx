@@ -89,9 +89,22 @@ describe('InvTable product linking', () => {
     expect(onLink).toHaveBeenCalledWith('adj', { n: 'Candi Sugar, Dark', q: 0, u: 'each' });
   });
 
-  it('shows the linked SKU on the control once a row has one', () => {
+  // ⚠️ The words are for a row with NO product. Once one is linked (or
+  // adopted, which is the same row shape), the control stops printing the
+  // vendor's code in the ingredient column and carries it in the tooltip —
+  // like every mapped row — leaving only the faint chain that makes a wrong
+  // link fixable.
+  it('drops the SKU out of the name cell once a row is linked', () => {
+    const onLink = vi.fn();
     render(<InvTable items={[{ n: 'Candi Sugar, Dark', q: 0, u: 'lbs', sku: 'AZZZ1771' }]}
-      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={vi.fn()} />);
-    expect(screen.getByText('AZZZ1771')).toBeInTheDocument();
+      unit="" category="adj" setter={vi.fn()} setInvCost={vi.fn()} onLink={onLink} />);
+    expect(screen.queryByText('AZZZ1771')).not.toBeInTheDocument();
+    expect(screen.queryByText('Link…')).not.toBeInTheDocument();
+    expect(screen.getByText('Candi Sugar, Dark')).toHaveAttribute('title', 'Priced as AZZZ1771');
+
+    const relink = screen.getByLabelText('Change the vendor product for Candi Sugar, Dark');
+    expect(relink).toHaveAttribute('title', 'Priced as AZZZ1771 — change which product Candi Sugar, Dark is');
+    fireEvent.click(relink);
+    expect(onLink).toHaveBeenCalledWith('adj', { n: 'Candi Sugar, Dark', q: 0, u: 'lbs', sku: 'AZZZ1771' });
   });
 });
