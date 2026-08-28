@@ -36,11 +36,14 @@ const CAT_OF = { m: "malt", h: "hop", y: "yeast", a: "adj" };
 // temp, ingredient lists with stage/time, water salts, cellar schedule), its
 // printable Brew Sheet, and its printable Cellar Sheet. Reset to preset / import
 // .bsmx live in the Edit view.
-export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, yeast, adj, setInvCost, settings, adopt }) {
+export default function RecipesTab({ recs, setRecs, selR, setSelR, malts, hops, yeast, adj, setInvCost, settings, adopt, initialView = "edit" }) {
   const [addSel, setAddSel] = useState({ m: "", h: "", y: "", a: "", sa: "", sc: "" });
   const [importing, setImporting] = useState(false);
   const [browsing, setBrowsing] = useState(null); // which table opened the catalog
-  const [view, setView] = useState("edit");
+  // The sub-nav is this tab's own state and resets whenever the tab mounts.
+  // `initialView` only seeds it, so the Analytics tab can hand off straight
+  // into a beer's Cost view; picking Recipes from the nav still starts on Edit.
+  const [view, setView] = useState(initialView);
   const [costDbl, setCostDbl] = useState(false);
   const r = recs[selR];
 

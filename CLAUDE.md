@@ -27,7 +27,8 @@ src/
                 #   cost-per-unit field), CatalogBrowser + AdoptDialog (the one
                 #   bridge from vendor catalog to shelf) and the three failure
                 #   surfaces: ErrorBoundary, SaveErrorBanner, StaleDataBanner
-  features/     # one folder per tab: inventory/, recipes/, order/, settings/
+  features/     # one folder per tab: inventory/, recipes/, order/, analytics/,
+                #   settings/
                 #   — plus auth/ (Supabase session + login gate). recipes/ also
                 #   holds the BrewSheetPanel + CellarPanel sub-views.
   hooks/        # usePersistentState (async-aware; routes through repo.js)
@@ -38,6 +39,7 @@ src/
                 #   — incl. hopCatalog.js (the spot hop list as catalog rows)
                 #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
+                #   — incl. analytics.js (every recipe costed, side by side)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
                 #   and, off the same parse, catalog → catalogChanges (the
@@ -52,7 +54,7 @@ supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0017)
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
 
-**Four tabs:**
+**Five tabs:**
 - **Inventory** — editable quantity inputs for all ingredients, **plus each
   one's cost per unit and what that stock is worth** (`q × cpu`, via
   [inventoryValue.js](src/lib/inventoryValue.js)): per-category subtotals and a
@@ -86,11 +88,31 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
+- **Analytics** — every beer costed side by side ([analytics.js](src/lib/analytics.js) +
+  [AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx)): batch total, cost/bbl,
+  cost/keg, cost/pint per recipe, sortable on any column, plus brewery-wide averages
+  and the cheapest/dearest beer per bbl. It adds **no arithmetic of its own** — every
+  figure comes from the same `computeRecipeCost()` the Cost panel calls, so a number
+  here and that recipe's own Cost view can't drift apart. Each recipe is costed against
+  **its own** `batchVolume()`, never one shared denominator, or a beer with a measured
+  keg yield would be compared on the brewery default. cogs.js's honesty rule carries up
+  a level: a recipe with an unpriced ingredient shows the priced part as a **floor**
+  (marked `+`), is excluded from the averages, and the tiles print how many were left
+  out — an average over 14 beers must never read as the average of 18. ⚠️ A recipe with
+  NO ingredients totals $0 and reports nothing missing, which would read as a beer that
+  costs nothing to brew; it's flagged `empty` and kept out of every statistic. The
+  **blockers** table is the payoff the per-recipe warnings can't give: unpriced
+  ingredients ranked by how many beers each one holds up, because each Cost view only
+  ever sees its own gap. Rows are **per single batch** — doubling scales ingredients
+  and volume together, so only the batch total would move and nothing about the ranking
+  would. Clicking a beer hands off into its Cost view (`openRecipeCost` in App.jsx →
+  RecipesTab's `initialView`; the sub-nav is still the tab's own state, and the nav
+  buttons reset it, so arriving by hand still starts on Edit)
 - **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), and data backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
-**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`.
+**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`. ⚠️ `tab` is a persisted INDEX into `tabNames`, so inserting a tab renumbers the ones after it — adding Analytics at 3 moved Settings from 3 to 4, and a stored `tab` lands somewhere new exactly once. Harmless because every panel is rendered on an explicit `tab===n`, so an index off the end shows nothing rather than crashing; append rather than insert if that one-time jump ever matters.
 
 ⚠️ **A long-open tab is stale, and a stale save used to be able to delete data.** The app reads each key once on mount and never refetches — no polling, no realtime — so a tab open since before an edit shows the data as of the moment it opened (2026-08-27: a tab predating an import was still offering the old recipe list, and the two imported recipes looked lost). The display was the harmless half: every save is a whole-list delete-then-insert, so editing anything in that tab would have written the old list over the new recipes and deleted them. Two members share one database; this needs two windows, not a day-old tab. Two mechanisms, in [src/lib/freshness.js](src/lib/freshness.js) and migration 0014:
 

@@ -102,7 +102,7 @@ export const adjUnits = Object.fromEntries(defAdj.map(([n,,u])=>[n,u]));
 export const saltNames = defSalts;
 
 // Tabs, in display order.
-export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Settings"];
+export const tabNames = ["Inventory", "Recipes", "Order Calculator", "Analytics", "Settings"];
 
 // Default brewery identity, editable in the Settings tab.
 // `postBoilYield` (gal off the kettle) and `lossPct` (kettle → packaged: trub,
