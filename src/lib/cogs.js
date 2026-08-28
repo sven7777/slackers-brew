@@ -22,13 +22,13 @@
 import { defSettings } from "./defaults";
 import { compareNames } from "./sortNames";
 
-const GAL_PER_BBL = 31;
+export const GAL_PER_BBL = 31;
 const KEGS_PER_BBL = 2; // a half-barrel keg is 15.5 gal
 export const GAL_PER_KEG = GAL_PER_BBL / KEGS_PER_BBL;
 // A 16 oz pint, so 8 to the gallon and 248 to the barrel. This is cost per pint
 // of PACKAGED beer — it does not model taproom pour loss (foam, line purge,
 // tasters), so the cost of a pint actually sold is somewhat higher.
-const PINTS_PER_BBL = GAL_PER_BBL * 8;
+export const PINTS_PER_BBL = GAL_PER_BBL * 8;
 
 // Every money figure is rounded UP to the cent. Costing should never come in
 // under what a batch actually costs, so a fraction of a cent always rounds

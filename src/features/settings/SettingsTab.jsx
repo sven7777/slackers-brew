@@ -1,6 +1,7 @@
 import { breweryEmojis, defSettings } from "../../lib/defaults";
 import { batchVolume, fmtLossPct, GAL_PER_KEG } from "../../lib/cogs";
 import { card, hdr, btn, inp } from "../../styles";
+import CostInputs from "./CostInputs";
 import DataBackup from "./DataBackup";
 import PriceImport from "./PriceImport";
 
@@ -144,6 +145,8 @@ export default function SettingsTab({ settings, setSettings, malts, setMalts, ho
           )}
         </div>
       </div>
+
+      <CostInputs settings={settings} setSettings={setSettings} />
 
       <PriceImport malts={malts} setMalts={setMalts} hops={hops} setHops={setHops}
         yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} />
