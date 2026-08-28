@@ -25,7 +25,9 @@ either way.
   price per pound (or ounce, or pitch) is worked out and shown before you commit.
   An ingredient nothing maps to a vendor product — one you typed in yourself —
   shows a **Link…** control; pointing it at a product on the list prices it and
-  keeps it priced on every import after that.
+  keeps it priced on every import after that. Once it is linked the words give
+  way to a faint 🔗 (hover any ingredient to see which product prices it), so
+  the wrong link is still fixable without a column of vendor codes.
 - **Recipes** — pick a recipe once, then switch between four views of it:
   - **Edit** — name, style, target gravities, mash and fermentation temps, plus
     the ingredient lists per recipe; add or remove ingredients across malts,

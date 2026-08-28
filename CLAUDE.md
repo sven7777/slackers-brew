@@ -215,7 +215,13 @@ created implicitly by the price field (the Whirlfloc case). Prod carried
 with nothing on screen saying which product it should be. On the Inventory tab, a row
 whose own SKU decides carries a small `Link…` control beside its name, opening
 the same browser in link mode; a mapped row is untouched and names its product
-in the tooltip.
+in the tooltip. ⚠️ **The words are spent only on a row that has NO product.**
+Once one is linked — and every adopted row is born that way — the control stops
+printing the resolved SKU and becomes a faint 🔗, with the SKU in the tooltip
+exactly as a mapped row carries it: a vendor's internal code (`AZZZ1771`) shown
+as a button in the ingredient column read as leftover UI, and it appeared on
+every row the catalog work had touched, not the two the shelf started with. The
+glyph stays because a link pointed at the wrong product must still be fixable.
 
 ⚠️ **That control is in the NAME cell, and only on rows that need it, because
 the inventory tables have no width left.** Two cards on a 900px page gives each
