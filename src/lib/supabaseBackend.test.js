@@ -211,6 +211,22 @@ describe("settings", () => {
     expect(await backend.load("settings", null)).toEqual(s);
   });
 
+  // The operating-cost model puts ~20 inputs on settings. They ride as ONE
+  // nested `costs` object precisely so this round-trip can't rot the way the
+  // batch-volume fields above did — a new cost input needs no backend change.
+  it("round-trips the nested operating-cost object whole", async () => {
+    const costs = {
+      batchesPerYear: 40, rent: 6000, permitType: "mb",
+      fermenters: [{ label: "7 BBL", gal: 250 }],
+    };
+    const s = { name: "Slackers", tagline: "beer", emoji: "🍺", logo: null, costs };
+    await backend.save("settings", s);
+    expect(client.store.settings[0].prefs.costs).toEqual(costs);
+    const loaded = await backend.load("settings", null);
+    expect(loaded.costs).toEqual(costs);
+    expect(loaded.costs.fermenters[0].gal).toBe(250);
+  });
+
   it("leaves a cleared pref absent, so it reads as unset rather than zero", async () => {
     await backend.save("settings", { name: "Slackers", tagline: "", emoji: "🍺", logo: null,
       postBoilYield: null, avgKegs: "" });

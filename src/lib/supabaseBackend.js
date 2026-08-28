@@ -50,7 +50,13 @@ const SHARED_KEYS = new Set([...Object.keys(CATEGORY), "recipes", "settings", "c
 // default. Costing quietly ran against 150 gal / 33% no matter what Settings
 // showed. Anything added to the settings object from here on belongs in this
 // list or in a column.
-const SETTINGS_PREFS = ["postBoilYield", "lossPct", "avgKegs"];
+//
+// `costs` is deliberately ONE nested object rather than a field per input: the
+// overhead/pricing model adds ~20 of them and will add more, and every one
+// added here individually is another chance to repeat exactly the failure
+// described above. One entry covers all of them, now and later — see
+// lib/overhead.js.
+const SETTINGS_PREFS = ["postBoilYield", "lossPct", "avgKegs", "costs"];
 
 export function createSupabaseBackend(client, localBackend = localStorageBackend) {
   // The version each key was at when THIS tab last read or wrote it. Everything
