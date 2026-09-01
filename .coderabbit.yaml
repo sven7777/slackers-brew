@@ -1,0 +1,145 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit — a second reviewer on PRs. Advisory only.
+#
+# ⚠️ CodeRabbit must never gate a merge. Merging to `main` runs
+# `supabase db push` against production and deploys the SPA, so the gate stays
+# lint + test + build + CodeQL — deterministic checks that fail for a reason.
+# Do not add CodeRabbit's commit status to branch protection.
+#
+# It is a GitHub App, not a workflow: this file only configures a review that
+# happens whether or not the file is here. Deleting it restores the defaults.
+
+language: en-US
+
+reviews:
+  # quiet | chill | assertive. `chill` is the default and the right one for a
+  # solo repo — `assertive` is explicitly documented as feeling nitpicky, and a
+  # reviewer you learn to skim past is worse than no reviewer.
+  profile: chill
+
+  # Never let the bot approve or block on its own. Default, restated because
+  # it is the setting that would quietly turn an advisor into a gate.
+  request_changes_workflow: false
+
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    # Dependency bumps are better covered by CI actually building and testing
+    # than by an LLM reading a lockfile diff. Drop this line to review them.
+    ignore_title_keywords:
+      - "Bump"
+
+  path_filters:
+    - "!package-lock.json"
+
+  path_instructions:
+    - path: "supabase/migrations/**"
+      instructions: |
+        These run UNATTENDED against the production database, applied by CI on
+        merge to `main`. There is no review step after merge and no undo.
+        Flag anything that is not additive and idempotent: destructive DDL
+        (DROP, DELETE, TRUNCATE), a non-idempotent statement that would fail on
+        re-run, a new NOT NULL column with no default or backfill, or a unique
+        index added without checking that existing rows satisfy it.
+        Past incident: a rename guarded against a unique index silently SKIPPED
+        instead of merging, leaving three production rows for one product.
+        A migration that can half-apply is the failure mode to look for.
+
+    - path: "src/lib/{cogs,pricing,inventoryValue,analytics}.js"
+      instructions: |
+        Money code, with deliberate and asymmetric rounding rules:
+        costs round UP to the cent (`ceilCents`) so a batch never costs more
+        than it was costed at, while a price rounds to NEAREST because it is a
+        quote, not a cost. Line costs are rounded FIRST and subtotals built
+        from the rounded lines, so the column on screen adds up to the total on
+        screen — do not "simplify" that into summing raw floats.
+        An unpriced ingredient must yield null and be reported as missing,
+        NEVER costed as 0. Silently treating absent as zero understates COGS,
+        which is the one failure this code exists to prevent.
+
+    - path: "src/lib/products.js"
+      instructions: |
+        This repo is PUBLIC and vendor price lists are marked
+        "TRADE SECRET CONFIDENTIAL". This catalog must never carry a `price`
+        field — not in the data, not in a comment, not in a test fixture.
+        Prices live only in the private Supabase database. Flag any numeric
+        field that looks like money. A test enforces this; if a diff changes
+        that test, say so loudly.
+
+    - path: "src/{components,features}/**/*.jsx"
+      instructions: |
+        Inline style objects only, from src/styles.js — there is no CSS file,
+        no Tailwind, and no TypeScript. Do not suggest introducing any.
+        ⚠️ The inventory and recipe ingredient tables are at their width
+        budget (~442px per card). Adding a column or a control to those tables
+        has broken them twice: once pushing the archive button off the right
+        edge, once slicing the remove `×` in half via `overflow: hidden`.
+        jsdom has no layout, so no unit test catches it. If a diff adds a
+        column or control to those tables, ask whether scrollWidth was
+        measured against clientWidth in a real browser.
+
+  # Opt-in actions offered after a review, each behind a checkbox. Nothing here
+  # runs on its own; these switches decide what is offered in the first place.
+  finishing_touches:
+    # ⚠️ Off. Every test in this repo encodes something learned the hard way —
+    # the rounding asymmetry, the crop-year pooling, the "carries no prices"
+    # guard. Generated tests assert whatever the code currently DOES, which
+    # enshrines bugs as expected behaviour and costs us the thing that makes a
+    # green suite worth anything.
+    unit_tests:
+      enabled: false
+    # Off. This codebase deliberately carries almost no docstrings — JSX with
+    # inline comments at the density of the surrounding code. A JSDoc sweep is a
+    # style change nobody asked for, showing up in every diff after it.
+    docstrings:
+      enabled: false
+    # ⚠️ Off. CI failing is SIGNAL: it is the gate in front of a branch whose
+    # merge migrates and deploys production. A bot that turns red green is
+    # hiding the one thing most worth looking at.
+    fix_ci:
+      enabled: false
+    # Kept on: scoped to a single finding you have already read and agreed with.
+    autofix:
+      enabled: true
+    # Off (also the default). `/simplify` already does this and knows the
+    # conventions in CLAUDE.md.
+    simplify:
+      enabled: false
+
+  tools:
+    # `npm run lint` in CI is the single lint authority. A second linter with
+    # its own defaults reports findings that are not violations of this repo's
+    # rules, which is exactly the noise that gets a reviewer ignored.
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    oxc:
+      enabled: false
+    # Deliberately formatted prose; CLAUDE.md is documentation, not a lint target.
+    markdownlint:
+      enabled: false
+    # Kept on: secret scanning is directly load-bearing here, since the whole
+    # pricing chain depends on vendor prices never reaching a public commit.
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+    # Kept on: these read the workflows that deploy and migrate production.
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    # CLAUDE.md is the reason this is worth configuring at all: it records the
+    # decisions that look like bugs to a reviewer seeing them for the first
+    # time (archive-never-delete, classify() returning null on purpose,
+    # PriceInput deliberately not being a controlled input).
+    filePatterns:
+      - "CLAUDE.md"
