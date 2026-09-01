@@ -81,6 +81,34 @@ reviews:
         column or control to those tables, ask whether scrollWidth was
         measured against clientWidth in a real browser.
 
+  # Opt-in actions offered after a review, each behind a checkbox. Nothing here
+  # runs on its own; these switches decide what is offered in the first place.
+  finishing_touches:
+    # ⚠️ Off. Every test in this repo encodes something learned the hard way —
+    # the rounding asymmetry, the crop-year pooling, the "carries no prices"
+    # guard. Generated tests assert whatever the code currently DOES, which
+    # enshrines bugs as expected behaviour and costs us the thing that makes a
+    # green suite worth anything.
+    unit_tests:
+      enabled: false
+    # Off. This codebase deliberately carries almost no docstrings — JSX with
+    # inline comments at the density of the surrounding code. A JSDoc sweep is a
+    # style change nobody asked for, showing up in every diff after it.
+    docstrings:
+      enabled: false
+    # ⚠️ Off. CI failing is SIGNAL: it is the gate in front of a branch whose
+    # merge migrates and deploys production. A bot that turns red green is
+    # hiding the one thing most worth looking at.
+    fix_ci:
+      enabled: false
+    # Kept on: scoped to a single finding you have already read and agreed with.
+    autofix:
+      enabled: true
+    # Off (also the default). `/simplify` already does this and knows the
+    # conventions in CLAUDE.md.
+    simplify:
+      enabled: false
+
   tools:
     # `npm run lint` in CI is the single lint authority. A second linter with
     # its own defaults reports findings that are not violations of this repo's
