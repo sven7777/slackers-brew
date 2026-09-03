@@ -38,10 +38,27 @@ const MONTHS_PER_YEAR = 12;
 // invent an expense the brewery never pays.
 export const FICA_PCT = 7.65;
 
+// The monthly overhead lines, in display order, with the label every screen
+// prints for each. Settings collects them and the Overhead view reports them,
+// and both read this one list: a line named "Austin Energy" where it is entered
+// and "electric" where it is totalled is the same drift the single `costs`
+// object exists to prevent.
+export const OVERHEAD_FIELDS = [
+  ["rent", "Rent + NNN"],
+  ["electric", "Austin Energy"],
+  ["water", "Austin Water"],
+  ["insurance", "Insurance"],
+  ["fohPayroll", "FOH payroll (burdened)"],
+  ["otherFixed", "Other fixed"],
+];
+
 // Inputs the brewery has not confirmed yet. They default to null rather than to
 // a plausible-looking number, so an unset rent reads as "we don't know" instead
 // of quietly costing the beer as if the building were free.
-const UNCONFIRMED = ["rent", "electric", "water", "insurance", "otherFixed", "fohPayroll"];
+const UNCONFIRMED = OVERHEAD_FIELDS.map(([k]) => k);
+
+export const overheadLabel = (key) =>
+  OVERHEAD_FIELDS.find(([k]) => k === key)?.[1] || key;
 
 // Defaults. Confirmed figures are Slackers' real numbers (Derek, 2026-08-28);
 // anything in UNCONFIRMED above ships null and must be entered.

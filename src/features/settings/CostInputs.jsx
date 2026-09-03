@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs } from "../../lib/overhead";
+import { OVERHEAD_FIELDS, annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs, overheadLabel } from "../../lib/overhead";
 import { card, hdr, inp, btn } from "../../styles";
 
 // Settings ▸ Operating Costs: every input behind the overhead and pricing model
@@ -41,15 +41,6 @@ function Num({ id, text, value, onChange, placeholder, width = 104, step = "any"
     </div>
   );
 }
-
-const OVERHEAD_FIELDS = [
-  ["rent", "Rent + NNN"],
-  ["electric", "Austin Energy"],
-  ["water", "Austin Water"],
-  ["insurance", "Insurance"],
-  ["fohPayroll", "FOH payroll (burdened)"],
-  ["otherFixed", "Other fixed"],
-];
 
 export default function CostInputs({ settings, setSettings }) {
   const stored = settings?.costs || {};
@@ -95,7 +86,7 @@ export default function CostInputs({ settings, setSettings }) {
         <div style={{ ...card, borderColor: "#fbbf24", background: "#fffbeb" }}>
           <div style={{ padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
             <strong>{missing.length} operating cost{missing.length > 1 ? "s" : ""} not entered yet</strong> —{" "}
-            {missing.map((k) => OVERHEAD_FIELDS.find(([f]) => f === k)?.[1] || k).join(", ")}.
+            {missing.map(overheadLabel).join(", ")}.
             They're left out of the cost per pint rather than counted as zero, so the real cost
             is higher than anything shown until they're filled in.
           </div>
