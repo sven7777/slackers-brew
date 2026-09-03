@@ -138,7 +138,10 @@ describe("PricingPanel", () => {
       const row = within(beerTable()).getByText(name).closest("tr");
       return [...row.querySelectorAll("td")][5].textContent;
     };
-    const parse = (t) => Number(t.replace("−", "-").replace("$", ""));
+    // Strips the whole rendering, not just the first symbol a cell happens to
+    // carry: a profit can print as "$5.95", "−$0.05" or "≤ $5.95" depending on
+    // sign and on whether the cost behind it was complete.
+    const parse = (t) => Number(t.replace(/\u2212/g, "-").replace(/[^\d.-]/g, ""));
     expect(parse(profitOf("Red Panda"))).toBeGreaterThan(parse(profitOf("Kolsch")));
   });
 
