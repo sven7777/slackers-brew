@@ -111,6 +111,14 @@ describe("CostInputs", () => {
     expect(board[4].price).toBeNull();
   });
 
+  // ⚠️ A stored price comes back as the STRING the field wrote it as, so a bare
+  // Number.isFinite() reads "9.00" as unset and blanks the row on blur.
+  it("shows a price that was stored as a string", () => {
+    const board = [{ key: "pint", label: "16 oz pint", oz: 16, price: "9.00" }];
+    renderInputs({ settings: { ...settings, costs: { servings: board } } });
+    expect(screen.getByLabelText("Serving 1 price")).toHaveValue(9);
+  });
+
   // The $2,000/mo double-count Derek caught and the app did not: nothing on
   // screen said the FOH figure excludes the brewer and cellar hours.
   it("says outright that FOH payroll excludes production labor", () => {

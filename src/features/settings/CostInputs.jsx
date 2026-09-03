@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { OVERHEAD_FIELDS, annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs, overheadHint, overheadLabel } from "../../lib/overhead";
+import { parseNum } from "../../lib/overhead";
 import { deductions, pourFor, servingsOf } from "../../lib/menuPricing";
 import PriceInput from "../../components/PriceInput";
 import { card, hdr, inp, btn } from "../../styles";
@@ -286,8 +287,13 @@ export default function CostInputs({ settings, setSettings }) {
               <span style={{ fontSize: 12, color: "#94a3b8" }}>oz</span>
               <span style={{ fontSize: 13, color: "#94a3b8" }}>$</span>
               {/* The same field the Cost views use, for the same reason: a price
-                  displayed as toFixed(2) cannot be a plain controlled input. */}
-              <PriceInput value={Number.isFinite(s.price) ? s.price : null} style={{ width: 68 }}
+                  displayed as toFixed(2) cannot be a plain controlled input.
+                  ⚠️ Parsed, not tested for finiteness: `c.servings` is the array
+                  branch of costInputs(), which hands back what is STORED, and a
+                  price this field just wrote is the string "9.00". A bare
+                  Number.isFinite() reads that as unset, so the row went blank on
+                  blur while holding a perfectly good price. */}
+              <PriceInput value={parseNum(s.price)} style={{ width: 68 }}
                 aria-label={`Serving ${i + 1} price`}
                 onCommit={(v) => setServing(i, { price: v === "" ? null : v })} />
               <button style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 16 }}

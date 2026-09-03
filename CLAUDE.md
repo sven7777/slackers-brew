@@ -388,7 +388,7 @@ The printable sheets each have a pure recipe→view-model builder, kept out of t
 - Inline CSS-in-JS objects only — no CSS file, no Tailwind. Shared objects in [src/styles.js](src/styles.js).
 - Color accent: `#f59e0b` (amber)
 - Neutral grays from Tailwind's slate palette
-- Shared style vars: `cell`, `num`, `inp`, `th`, `btn`, `card`, `hdr`, `badge`, `rmBtn`, `addRow`, `sel`, `addBtn`, `tabBtn`, and `segWrap`/`segBtn` for a tab's own sub-nav (Recipes' four views, Analytics' two) — distinct from `tabBtn` on purpose: the top nav is where you are in the app, a segmented control is which lens you're using on what's already selected
+- Shared style vars: `cell`, `num`, `inp`, `th`, `btn`, `card`, `hdr`, `badge`, `rmBtn`, `addRow`, `sel`, `addBtn`, `tabBtn`, `statBox`/`statLabel`/`statValue`/`statNote` for the Analytics stat tile (all three views print the same row of them; `minWidth` is the one per-panel part, since it decides how many fit before they wrap), and `segWrap`/`segBtn` for a tab's own sub-nav (Recipes' four views, Analytics' three) — distinct from `tabBtn` on purpose: the top nav is where you are in the app, a segmented control is which lens you're using on what's already selected
 
 ## Testing
 

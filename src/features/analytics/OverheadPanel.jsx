@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { annualCapacity, annualVolume, costInputs, costStack, overheadLabel } from "../../lib/overhead";
-import { card, hdr, cell, num, th } from "../../styles";
+import { card, hdr, cell, num, th, statBox, statLabel, statValue, statNote } from "../../styles";
 
 // Analytics ▸ Overhead: what a pint costs once everything except ingredients is
 // counted.
@@ -30,10 +30,6 @@ const money = (n) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 const cents = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
 const pct = (n) => (n == null ? "—" : `${n.toFixed(0)}%`);
 
-const statBox = { flex: 1, minWidth: 150, padding: "12px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 };
-const statLabel = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" };
-const statValue = { fontSize: 22, fontWeight: 800, color: "#92400e", marginTop: 2 };
-const statNote = { fontSize: 11, color: "#94a3b8", marginTop: 2 };
 const noteStyle = { fontSize: 12, color: "#64748b", padding: "8px 14px" };
 const subtotal = { fontWeight: 700, background: "#f8fafc" };
 

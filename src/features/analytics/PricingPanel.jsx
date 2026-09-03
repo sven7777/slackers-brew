@@ -5,7 +5,7 @@ import { costInputs, costStack, overheadLabel } from "../../lib/overhead";
 import {
   OZ_PER_PINT, priceBeers, priceBoard, servingsOf, sortPricedBeers,
 } from "../../lib/menuPricing";
-import { card, hdr, cell, num, th, inp } from "../../styles";
+import { card, hdr, cell, num, th, inp, statBox, statLabel, statValue, statNote } from "../../styles";
 
 // Analytics ▸ Pricing: what a beer is sold for, against what it costs.
 //
@@ -48,10 +48,6 @@ const perOz = (n) => (n == null ? "—" : `$${n.toFixed(3)}`);
 // that convention with its sign the right way round.
 const ceiling = (text, complete) => (complete || text === "—" ? text : `≤ ${text}`);
 
-const statBox = { flex: 1, minWidth: 150, padding: "12px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 };
-const statLabel = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" };
-const statValue = { fontSize: 22, fontWeight: 800, color: "#92400e", marginTop: 2 };
-const statNote = { fontSize: 11, color: "#94a3b8", marginTop: 2 };
 const noteStyle = { fontSize: 12, color: "#64748b", padding: "8px 14px" };
 const subtotal = { fontWeight: 700, background: "#f8fafc" };
 

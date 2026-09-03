@@ -25,3 +25,14 @@ export const segWrap = {display:'flex',gap:4,padding:4,background:'#f1f5f9',bord
 // slate-500 comes to 4.2:1 and misses AA for 13px text. An unselected segment
 // is a control you are meant to be able to read and click, not a caption.
 export const segBtn = a=>({flex:1,padding:'8px 12px',fontSize:13,border:'none',cursor:'pointer',borderRadius:6,fontWeight:a?700:500,background:a?'#fff':'transparent',color:a?'#92400e':'#475569',boxShadow:a?'0 1px 2px rgba(0,0,0,0.08)':'none'});
+
+// The Analytics stat tile — a big number, a label above it, a note under it.
+// Shared because all three Analytics views print the same row of them, and three
+// copies of a color is three chances for one of them to drift. `minWidth` is the
+// one part that is per-panel: it sets how many tiles fit on a row before they
+// wrap, and a four-tile row of long labels needs more than a four-tile row of
+// short ones, so panels spread their own over the base.
+export const statBox = {flex:1,minWidth:150,padding:'12px 14px',background:'#fff',border:'1px solid #e2e8f0',borderRadius:8};
+export const statLabel = {fontSize:11,fontWeight:600,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.05em'};
+export const statValue = {fontSize:22,fontWeight:800,color:'#92400e',marginTop:2};
+export const statNote = {fontSize:11,color:'#94a3b8',marginTop:2};
