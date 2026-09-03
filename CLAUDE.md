@@ -25,8 +25,9 @@ src/
   components/   # reusable tables: InvTable, RecEditTable, ScheduleEditTable
                 #   — plus StyleSelect (BJCP style picker), PriceInput (the one
                 #   cost-per-unit field), CatalogBrowser + AdoptDialog (the one
-                #   bridge from vendor catalog to shelf) and the three failure
-                #   surfaces: ErrorBoundary, SaveErrorBanner, StaleDataBanner
+                #   bridge from vendor catalog to shelf), SortableTh (the one
+                #   keyboard-operable sortable column heading) and the three
+                #   failure surfaces: ErrorBoundary, SaveErrorBanner, StaleDataBanner
   features/     # one folder per tab: inventory/, recipes/, order/, analytics/,
                 #   settings/
                 #   — plus auth/ (Supabase session + login gate). recipes/ also
@@ -40,6 +41,8 @@ src/
                 #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
                 #   — incl. analytics.js (every recipe costed, side by side)
+                #   — incl. menuPricing.js (the PRICE model, above overhead.js's
+                #   cost model; NOT pricing.js, which converts vendor packs)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
                 #   and, off the same parse, catalog → catalogChanges (the
@@ -88,7 +91,7 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
-- **Analytics** — two views of the whole book, behind a segmented sub-nav
+- **Analytics** — three views of the whole book, behind a segmented sub-nav
   ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
   state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
   both, so the Overhead view's ingredient layer is literally the average printed in the
@@ -125,12 +128,48 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   beer lost to foam, line purge and comps is beer you paid to make and were never paid
   for. And an **unconfirmed input is not a zero**: a blank rent is named, left out, and
   the absorbed figure is marked `+` as the floor it is, exactly as the Beers view marks
-  a recipe with an unpriced ingredient. ⚠️ The split between the two views is itself the
+  a recipe with an unpriced ingredient. ⚠️ The split between the views is itself the
   point — ingredient COGS is the EXACT part (real vendor prices, real grain bills) and
   runs ~6% of an $8 pint, so putting the precise small number and the modelled large one
   on one screen would let the first stand in for the second. Keep cogs.js
   ingredients-only and stack on top of it; do not fold overhead back into it.
-- **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), **operating costs** ([CostInputs.jsx](src/features/settings/CostInputs.jsx) — production/capacity, taproom losses, production labor, monthly overhead and price deductions, all under the single `settings.costs` object; it and Analytics ▸ Overhead read the one `OVERHEAD_FIELDS` list in overhead.js, so a line cannot be called "Austin Energy" where it is entered and "electric" where it is totalled), and data backup (export/import all app data as JSON)
+  - **Pricing** — what a beer is SOLD for, against what it costs
+  ([menuPricing.js](src/lib/menuPricing.js) + [PricingPanel.jsx](src/features/analytics/PricingPanel.jsx)):
+  the board with every serving size costed, the full walk from board price down to what
+  reaches the brewery, and every beer at its own pour. Like the other two it adds **no
+  arithmetic of its own** — and menuPricing.js in turn consumes `costStack()`'s published
+  output rather than recomputing a cost, which is why it is a separate module: a cost
+  that is too low and a price that is too high are the same mistake made from either end.
+  ⚠️ It is **not** `pricing.js`, which converts vendor packs to recipe units — that one
+  prices a sack of malt, this one prices a pint. Four things the layout exists to say.
+  **PRICE is not REVENUE**: sales tax, card processing and excise take ~$0.90 of an $8.00
+  pint and none of them appear on a menu, so comparing a board price straight against a
+  cost/pint overstates the margin by about a beer's worth of ingredients — the whole
+  deduction walk is printed for that reason. **SIZE is a pricing decision**: one price for
+  12 and 16 oz makes the pint the cheapest beer on the board per ounce, which the `$/oz`
+  column exists to make unavoidable. The **pour belongs to the beer** — Red Panda's 8 oz
+  lives on `recipe.process.pourOz` (free-form JSONB, migration 0005, so no migration) and
+  is set on its own row, never as a list of exceptions in the pricing code. And ⚠️ **an
+  incomplete cost marks a profit the OTHER WAY**: the rest of the app appends `+` to a
+  total built on a missing input, meaning "at least this", but subtract that floor from a
+  price and the answer is a CEILING, so profits and margins print `≤` instead. A
+  confident green profit beside a cost with no rent in it is the `+` convention failing in
+  the one place where it would flatter rather than alarm.
+
+  ⚠️ **The tax basis is asked, not assumed.** `costs.taxBasis` (`included`/`added`) decides
+  whether an $8.00 board price is $8.00 the customer pays or $8.66 — worth $0.61 on that
+  pint at 8.25%, which is more than a pint's entire contribution. The old Settings preview
+  string assumed tax was added on top and did the arithmetic by hand; it now calls the same
+  `deductions()` the board does. ⚠️ Two more rules `menuPricing.js` keeps that are easy to
+  undo: the card fee is charged on the GROSS amount swiped, tax included, because the
+  processor does not care which part the brewery keeps; and excise is spread over ounces
+  **SOLD**, since beer lost to foam was still produced and still owes it. And
+  `recommendedPrice()`'s closed form is a SEED, not the answer — the forward path rounds
+  against the brewery at four points (rule: costs up, revenue down), so the exact solution
+  comes back ~2¢ short of its own target and is nudged a cent at a time until it actually
+  clears. Its own test caught that; don't simplify it back to the algebra
+- **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), **operating costs** ([CostInputs.jsx](src/features/settings/CostInputs.jsx) — production/capacity, taproom losses, production labor, monthly overhead and price deductions, all under the single `settings.costs` object; it and Analytics ▸ Overhead read the one `OVERHEAD_FIELDS` list in overhead.js, so a line cannot be called "Austin Energy" where it is entered and "electric" where it is totalled — the list also carries the per-field HINT, because ⚠️ `fohPayroll` is the one input whose meaning its name doesn't give: it is **front of house ONLY**, and a figure that included the brewer and cellar hours double-counted them against `annualLabor()` and read a pint as costing $7.94 when it cost $7.15), **the board** (serving sizes, their prices, the house pour and the target margin the
+  Pricing view solves for), and data backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
@@ -164,7 +203,7 @@ Ingredient defaults live in [src/lib/defaults.js](src/lib/defaults.js):
 - `defAdj` — 13 adjuncts with per-item units (lbs/oz/ml/each)
 - `defSalts` — water-chemistry salts (names only; amounts live per-recipe)
 
-`defRecipes` — 18 preset recipes, each `{n, s, og, fg, abv, mt, ft, m[], h[], y[], a[], sa[], sc[]}` (name, style, target OG/FG/ABV, single-infusion mash temp, primary fermentation temp, malts, hops, yeast, adjuncts, water salts, cellar schedule). `ft` (ferm temp °F) is editable in the Recipes Edit view, imported from BeerSmith's `F_A_PRIM_TEMP`, and prints in the Cellar Sheet's Yeast box; persisted as `recipes.ferm_temp` (migration 0004). A recipe may also carry `process`, a free-form `{key: value}` map of the Brew Sheet's editable planned readings (strike temp, mash/sparge volumes, boil/vorlauf/runoff times, pH targets, whirlpool/knockout temps), persisted as a single JSONB column `recipes.process` (migration 0005) so the field set can change without a migration. **Dry hop is numbered** — stages `dryhop1/2/3` (`dryHopStages`, labelled "Dry Hop 1…" in the picker via `stageLabels`) and matching schedule actions "Dry Hop 1/2/3". The number is the join key between a hop and its scheduled day: a double dry hop is two charges on two days, and without it there was nothing to pair them by, so the Cellar Sheet could only print one date (and printed it against the first hop row alone). `dryHopCharge(stage)` resolves a stage to 1-3, mapping the pre-0011 unnumbered `dryhop`/"Dry Hop" to charge 1 so unmigrated localStorage or an old backup still prints. Migration 0011 rewrites prod. Tuple shapes: malt/yeast `[name, qty]`; hop `[name, qty, stage, time]`; adjunct `[name, qty, unit, stage, time]`; salt `[name, qty, stage]`; schedule `[dayOffset, action]`. Additions carry a **stage** (`brewDayStages`/`cellarStages`/`saltStages` in defaults.js) and may repeat the same name at different stages (e.g. a hop at boil, whirlpool, and dry hop). `computeOrder()` aggregates by name, so it ignores stage/time. The cellar `sc` schedule (actions from `cellarActions`) is the spine of the Cellar Summary sheet: entering a brew date computes each step's date (`brewDate + dayOffset`). Only All Y'alls ships with a seeded schedule; other recipes start empty and are filled in the Recipes tab.
+`defRecipes` — 18 preset recipes, each `{n, s, og, fg, abv, mt, ft, m[], h[], y[], a[], sa[], sc[]}` (name, style, target OG/FG/ABV, single-infusion mash temp, primary fermentation temp, malts, hops, yeast, adjuncts, water salts, cellar schedule). `ft` (ferm temp °F) is editable in the Recipes Edit view, imported from BeerSmith's `F_A_PRIM_TEMP`, and prints in the Cellar Sheet's Yeast box; persisted as `recipes.ferm_temp` (migration 0004). A recipe may also carry `process`, a free-form `{key: value}` map of the Brew Sheet's editable planned readings (strike temp, mash/sparge volumes, boil/vorlauf/runoff times, pH targets, whirlpool/knockout temps), persisted as a single JSONB column `recipes.process` (migration 0005) so the field set can change without a migration — which is also where `avgKegs` and `pourOz` (the size THIS beer pours at, set on its row in Analytics ▸ Pricing) live, neither of which needed one. **Dry hop is numbered** — stages `dryhop1/2/3` (`dryHopStages`, labelled "Dry Hop 1…" in the picker via `stageLabels`) and matching schedule actions "Dry Hop 1/2/3". The number is the join key between a hop and its scheduled day: a double dry hop is two charges on two days, and without it there was nothing to pair them by, so the Cellar Sheet could only print one date (and printed it against the first hop row alone). `dryHopCharge(stage)` resolves a stage to 1-3, mapping the pre-0011 unnumbered `dryhop`/"Dry Hop" to charge 1 so unmigrated localStorage or an old backup still prints. Migration 0011 rewrites prod. Tuple shapes: malt/yeast `[name, qty]`; hop `[name, qty, stage, time]`; adjunct `[name, qty, unit, stage, time]`; salt `[name, qty, stage]`; schedule `[dayOffset, action]`. Additions carry a **stage** (`brewDayStages`/`cellarStages`/`saltStages` in defaults.js) and may repeat the same name at different stages (e.g. a hop at boil, whirlpool, and dry hop). `computeOrder()` aggregates by name, so it ignores stage/time. The cellar `sc` schedule (actions from `cellarActions`) is the spine of the Cellar Summary sheet: entering a brew date computes each step's date (`brewDate + dayOffset`). Only All Y'alls ships with a seeded schedule; other recipes start empty and are filled in the Recipes tab.
 
 `beerStyles.js` is **generated** — `node scripts/gen-styles.mjs` re-derives it from a BeerSmith style export (File ▸ Export ▸ Styles) via `parseBeerSmithStyles()`. The export lands in `styles/`, which is **gitignored** like `pricing/`: it's ~550 KB and carries `F_S_DESCRIPTION`, verbatim BJCP guideline prose that must not go into a public repo. The generator takes names and categories only. Accented names arrive as HTML named entities and are decoded by composing letter + accent (`&egrave;` → e + combining grave → `è`), which covers all of Latin-1 in one rule — the old hardcoded ö/ü/ä list let `Bi&egrave;re de Garde` through raw. A test asserts every preset recipe's style is in the catalog: **migration 0010** put prod's three shorthand values (`NEIPA`, `Belgian Blond`, `American Brown`) onto catalog names and backfilled blank styles from the brewery's own `.bsmx` exports, so `defaults.js`, `seed_recipes.sql` and prod all agree.
 

@@ -79,8 +79,43 @@ describe("CostInputs", () => {
 
   it("shows the mixed beverage hit once that permit is selected", () => {
     renderInputs({ settings: { ...settings, costs: { permitType: "mb" } } });
-    // 6.7% of $8.00
-    expect(screen.getByText(/\$0\.54 gross receipts/)).toBeInTheDocument();
+    // 6.7% of the $7.39 of BEER inside a tax-inclusive $8.00 pint, not 6.7% of
+    // the $8.00 — the customer's sales tax was never the brewery's receipts.
+    // The old hand-rolled preview charged it on the full $8.00 and read $0.54.
+    expect(screen.getByText(/\$0\.50 gross receipts/)).toBeInTheDocument();
+  });
+
+  // The preview is now the same `deductions()` the Pricing view prices every
+  // beer with, rather than a second copy of the tax arithmetic beside it.
+  it("splits the house pint the way the register does", () => {
+    renderInputs();
+    // $8.00 tax-inclusive: $0.61 tax, $0.24 card, $0.05 excise, $7.10 left.
+    expect(screen.getByText(/\$0\.61 sales tax/)).toBeInTheDocument();
+    expect(screen.getByText(/\$7\.10/)).toBeInTheDocument();
+  });
+
+  // ⚠️ Worth $0.61 on an $8.00 pint — most of a pint's whole contribution — so
+  // it is asked outright rather than assumed in the arithmetic.
+  it("changes what the brewery keeps when tax is added rather than included", () => {
+    const { setSettings } = renderInputs();
+    fireEvent.change(screen.getByLabelText("Board prices"), { target: { value: "added" } });
+    expect(applied(setSettings).costs.taxBasis).toBe("added");
+  });
+
+  it("edits the board, and keeps an unpriced size unpriced", () => {
+    const { setSettings } = renderInputs();
+    fireEvent.change(screen.getByLabelText("Serving 3 price"), { target: { value: "9.00" } });
+    const board = applied(setSettings).costs.servings;
+    expect(board[2].price).toBe("9.00");
+    // A size with no price is one that isn't sold yet, not one that is free.
+    expect(board[4].price).toBeNull();
+  });
+
+  // The $2,000/mo double-count Derek caught and the app did not: nothing on
+  // screen said the FOH figure excludes the brewer and cellar hours.
+  it("says outright that FOH payroll excludes production labor", () => {
+    renderInputs();
+    expect(screen.getByText(/front of house ONLY/)).toBeInTheDocument();
   });
 
   it("states that tips are not an employer cost", () => {

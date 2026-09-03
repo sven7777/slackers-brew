@@ -54,7 +54,7 @@ either way.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
   order. Malts also roll up into 55 lb bag counts.
-- **Analytics** — two views of the whole book. **Beers** costs every beer side by
+- **Analytics** — three views of the whole book. **Beers** costs every beer side by
   side: batch total, cost per bbl, per keg and per 16 oz pint, sortable by any of
   them, with brewery-wide averages and the cheapest and dearest beer per barrel.
   Each beer is costed against its own yield, so one with a measured keg count
@@ -69,10 +69,22 @@ either way.
   the business works at this volume), and shows what each overhead line comes to
   per pint — ingredients are a few percent of a pint, so this is where the money
   actually is. An operating cost you haven't entered is named and left out rather
-  than counted as zero, and the total is marked as the floor it is.
+  than counted as zero, and the total is marked as the floor it is. **Pricing**
+  puts the board beside that cost and subtracts what a menu never shows: sales
+  tax, card processing, excise, and gross receipts if your permit owes it. On an
+  $8.00 pint those come to about $0.90, so a price compared straight against a
+  cost per pint overstates the margin by roughly a beer's worth of ingredients.
+  It prices every serving size against the same cost — the per-ounce column is
+  the point, since one price for a 12 oz and a 16 oz makes the pint the cheapest
+  beer on the menu by volume — recommends a price for a target margin, and prices
+  every beer at *its own* pour, because a 9% tripel poured at 8 oz is a property
+  of that beer and is set on its row.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume that drives costing — post-boil yield plus the average kegs a batch
-  packages, which is where the brewhouse loss % comes from — ingredient pricing (upload the
+  packages, which is where the brewhouse loss % comes from — the serving sizes and board
+  prices the Pricing view works from, operating costs (production, taproom
+  losses, labor, monthly overhead and what comes off a retail price), ingredient
+  pricing (upload the
   vendor's PDF price list, see exactly which prices would change, then apply —
   the spot hop list is read too, from its text when it has one and by OCR when
   it's a scan, with every price shown against the page it came from and editable

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import SortableTh from "../../components/SortableTh";
 import { sortRows } from "../../lib/analytics";
 import { card, hdr, cell, num, th } from "../../styles";
 
@@ -108,11 +109,8 @@ export default function BeersPanel({ rows, summary, blockers, asOf, openRecipeCo
             <thead>
               <tr>
                 {COLUMNS.map((c) => (
-                  <th key={c.key} style={{ ...th, textAlign: c.align, cursor: "pointer", userSelect: "none" }}
-                      onClick={() => toggleSort(c.key)}
-                      aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
-                    {c.label}{sort.key === c.key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
-                  </th>
+                  <SortableTh key={c.key} label={c.label} sortKey={c.key} align={c.align}
+                    sort={sort} onSort={toggleSort} />
                 ))}
               </tr>
             </thead>

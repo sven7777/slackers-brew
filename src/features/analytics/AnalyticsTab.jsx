@@ -1,21 +1,25 @@
 import { useMemo, useState } from "react";
 import BeersPanel from "./BeersPanel";
 import OverheadPanel from "./OverheadPanel";
+import PricingPanel from "./PricingPanel";
 import { costAllRecipes } from "../../lib/analytics";
 import { priceAsOf } from "../../lib/inventoryValue";
 import { segWrap, segBtn } from "../../styles";
 
-// Analytics tab: the two questions that only exist across the whole book.
+// Analytics tab: the questions that only exist across the whole book.
 //
 //   Beers — what each beer's INGREDIENTS cost, side by side.
 //   Overhead — what a pint costs once labor and the cost of being open are
 //     stacked on top of that.
+//   Pricing — what it is sold for, and what is left of that price once tax,
+//     card fees and excise have taken their cut.
 //
 // The split is the point. Ingredient COGS is the exact part, computed off real
-// vendor prices, and it is about 6% of an $8.00 pint; keeping the two on one
-// screen would let the precise number stand in for the big one. They share a
-// single `costAllRecipes()` here so the Overhead view's ingredient layer is
-// literally the average printed in the tile beside it, never a second opinion.
+// vendor prices, and it is about 6% of an $8.00 pint; keeping it on one screen
+// with the modelled figures would let the precise number stand in for the big
+// one. All three share a single `costAllRecipes()` here, so the Overhead view's
+// ingredient layer is literally the average printed in the Beers tile beside it
+// and the Pricing view prices against that same number — never a second opinion.
 //
 // The sub-nav is LOCAL state, like the Recipes tab's — which view you last
 // looked at is not worth a round trip to the database, and `tab` is already a
@@ -24,9 +28,10 @@ import { segWrap, segBtn } from "../../styles";
 const SUBVIEWS = [
   { key: "beers", label: "Beers" },
   { key: "overhead", label: "Overhead" },
+  { key: "pricing", label: "Pricing" },
 ];
 
-export default function AnalyticsTab({ recs, malts, hops, yeast, adj, settings, openRecipeCost }) {
+export default function AnalyticsTab({ recs, setRecs, malts, hops, yeast, adj, settings, setSettings, openRecipeCost }) {
   const [view, setView] = useState("beers");
 
   const { rows, summary, blockers } = useMemo(
@@ -58,6 +63,14 @@ export default function AnalyticsTab({ recs, malts, hops, yeast, adj, settings, 
       {view === "overhead" && (
         <OverheadPanel settings={settings} ingredientCostPerBbl={summary.avgCostPerBbl}
           costedBeers={summary.counted} />
+      )}
+
+      {/* Pricing reads the same `rows` the Beers view ranks and the same
+          per-bbl average the Overhead view stacks, so a price recommended here
+          is answering the cost printed one tab over — not a third opinion. */}
+      {view === "pricing" && (
+        <PricingPanel settings={settings} setSettings={setSettings} recs={recs} setRecs={setRecs}
+          rows={rows} ingredientCostPerBbl={summary.avgCostPerBbl} />
       )}
     </div>
   );
