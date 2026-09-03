@@ -71,9 +71,11 @@ either way.
   actually is. An operating cost you haven't entered is named and left out rather
   than counted as zero, and the total is marked as the floor it is. **Pricing**
   puts the board beside that cost and subtracts what a menu never shows: sales
-  tax, card processing, excise, and gross receipts if your permit owes it. On an
-  $8.00 pint those come to about $0.90, so a price compared straight against a
-  cost per pint overstates the margin by roughly a beer's worth of ingredients.
+  tax, card processing, excise, and gross receipts if your permit owes it. How
+  much that is turns on one question the view asks outright — whether a board
+  price already includes sales tax or the register adds it. On an $8.00 pint
+  that answer alone is worth $0.61, more than the pint's whole margin, so it is
+  asked rather than assumed and printed above every figure that depends on it.
   It prices every serving size against the same cost — the per-ounce column is
   the point, since one price for a 12 oz and a 16 oz makes the pint the cheapest
   beer on the menu by volume — recommends a price for a target margin, and prices

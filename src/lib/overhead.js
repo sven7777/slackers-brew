@@ -152,9 +152,15 @@ export const defCosts = {
   // a two-option question with no honest default, so it is asked outright.
   //   'included' — the customer pays $8.00 and the brewery keeps $7.39.
   //   'added'    — the customer pays $8.66 and the brewery keeps $8.00.
-  // Defaulted to 'included' because round board prices usually are, and the
-  // Pricing view prints which one it is using on every screen that depends on it.
-  taxBasis: "included",
+  // ✅ CONFIRMED 'added' (Derek, 2026-09-03): the board says $8 and Toast adds
+  // tax at the register. Like the 150 gal / 33% volume defaults, this default is
+  // Slackers' actual answer rather than a generic one. #98 shipped it as
+  // 'included' on the guess that round board prices usually are, which cost the
+  // brewery $0.61 a pint on paper and made an $8.00 pint read as a five-cent
+  // LOSS against its $7.15 absorbed cost; on the confirmed basis it clears
+  // $0.54. The Pricing view prints which basis it is using above every figure
+  // that depends on it, which is how the wrong guess was visible enough to fix.
+  taxBasis: "added",
 
   // ── The board ──
   // What a beer is actually sold as. Sizes are brewery-wide; WHICH size a given
