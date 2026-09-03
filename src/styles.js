@@ -20,4 +20,8 @@ export const tabBtn = a=>({padding:'10px 20px',border:'none',borderBottom:a?'3px
 // where you are in the app, this is which lens you're using on what's already
 // selected, so it reads as a control rather than as navigation.
 export const segWrap = {display:'flex',gap:4,padding:4,background:'#f1f5f9',borderRadius:8,marginBottom:12};
-export const segBtn = a=>({flex:1,padding:'8px 12px',fontSize:13,border:'none',cursor:'pointer',borderRadius:6,fontWeight:a?700:500,background:a?'#fff':'transparent',color:a?'#92400e':'#64748b',boxShadow:a?'0 1px 2px rgba(0,0,0,0.08)':'none'});
+// ⚠️ The inactive color is slate-600, NOT the slate-500 used for muted text
+// elsewhere: this sits on the #f1f5f9 track rather than on white, where
+// slate-500 comes to 4.2:1 and misses AA for 13px text. An unselected segment
+// is a control you are meant to be able to read and click, not a caption.
+export const segBtn = a=>({flex:1,padding:'8px 12px',fontSize:13,border:'none',cursor:'pointer',borderRadius:6,fontWeight:a?700:500,background:a?'#fff':'transparent',color:a?'#92400e':'#475569',boxShadow:a?'0 1px 2px rgba(0,0,0,0.08)':'none'});
