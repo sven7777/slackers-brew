@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import SortableTh from "../../components/SortableTh";
 import { sortRows } from "../../lib/analytics";
-import { card, hdr, cell, num, th } from "../../styles";
+import { card, hdr, cell, num, th, statBox as sharedStatBox, statLabel, statValue, statNote } from "../../styles";
 
 // Analytics ▸ Beers: every beer in the book and what its ingredients cost, side
 // by side.
@@ -21,10 +22,9 @@ const CAT_LABEL = { malt: "malt", hop: "hop", yeast: "yeast", adj: "adjunct" };
 // toFixed(2) is exact rather than a second rounding.
 const money = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
 
-const statBox = { flex: 1, minWidth: 130, padding: "12px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8 };
-const statLabel = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" };
-const statValue = { fontSize: 22, fontWeight: 800, color: "#92400e", marginTop: 2 };
-const statNote = { fontSize: 11, color: "#94a3b8", marginTop: 2 };
+// Narrower than the shared default: these four labels are short ("Avg / keg"),
+// so four fit on one row at 130 where the Overhead view's would wrap.
+const statBox = { ...sharedStatBox, minWidth: 130 };
 const noteStyle = { fontSize: 12, color: "#64748b", padding: "8px 14px" };
 
 // Columns, in display order. `align` drives both the header and the body cell,
@@ -108,11 +108,8 @@ export default function BeersPanel({ rows, summary, blockers, asOf, openRecipeCo
             <thead>
               <tr>
                 {COLUMNS.map((c) => (
-                  <th key={c.key} style={{ ...th, textAlign: c.align, cursor: "pointer", userSelect: "none" }}
-                      onClick={() => toggleSort(c.key)}
-                      aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
-                    {c.label}{sort.key === c.key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
-                  </th>
+                  <SortableTh key={c.key} label={c.label} sortKey={c.key} align={c.align}
+                    sort={sort} onSort={toggleSort} />
                 ))}
               </tr>
             </thead>

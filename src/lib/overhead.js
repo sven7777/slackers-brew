@@ -18,6 +18,14 @@
 //   2. Money rounds UP to the cent (`ceilCents`), for the same reason: costing
 //      should never come in under what things actually cost.
 //
+// ⚠️ `defCosts` below is the schema for everything under `settings.costs`, and
+// that now includes the PRICE side — serving sizes, the board price on each, the
+// tax basis. Those are consumed by menuPricing.js, not here, and they live in
+// this object anyway for the reason the next paragraph gives: one nested object
+// is one entry in `SETTINGS_PREFS` forever. Splitting the price inputs into a
+// second settings key to keep this module tidy would buy tidiness with exactly
+// the failure mode that has already cost this app two silent data losses.
+//
 // ⚠️ Every cost input lives under ONE key, `settings.costs`. That is deliberate.
 // A settings field can fall through two gaps — the default-merge on read and
 // `SETTINGS_PREFS` in supabaseBackend.js on write — and it has, twice, silently
@@ -39,16 +47,26 @@ const MONTHS_PER_YEAR = 12;
 export const FICA_PCT = 7.65;
 
 // The monthly overhead lines, in display order, with the label every screen
-// prints for each. Settings collects them and the Overhead view reports them,
-// and both read this one list: a line named "Austin Energy" where it is entered
-// and "electric" where it is totalled is the same drift the single `costs`
-// object exists to prevent.
+// prints for each and — where the name alone is not enough — what the line
+// means. Settings collects them and the Overhead view reports them, and both
+// read this one list: a line named "Austin Energy" where it is entered and
+// "electric" where it is totalled is the same drift the single `costs` object
+// exists to prevent, and a line that means one thing on one screen and another
+// on the next is that same failure wearing a different coat.
+//
+// ⚠️ `fohPayroll` is the ONLY input here whose meaning is not obvious from its
+// name, and the gap has already cost real money. Derek's first figure included
+// the brewer and cellar hours — which `annualLabor()` charges separately as
+// production labor — so the stack billed them twice, ~$2,000/mo, and the model
+// read a pint as costing $7.94 when it cost $7.15. He caught it; the app did
+// not. Hence the hint, and hence the hint living HERE rather than in the
+// Settings markup, so the Overhead view's own row carries it too.
 export const OVERHEAD_FIELDS = [
   ["rent", "Rent + NNN"],
   ["electric", "Austin Energy"],
   ["water", "Austin Water"],
   ["insurance", "Insurance"],
-  ["fohPayroll", "FOH payroll (burdened)"],
+  ["fohPayroll", "FOH payroll (burdened)", "front of house ONLY — brewer and cellar hours are charged separately as production labor"],
   ["otherFixed", "Other fixed"],
 ];
 
@@ -59,6 +77,11 @@ const UNCONFIRMED = OVERHEAD_FIELDS.map(([k]) => k);
 
 export const overheadLabel = (key) =>
   OVERHEAD_FIELDS.find(([k]) => k === key)?.[1] || key;
+
+// What the line means, for the one line whose name does not say. Null for the
+// rest, so a caller renders a hint only where there is one to render.
+export const overheadHint = (key) =>
+  OVERHEAD_FIELDS.find(([k]) => k === key)?.[2] || null;
 
 // Defaults. Confirmed figures are Slackers' real numbers (Derek, 2026-08-28);
 // anything in UNCONFIRMED above ships null and must be entered.
@@ -121,6 +144,39 @@ export const defCosts = {
   permitType: "bg",
   mbGrtPct: 6.7,
   salesTaxPct: 8.25,
+
+  // ⚠️ Does the price on the board already have sales tax in it, or is tax
+  // added at the register? On an $8.00 pint at 8.25% the answer is worth $0.61
+  // — which is most of a pint's entire contribution, so it cannot be left
+  // implicit in the arithmetic the way it was in the old preview string. It is
+  // a two-option question with no honest default, so it is asked outright.
+  //   'included' — the customer pays $8.00 and the brewery keeps $7.39.
+  //   'added'    — the customer pays $8.66 and the brewery keeps $8.00.
+  // Defaulted to 'included' because round board prices usually are, and the
+  // Pricing view prints which one it is using on every screen that depends on it.
+  taxBasis: "included",
+
+  // ── The board ──
+  // What a beer is actually sold as. Sizes are brewery-wide; WHICH size a given
+  // beer pours at is a property of that beer (`recipe.process.pourOz`), because
+  // Red Panda pouring 8 oz is a fact about Red Panda and not a special case in
+  // the pricing code.
+  //
+  // A `price` of null means "not on the board yet" — an unsold size, not a free
+  // one. It is reported as unpriced and gets a recommendation rather than a
+  // margin, the same way an unconfirmed rent is named instead of zeroed.
+  servings: [
+    { key: "half", label: "Half pour", oz: 8, price: 8.0 },
+    { key: "short", label: "12 oz", oz: 12, price: 7.0 },
+    { key: "pint", label: "16 oz pint", oz: 16, price: 8.0 },
+    { key: "crowler", label: "32 oz crowler", oz: 32, price: null },
+    { key: "growler", label: "64 oz growler", oz: 64, price: null },
+  ],
+  // The size a beer pours at unless its own recipe says otherwise.
+  defaultServing: "pint",
+  // Target margin on NET revenue, absorbed basis — what the recommended price
+  // is solved for.
+  targetMarginPct: 20,
 };
 
 // Tolerant number parse, because these are free-text fields like the yield ones
@@ -164,6 +220,22 @@ export function missingInputs(settings) {
   return UNCONFIRMED.filter((k) => parseNum(stored[k]) == null);
 }
 
+// The share of packaged beer that actually gets sold — what survives line loss
+// and foam, then comps and staff pours.
+//
+// Losses compound in sequence, each on what survived the last: they are
+// successive events, not two slices of the original volume.
+//
+// It is one exported function because THREE things divide by pints sold — the
+// annual volume, the cost stack, and (through menuPricing.js) the excise a
+// serving has to carry. A brewery that pours 5% of its beer down a drain pays
+// excise on that beer too, so a second copy of this expression that drifted by
+// a point would quietly move every price on the board.
+export function pourKeep(settings) {
+  const c = costInputs(settings);
+  return (1 - c.linePct / 100) * (1 - c.compsPct / 100);
+}
+
 // ── Volume ────────────────────────────────────────────────────────────────
 
 // A year of production, from the kettle all the way to pints actually sold.
@@ -188,9 +260,7 @@ export function annualVolume({ settings } = {}) {
   const packagedBbl = packagedGal / GAL_PER_BBL;
   const pintsPackaged = packagedBbl * PINTS_PER_BBL;
 
-  // Losses compound in sequence, each on what survived the last — they are
-  // successive events, not two slices of the original volume.
-  const keep = (1 - c.linePct / 100) * (1 - c.compsPct / 100);
+  const keep = pourKeep(settings);
   const pintsSold = pintsPackaged * keep;
 
   return {
@@ -304,13 +374,11 @@ export function annualOverhead({ settings } = {}) {
 // business works at this volume.
 export function costStack({ settings, ingredientCostPerBbl = null, volumeBbl = null } = {}) {
   const v = annualVolume({ settings });
-  const c = costInputs(settings);
 
   // Scale to an arbitrary volume for the capacity curve, keeping the same pour
   // losses so pints SOLD stays the denominator at every point on it.
   const packagedBbl = volumeBbl != null ? volumeBbl : v.packagedBbl;
-  const keep = (1 - c.linePct / 100) * (1 - c.compsPct / 100);
-  const pintsSold = packagedBbl * PINTS_PER_BBL * keep;
+  const pintsSold = packagedBbl * PINTS_PER_BBL * pourKeep(settings);
 
   const labor = annualLabor({ settings });
   const overhead = annualOverhead({ settings });
