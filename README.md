@@ -54,15 +54,22 @@ either way.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
   order. Malts also roll up into 55 lb bag counts.
-- **Analytics** — every beer in the book and what it costs, side by side: batch
-  total, cost per bbl, per keg and per 16 oz pint, sortable by any of them, with
-  brewery-wide averages and the cheapest and dearest beer per barrel. Each beer
-  is costed against its own yield, so one with a measured keg count isn't
-  compared on the brewery default. A recipe with an unpriced ingredient shows
-  what the priced part costs, marked, and stays out of the averages — and a
+- **Analytics** — two views of the whole book. **Beers** costs every beer side by
+  side: batch total, cost per bbl, per keg and per 16 oz pint, sortable by any of
+  them, with brewery-wide averages and the cheapest and dearest beer per barrel.
+  Each beer is costed against its own yield, so one with a measured keg count
+  isn't compared on the brewery default. A recipe with an unpriced ingredient
+  shows what the priced part costs, marked, and stays out of the averages — and a
   separate list ranks the unpriced ingredients by how many beers each one is
   blocking, so you can see that one missing malt price is holding up four beers.
-  Clicking a beer opens its full cost breakdown.
+  Clicking a beer opens its full cost breakdown. **Overhead** stacks the rest of
+  the cost on top: production labor and the allocated cost of being open, divided
+  by pints actually *sold* rather than pints packaged. It separates the direct
+  cost (whether one more pint is worth pouring) from the absorbed cost (whether
+  the business works at this volume), and shows what each overhead line comes to
+  per pint — ingredients are a few percent of a pint, so this is where the money
+  actually is. An operating cost you haven't entered is named and left out rather
+  than counted as zero, and the total is marked as the floor it is.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — ingredient pricing (upload the

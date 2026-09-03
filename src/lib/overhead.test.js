@@ -62,7 +62,7 @@ describe("costInputs", () => {
 describe("missingInputs", () => {
   it("names every unconfirmed overhead input", () => {
     expect(missingInputs({})).toEqual(
-      ["rent", "electric", "water", "insurance", "otherFixed", "fohPayroll"]
+      ["rent", "electric", "water", "insurance", "fohPayroll", "otherFixed"]
     );
   });
 

@@ -1,8 +1,13 @@
 // Per-batch ingredient cost: what a brew of a given recipe costs to make.
 //
 // Pure, like orderCalc.js and brewSheet.js, so the arithmetic is testable
-// without rendering anything. Scope is ingredients only — no packaging, labor,
-// or utilities.
+// without rendering anything. Scope is ingredients only — and it stays that
+// way. Packaging, labor and the cost of being open live one layer up, in
+// lib/overhead.js, which stacks them ON TOP of this number rather than mixing
+// them into it. That separation is deliberate: this figure is exact (real
+// vendor prices against a real grain bill) and the layer above is modelled, so
+// folding them together would give a modelled number the authority of a
+// measured one.
 //
 // Two rules shape the whole module:
 //
