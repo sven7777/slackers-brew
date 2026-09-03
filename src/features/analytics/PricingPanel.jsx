@@ -3,7 +3,7 @@ import PriceInput from "../../components/PriceInput";
 import SortableTh from "../../components/SortableTh";
 import { costInputs, costStack, overheadLabel } from "../../lib/overhead";
 import {
-  OZ_PER_PINT, priceBeers, priceBoard, servingsOf, sortPricedBeers,
+  OZ_PER_PINT, article, priceBeers, priceBoard, servingsOf, sortPricedBeers,
 } from "../../lib/menuPricing";
 import { card, hdr, cell, num, th, inp, statBox, statLabel, statValue, statNote } from "../../styles";
 
@@ -41,9 +41,6 @@ const money = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
 const signed = (n) => (n == null ? "—" : `${n < 0 ? "−" : ""}$${Math.abs(n).toFixed(2)}`);
 const pct = (n) => (n == null ? "—" : `${n.toFixed(1)}%`);
 const perOz = (n) => (n == null ? "—" : `$${n.toFixed(3)}`);
-// "a $8.00 pint" is read aloud as "a eight dollar pint". Eight and eleven are
-// the two leading digits that take "an".
-const article = (n) => (n != null && /^\$?(8|11)/.test(String(n)) ? "an" : "a");
 
 // ⚠️ An incomplete cost marks a PROFIT in the opposite direction from a cost.
 // The rest of the app appends `+` to a total built on a missing input, meaning

@@ -48,6 +48,18 @@ export const floorCents = (n) =>
 
 const pct = (n) => (Number.isFinite(n) ? n / 100 : 0);
 
+// "a $8.00 pint" is read aloud as "a eight dollar pint". English takes "an"
+// before a vowel SOUND, and the prices that start with one are the eights and
+// the elevens: $8, $11, $18, $80-89. Scoped to a MENU price deliberately —
+// $110 is "one hundred ten" and would want "a", but no brewery pours one, and a
+// rule that handled it would be longer than the thing it corrects.
+//
+// It lives here rather than in either panel because both the Pricing view and
+// the Settings preview print a price into a sentence, and two copies of a rule
+// this fiddly is two chances for one of them to drift.
+export const article = (price) =>
+  /^\$?(8|11|18)/.test(String(price ?? "")) ? "an" : "a";
+
 // ── The board ─────────────────────────────────────────────────────────────
 
 // Serving sizes as stored, tolerant of the free-text they are typed in. A row

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  OZ_PER_BBL, deductionFactors, deductions, floorCents, pourFor,
+  OZ_PER_BBL, article, deductionFactors, deductions, floorCents, pourFor,
   priceBeers, priceBoard, priceServing, recommendedPrice, roundToBoard,
   servingsOf, sortPricedBeers,
 } from "./menuPricing";
@@ -41,6 +41,26 @@ describe("floorCents", () => {
   it("returns null rather than a number for a non-number", () => {
     expect(floorCents(null)).toBeNull();
     expect(floorCents(NaN)).toBeNull();
+  });
+});
+
+describe("article", () => {
+  // "a $8.00 pint" reads as "a eight dollar pint".
+  it("takes 'an' before the prices that start with a vowel sound", () => {
+    for (const p of ["$8.00", 8, "$11.00", "$18.00", "$8.50", "$85.00"]) {
+      expect(article(p)).toBe("an");
+    }
+  });
+
+  it("takes 'a' before every other price", () => {
+    for (const p of ["$7.00", "$12.00", "$1.50", "$64.00", "$9.00"]) {
+      expect(article(p)).toBe("a");
+    }
+  });
+
+  it("falls back to 'a' rather than throwing on nothing", () => {
+    expect(article(null)).toBe("a");
+    expect(article(undefined)).toBe("a");
   });
 });
 

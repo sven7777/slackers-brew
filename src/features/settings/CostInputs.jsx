@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { OVERHEAD_FIELDS, annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs, overheadHint, overheadLabel } from "../../lib/overhead";
 import { parseNum } from "../../lib/overhead";
-import { deductions, pourFor, servingsOf } from "../../lib/menuPricing";
+import { article, deductions, pourFor, servingsOf } from "../../lib/menuPricing";
 import PriceInput from "../../components/PriceInput";
 import { card, hdr, inp, btn } from "../../styles";
 
@@ -22,9 +22,6 @@ const money = (n) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 // Whole dollars are right for a year of rent and wrong for what comes off one
 // pint, where the whole figure is cents.
 const cents = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
-// "a $8.00 pint" is read aloud as "a eight dollar pint". Eight and eleven are
-// the two leading digits that take "an".
-const article = (n) => (n != null && /^(8|11)/.test(String(n)) ? "an" : "a");
 
 const label = { fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" };
 const fieldWrap = { display: "flex", flexDirection: "column", gap: 4 };
