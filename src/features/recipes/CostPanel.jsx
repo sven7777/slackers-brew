@@ -178,7 +178,9 @@ export default function CostPanel({ recipe, ri, setRecs, dbl, setDbl, malts, hop
 
       <div style={{ ...card, marginBottom: 8 }}>
         <div style={noteStyle}>
-          Ingredient cost only — no packaging, labor, or utilities. Water salts are excluded
+          <strong>Ingredients only.</strong> Labor, rent and utilities aren't here — they don't
+          belong to one recipe, so they're modelled per pint in{" "}
+          <strong>Analytics ▸ Overhead</strong> and stack on top of this. Water salts are excluded
           (dosed in grams, pennies per batch). Cost per pint is a 16 oz pour of{" "}
           <strong>packaged</strong> beer — it doesn't account for taproom pour loss (foam, line
           purge, tasters), so a pint actually sold costs a little more. Editing a cost here changes it for{" "}

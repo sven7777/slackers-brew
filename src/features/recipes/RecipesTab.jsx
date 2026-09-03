@@ -10,7 +10,7 @@ import StyleSelect from "../../components/StyleSelect";
 import { defRecipes, maltNames, hopNames, yeastNames, adjNames, saltNames } from "../../lib/defaults";
 import { sortedWithIndex } from "../../lib/sortNames";
 import { addIngredient } from "../../lib/recipeRows";
-import { card, hdr, btn, inp } from "../../styles";
+import { card, hdr, btn, inp, segWrap, segBtn } from "../../styles";
 
 // Sub-views of the Recipes tab, all driven by the one recipe dropdown below.
 const SUBVIEWS = [
@@ -19,15 +19,6 @@ const SUBVIEWS = [
   { key: "cellar", label: "Cellar Sheet" },
   { key: "cost", label: "Cost" },
 ];
-const segWrap = { display: "flex", gap: 4, padding: 4, background: "#f1f5f9", borderRadius: 8, marginBottom: 12 };
-const segBtn = (active) => ({
-  flex: 1, padding: "8px 12px", fontSize: 13, border: "none", cursor: "pointer", borderRadius: 6,
-  fontWeight: active ? 700 : 500,
-  background: active ? "#fff" : "transparent",
-  color: active ? "#92400e" : "#64748b",
-  boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-});
-
 // Which inventory category each recipe table draws from, for the catalog
 // browser opened out of that table's Add picker.
 const CAT_OF = { m: "malt", h: "hop", y: "yeast", a: "adj" };

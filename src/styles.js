@@ -14,3 +14,10 @@ export const addRow = {display:'flex',gap:6,padding:'6px 10px',alignItems:'cente
 export const sel = {flex:1,padding:'4px 6px',fontSize:13,border:'1px solid #cbd5e1',borderRadius:4,background:'#fff',color:'#1e293b'};
 export const addBtn = {padding:'4px 12px',fontSize:12,border:'1px solid #f59e0b',borderRadius:4,background:'#fef3c7',cursor:'pointer',color:'#92400e',fontWeight:600};
 export const tabBtn = a=>({padding:'10px 20px',border:'none',borderBottom:a?'3px solid #f59e0b':'3px solid transparent',background:'none',cursor:'pointer',fontWeight:a?700:500,fontSize:14,color:a?'#f59e0b':'#475569',transition:'all 0.15s'});
+
+// Segmented sub-nav within a tab (Recipes' four views of one recipe, Analytics'
+// two views of the book). Distinct from `tabBtn` on purpose: the top nav is
+// where you are in the app, this is which lens you're using on what's already
+// selected, so it reads as a control rather than as navigation.
+export const segWrap = {display:'flex',gap:4,padding:4,background:'#f1f5f9',borderRadius:8,marginBottom:12};
+export const segBtn = a=>({flex:1,padding:'8px 12px',fontSize:13,border:'none',cursor:'pointer',borderRadius:6,fontWeight:a?700:500,background:a?'#fff':'transparent',color:a?'#92400e':'#64748b',boxShadow:a?'0 1px 2px rgba(0,0,0,0.08)':'none'});

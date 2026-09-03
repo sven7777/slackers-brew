@@ -117,4 +117,27 @@ describe("AnalyticsTab", () => {
     expect(screen.getByText(/no ingredients yet/)).toBeInTheDocument();
     expect(stat("Beers costed")).toContain("of 1");
   });
+
+  it("switches to the Overhead view and feeds it the book average", () => {
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: "Overhead" }));
+
+    // The Beers table is gone and the cost stack is in its place.
+    expect(screen.queryByText("Cost by Beer")).not.toBeInTheDocument();
+    // ⚠️ The ingredient layer must be the SAME number the Beers tile printed —
+    // $87.92/bbl — not a second computation off the same recipes. 3.2419 bbl
+    // × 40 batches × $87.92 = $11,401.35.
+    const row = screen.getByText("Ingredients").closest("tr");
+    expect(row.textContent).toContain("$11,401");
+  });
+
+  it("shows Overhead even with no recipes at all — rent is a cost on day one", () => {
+    renderTab({ recs: [] });
+    // The Beers view says there is nothing to cost...
+    expect(screen.getByText(/No recipes yet/)).toBeInTheDocument();
+    // ...but the sub-nav is still there and Overhead still has something to say.
+    fireEvent.click(screen.getByRole("button", { name: "Overhead" }));
+    expect(screen.getByText(/No recipe is fully priced/)).toBeInTheDocument();
+    expect(screen.getByText("Production labor")).toBeInTheDocument();
+  });
 });

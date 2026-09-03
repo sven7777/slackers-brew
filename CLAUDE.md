@@ -88,8 +88,13 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
 - **Order Calculator** — select recipes (single/double batch) → computed order summary
-- **Analytics** — every beer costed side by side ([analytics.js](src/lib/analytics.js) +
-  [AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx)): batch total, cost/bbl,
+- **Analytics** — two views of the whole book, behind a segmented sub-nav
+  ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
+  state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
+  both, so the Overhead view's ingredient layer is literally the average printed in the
+  Beers tile beside it, never a second computation off the same recipes.
+  - **Beers** — every beer costed side by side ([analytics.js](src/lib/analytics.js) +
+  [BeersPanel.jsx](src/features/analytics/BeersPanel.jsx)): batch total, cost/bbl,
   cost/keg, cost/pint per recipe, sortable on any column, plus brewery-wide averages
   and the cheapest/dearest beer per bbl. It adds **no arithmetic of its own** — every
   figure comes from the same `computeRecipeCost()` the Cost panel calls, so a number
@@ -108,7 +113,24 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   would. Clicking a beer hands off into its Cost view (`openRecipeCost` in App.jsx →
   RecipesTab's `initialView`; the sub-nav is still the tab's own state, and the nav
   buttons reset it, so arriving by hand still starts on Edit)
-- **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), and data backup (export/import all app data as JSON)
+  - **Overhead** — what a pint costs BEYOND its ingredients
+  ([overhead.js](src/lib/overhead.js) + [OverheadPanel.jsx](src/features/analytics/OverheadPanel.jsx)):
+  the cost stack per pint (ingredients → production labor → allocated overhead), the
+  overhead broken out line by line, and where the labor goes. Like the Beers view it
+  adds **no arithmetic of its own**. Three things the layout exists to say:
+  **DIRECT vs ABSORBED** are separate rows because they answer different questions —
+  direct (ingredients + labor) says whether one more pint is worth pouring, absorbed
+  (+ overhead) says whether the business works at this volume, and one blended "cost
+  per pint" would answer neither. The denominator is **pints SOLD**, not packaged —
+  beer lost to foam, line purge and comps is beer you paid to make and were never paid
+  for. And an **unconfirmed input is not a zero**: a blank rent is named, left out, and
+  the absorbed figure is marked `+` as the floor it is, exactly as the Beers view marks
+  a recipe with an unpriced ingredient. ⚠️ The split between the two views is itself the
+  point — ingredient COGS is the EXACT part (real vendor prices, real grain bills) and
+  runs ~6% of an $8 pint, so putting the precise small number and the modelled large one
+  on one screen would let the first stand in for the second. Keep cogs.js
+  ingredients-only and stack on top of it; do not fold overhead back into it.
+- **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), **operating costs** ([CostInputs.jsx](src/features/settings/CostInputs.jsx) — production/capacity, taproom losses, production labor, monthly overhead and price deductions, all under the single `settings.costs` object; it and Analytics ▸ Overhead read the one `OVERHEAD_FIELDS` list in overhead.js, so a line cannot be called "Austin Energy" where it is entered and "electric" where it is totalled), and data backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
@@ -327,7 +349,7 @@ The printable sheets each have a pure recipe→view-model builder, kept out of t
 - Inline CSS-in-JS objects only — no CSS file, no Tailwind. Shared objects in [src/styles.js](src/styles.js).
 - Color accent: `#f59e0b` (amber)
 - Neutral grays from Tailwind's slate palette
-- Shared style vars: `cell`, `num`, `inp`, `th`, `btn`, `card`, `hdr`, `badge`, `rmBtn`, `addRow`, `sel`, `addBtn`, `tabBtn`
+- Shared style vars: `cell`, `num`, `inp`, `th`, `btn`, `card`, `hdr`, `badge`, `rmBtn`, `addRow`, `sel`, `addBtn`, `tabBtn`, and `segWrap`/`segBtn` for a tab's own sub-nav (Recipes' four views, Analytics' two) — distinct from `tabBtn` on purpose: the top nav is where you are in the app, a segmented control is which lens you're using on what's already selected
 
 ## Testing
 
