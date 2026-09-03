@@ -78,16 +78,18 @@ describe("PricingPanel", () => {
     expect(screen.getByText(/= Net revenue/)).toBeInTheDocument();
   });
 
+  // ✅ Slackers' confirmed basis (Derek, 2026-09-03): the board says $8 and
+  // Toast adds tax at the register.
   it("states which tax basis every figure on the screen assumes", () => {
     renderPanel();
-    expect(screen.getByLabelText("Sales tax basis")).toHaveValue("included");
-    expect(screen.getByText(/of sales tax passing through/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Sales tax basis")).toHaveValue("added");
+    expect(screen.getByText(/rings up at \$8\.66 and the brewery keeps \$8\.00/)).toBeInTheDocument();
   });
 
   it("switches the basis and stores it under settings.costs", () => {
     const { setSettings } = renderPanel();
-    fireEvent.change(screen.getByLabelText("Sales tax basis"), { target: { value: "added" } });
-    expect(applied(setSettings).costs.taxBasis).toBe("added");
+    fireEvent.change(screen.getByLabelText("Sales tax basis"), { target: { value: "included" } });
+    expect(applied(setSettings).costs.taxBasis).toBe("included");
   });
 
   // Editing the board here edits the brewery's board, exactly as an ingredient

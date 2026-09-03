@@ -142,10 +142,9 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   that is too low and a price that is too high are the same mistake made from either end.
   ⚠️ It is **not** `pricing.js`, which converts vendor packs to recipe units — that one
   prices a sack of malt, this one prices a pint. Four things the layout exists to say.
-  **PRICE is not REVENUE**: sales tax, card processing and excise take ~$0.90 of an $8.00
-  pint and none of them appear on a menu, so comparing a board price straight against a
-  cost/pint overstates the margin by about a beer's worth of ingredients — the whole
-  deduction walk is printed for that reason. **SIZE is a pricing decision**: one price for
+  **PRICE is not REVENUE**: card processing and excise take $0.31 of Slackers' $8.00 pint
+  and neither appears on a menu, so comparing a board price straight against a cost/pint
+  overstates the margin — the whole deduction walk is printed for that reason. **SIZE is a pricing decision**: one price for
   12 and 16 oz makes the pint the cheapest beer on the board per ounce, which the `$/oz`
   column exists to make unavoidable. The **pour belongs to the beer** — Red Panda's 8 oz
   lives on `recipe.process.pourOz` (free-form JSONB, migration 0005, so no migration) and
@@ -156,11 +155,17 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   confident green profit beside a cost with no rent in it is the `+` convention failing in
   the one place where it would flatter rather than alarm.
 
-  ⚠️ **The tax basis is asked, not assumed.** `costs.taxBasis` (`included`/`added`) decides
-  whether an $8.00 board price is $8.00 the customer pays or $8.66 — worth $0.61 on that
-  pint at 8.25%, which is more than a pint's entire contribution. The old Settings preview
-  string assumed tax was added on top and did the arithmetic by hand; it now calls the same
-  `deductions()` the board does. ⚠️ Two more rules `menuPricing.js` keeps that are easy to
+  ⚠️ **The tax basis is asked, not assumed, and it is the single biggest input on the
+  screen.** `costs.taxBasis` (`included`/`added`) decides whether an $8.00 board price is
+  $8.00 the customer pays or $8.66 — worth $0.61 at 8.25%, which is more than a pint's
+  entire margin, and it flips the answer's SIGN: against a $7.15 absorbed cost the same
+  pint clears $0.54 on one basis and loses $0.05 on the other. ✅ Slackers is **`added`**
+  (Derek, 2026-09-03: the board says $8 and Toast adds tax), and that is the shipped
+  default, the same way the 150 gal / 33% volume defaults are the brewery's real numbers.
+  #98 shipped it defaulted to `included` on a guess and #99 corrected it; the guess was
+  catchable only because the view prints its basis above every figure. The old Settings
+  preview string had the same assumption buried in hand-rolled arithmetic; it now calls
+  the same `deductions()` the board does. ⚠️ Two more rules `menuPricing.js` keeps that are easy to
   undo: the card fee is charged on the GROSS amount swiped, tax included, because the
   processor does not care which part the brewery keeps; and excise is spread over ounces
   **SOLD**, since beer lost to foam was still produced and still owes it. And

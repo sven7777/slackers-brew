@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import CostInputs from "./CostInputs";
 
 const settings = { postBoilYield: 150, avgKegs: 6.5, lossPct: 33 };
@@ -79,9 +79,13 @@ describe("CostInputs", () => {
 
   it("shows the mixed beverage hit once that permit is selected", () => {
     renderInputs({ settings: { ...settings, costs: { permitType: "mb" } } });
-    // 6.7% of the $7.39 of BEER inside a tax-inclusive $8.00 pint, not 6.7% of
-    // the $8.00 — the customer's sales tax was never the brewery's receipts.
-    // The old hand-rolled preview charged it on the full $8.00 and read $0.54.
+    // 6.7% of the full $8.00, because on the added basis the whole board price
+    // is beverage receipts. On the inclusive basis it would be 6.7% of the
+    // $7.39 of beer inside it — the customer's sales tax was never the
+    // brewery's receipts — and reads $0.50.
+    expect(screen.getByText(/\$0\.54 gross receipts/)).toBeInTheDocument();
+    cleanup();
+    renderInputs({ settings: { ...settings, costs: { permitType: "mb", taxBasis: "included" } } });
     expect(screen.getByText(/\$0\.50 gross receipts/)).toBeInTheDocument();
   });
 
@@ -89,17 +93,19 @@ describe("CostInputs", () => {
   // beer with, rather than a second copy of the tax arithmetic beside it.
   it("splits the house pint the way the register does", () => {
     renderInputs();
-    // $8.00 tax-inclusive: $0.61 tax, $0.24 card, $0.05 excise, $7.10 left.
-    expect(screen.getByText(/\$0\.61 sales tax/)).toBeInTheDocument();
-    expect(screen.getByText(/\$7\.10/)).toBeInTheDocument();
+    // ✅ Slackers' confirmed basis: $8.00 on the board, tax added at the
+    // register. $0.66 tax, $0.26 card, $0.05 excise, $7.69 reaching the brewery.
+    expect(screen.getByText(/\$0\.66 sales tax/)).toBeInTheDocument();
+    expect(screen.getByText(/\$7\.69/)).toBeInTheDocument();
   });
 
   // ⚠️ Worth $0.61 on an $8.00 pint — most of a pint's whole contribution — so
   // it is asked outright rather than assumed in the arithmetic.
-  it("changes what the brewery keeps when tax is added rather than included", () => {
+  it("changes what the brewery keeps when tax is included rather than added", () => {
     const { setSettings } = renderInputs();
-    fireEvent.change(screen.getByLabelText("Board prices"), { target: { value: "added" } });
-    expect(applied(setSettings).costs.taxBasis).toBe("added");
+    expect(screen.getByLabelText("Board prices")).toHaveValue("added");
+    fireEvent.change(screen.getByLabelText("Board prices"), { target: { value: "included" } });
+    expect(applied(setSettings).costs.taxBasis).toBe("included");
   });
 
   it("edits the board, and keeps an unpriced size unpriced", () => {

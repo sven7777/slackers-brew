@@ -12,9 +12,12 @@ import { card, hdr, cell, num, th, inp, statBox, statLabel, statValue, statNote 
 // The Overhead view stops at cost. This one puts the board beside it and takes
 // off everything that comes out of a price before a single cost is paid. That
 // last part is the reason the view exists: an $8.00 pint against a $7.15
-// absorbed cost looks like $0.85 of contribution, and it is not — sales tax,
-// card processing and excise take about $0.90 of it first. The gap between the
-// price on the wall and the money that reaches the brewery is the whole subject.
+// absorbed cost looks like $0.85 of contribution, and it is not. What it really
+// is depends on the basis — on Slackers' tax-added board, card processing and
+// excise take $0.31 and it clears $0.54; on a tax-inclusive board the tax comes
+// out of that same $8.00 too and the pint LOSES five cents. The gap between the
+// price on the wall and the money that reaches the brewery is the whole subject,
+// and the basis is the biggest part of the gap.
 //
 // It adds no arithmetic of its own, exactly as the Beers and Overhead views add
 // none: every figure comes from lib/menuPricing.js, which in turn consumes
@@ -38,6 +41,9 @@ const money = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
 const signed = (n) => (n == null ? "—" : `${n < 0 ? "−" : ""}$${Math.abs(n).toFixed(2)}`);
 const pct = (n) => (n == null ? "—" : `${n.toFixed(1)}%`);
 const perOz = (n) => (n == null ? "—" : `$${n.toFixed(3)}`);
+// "a $8.00 pint" is read aloud as "a eight dollar pint". Eight and eleven are
+// the two leading digits that take "an".
+const article = (n) => (n != null && /^\$?(8|11)/.test(String(n)) ? "an" : "a");
 
 // ⚠️ An incomplete cost marks a PROFIT in the opposite direction from a cost.
 // The rest of the app appends `+` to a total built on a missing input, meaning
@@ -150,8 +156,8 @@ export default function PricingPanel({ settings, setSettings, recs, setRecs, row
           </select>
           <span style={{ color: "#94a3b8" }}>
             {c.taxBasis === "added"
-              ? `— a ${money(house?.price)} pint rings up at ${money(house ? house.gross : null)} and the brewery keeps ${money(house?.beer)} of it.`
-              : `— a ${money(house?.price)} pint is ${money(house?.beer)} of beer and ${money(house?.salesTax)} of sales tax passing through.`}
+              ? `— ${article(money(house?.price))} ${money(house?.price)} pint rings up at ${money(house ? house.gross : null)} and the brewery keeps ${money(house?.beer)} of it.`
+              : `— ${article(money(house?.price))} ${money(house?.price)} pint is ${money(house?.beer)} of beer and ${money(house?.salesTax)} of sales tax passing through.`}
           </span>
         </div>
       </div>
@@ -160,7 +166,9 @@ export default function PricingPanel({ settings, setSettings, recs, setRecs, row
         <div style={statBox}>
           <div style={statLabel}>Net on a {house?.label || "pint"}</div>
           <div style={statValue}>{money(house?.net)}</div>
-          <div style={statNote}>of a {money(house?.price)} price, after tax, card and excise</div>
+          <div style={statNote}>
+            of {article(money(house?.price))} {money(house?.price)} price, after tax, card and excise
+          </div>
         </div>
         <div style={statBox}>
           <div style={statLabel}>Absorbed cost</div>
@@ -264,7 +272,7 @@ export default function PricingPanel({ settings, setSettings, recs, setRecs, row
 
       <div style={card}>
         <div style={{ ...hdr, display: "flex", justifyContent: "space-between" }}>
-          <span>🧾 Where a {money(house?.price)} {house?.label || "pint"} goes</span>
+          <span>🧾 Where {article(money(house?.price))} {money(house?.price)} {house?.label || "pint"} goes</span>
           <span style={{ fontWeight: 400, fontSize: 12, color: "#64748b" }}>
             {c.permitType === "mb" ? "mixed beverage permit" : "wine & beer / on-premise permit"}
           </span>
@@ -339,8 +347,9 @@ export default function PricingPanel({ settings, setSettings, recs, setRecs, row
         <div style={noteStyle}>
           None of the middle rows appear on a menu, and together they are{" "}
           <strong>{money(house && house.price != null && house.net != null ? Number((house.price - house.net).toFixed(2)) : null)}</strong>{" "}
-          of a {money(house?.price)} pour. Comparing a board price straight against a cost per
-          pint skips all of them and overstates the margin by that much.
+          of {article(money(house?.price))} {money(house?.price)} pour. Comparing a board price
+          straight against a cost per pint skips all of them and overstates the margin by that
+          much.
         </div>
       </div>
 

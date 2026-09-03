@@ -14,7 +14,11 @@ const settings = { postBoilYield: 150, avgKegs: 6.5, lossPct: 33 };
 const withCosts = (costs) => ({ ...settings, costs: { ...costs } });
 
 const OVERHEAD = { rent: 6000, electric: 1500, water: 400, insurance: 600, otherFixed: 500, fohPayroll: 1000 };
+// The shipped default basis is `added` — Slackers' confirmed answer, the board
+// says $8 and Toast adds tax at the register. Tests about the INCLUSIVE path
+// therefore say so explicitly rather than leaning on the default.
 const complete = (extra = {}) => withCosts({ ...OVERHEAD, ...extra });
+const inclusive = (extra = {}) => complete({ taxBasis: "included", ...extra });
 
 const stackOf = (s, perBbl = 120) => costStack({ settings: s, ingredientCostPerBbl: perBbl });
 
@@ -86,14 +90,17 @@ describe("deductionFactors", () => {
   // The single biggest lever on this whole screen: on an $8.00 pint at 8.25%
   // the two bases differ by $0.61, which is more than a pint's contribution.
   it("treats a tax-inclusive price as the customer's total", () => {
-    const f = deductionFactors(complete());
+    const f = deductionFactors(inclusive());
     expect(f.included).toBe(true);
     expect(f.grossPerPrice).toBe(1);
     expect(f.beerPerPrice).toBeCloseTo(1 / 1.0825, 10);
   });
 
-  it("adds tax on top when the board price excludes it", () => {
-    const f = deductionFactors(complete({ taxBasis: "added" }));
+  // Slackers' confirmed basis, and therefore the shipped default: the board
+  // says $8 and the register adds tax on top.
+  it("adds tax on top when the board price excludes it, which is the default", () => {
+    const f = deductionFactors(complete());
+    expect(f.included).toBe(false);
     expect(f.beerPerPrice).toBe(1);
     expect(f.grossPerPrice).toBeCloseTo(1.0825, 10);
   });
@@ -101,8 +108,8 @@ describe("deductionFactors", () => {
   // The processor charges on the whole swipe, tax included — it does not care
   // which part of the charge the brewery keeps.
   it("charges the card fee on the gross amount swiped", () => {
-    const inc = deductionFactors(complete());
-    const add = deductionFactors(complete({ taxBasis: "added" }));
+    const inc = deductionFactors(inclusive());
+    const add = deductionFactors(complete());
     expect(inc.cardPerPrice).toBeCloseTo(0.03, 10);
     expect(add.cardPerPrice).toBeCloseTo(0.03 * 1.0825, 10);
   });
@@ -110,7 +117,11 @@ describe("deductionFactors", () => {
   // Slackers' permit is 'bg' — confirmed 2026-09-03, no gross receipts tax.
   it("charges gross receipts only on a mixed beverage permit", () => {
     expect(deductionFactors(complete()).grtPerPrice).toBe(0);
+    // On the added basis the whole menu price is beverage receipts; on the
+    // inclusive one the sales tax inside it was never the brewery's money.
     expect(deductionFactors(complete({ permitType: "mb" })).grtPerPrice)
+      .toBeCloseTo(0.067, 10);
+    expect(deductionFactors(inclusive({ permitType: "mb" })).grtPerPrice)
       .toBeCloseTo(0.067 / 1.0825, 10);
   });
 
@@ -130,7 +141,7 @@ describe("deductionFactors", () => {
 
 describe("deductions", () => {
   it("splits a tax-inclusive $8.00 pint the way the register does", () => {
-    const d = deductions({ settings: complete(), price: 8, oz: 16 });
+    const d = deductions({ settings: inclusive(), price: 8, oz: 16 });
     expect(d.gross).toBe(8);
     expect(d.salesTax).toBe(0.61);   // 8 − 8/1.0825
     expect(d.beer).toBe(7.39);
@@ -140,11 +151,15 @@ describe("deductions", () => {
     expect(d.net).toBe(7.1);
   });
 
-  it("charges the customer more, and the brewery the same, when tax is added", () => {
-    const d = deductions({ settings: complete({ taxBasis: "added" }), price: 8, oz: 16 });
-    expect(d.gross).toBe(8.66);
-    expect(d.beer).toBe(8);
-    expect(d.net).toBeGreaterThan(7.6);
+  // ✅ Slackers' real board, on the confirmed basis (Derek, 2026-09-03).
+  it("splits an $8.00 pint the way Slackers' register actually does", () => {
+    const d = deductions({ settings: complete(), price: 8, oz: 16 });
+    expect(d.gross).toBe(8.66);   // what the customer's card is charged
+    expect(d.salesTax).toBe(0.66);
+    expect(d.beer).toBe(8);       // the brewery keeps the whole board price
+    expect(d.card).toBe(0.26);    // 3% of the gross swipe, tax included
+    expect(d.excise).toBe(0.05);
+    expect(d.net).toBe(7.69);
   });
 
   // An unsold size is not a $0 sale.
@@ -175,16 +190,27 @@ describe("priceServing", () => {
     });
     expect(s.directCost).toBe(1.26);
     expect(s.absorbedCost).toBe(7.15);
-    // Direct margin says pour it; absorbed says the year is marginal. One
+    // Direct margin says pour it; absorbed says whether the year works. One
     // blended number would say neither.
-    expect(s.contribution).toBe(5.84);
-    expect(s.profit).toBe(-0.05);
+    expect(s.contribution).toBe(6.43);
+    expect(s.profit).toBe(0.54);
   });
 
-  // The finding this whole view exists to surface: the deductions eat the
-  // apparent $0.85 of contribution between a $7.15 pint and an $8.00 price.
-  it("shows an $8.00 pint failing to clear a $7.15 absorbed cost", () => {
+  // The finding this whole view exists to surface: $0.97 of an $8.66 swipe
+  // never reaches the brewery, and none of it appears on a menu. Comparing the
+  // $8.00 board price straight against the $7.15 cost would read $0.85 of
+  // margin where there is $0.54.
+  it("shows what the deductions take before any cost is paid", () => {
     const s = priceServing({ settings: complete(), price: 8, oz: 16, absorbedPerOz: perOz(7.15) });
+    expect(s.net).toBe(7.69);
+    expect(Number((s.gross - s.net).toFixed(2))).toBe(0.97);
+    expect(s.profit).toBe(0.54);
+    expect(s.profit).toBeLessThan(8 - 7.15);
+  });
+
+  // ⚠️ The same pint on the other basis is a LOSS. The basis is not a detail.
+  it("turns the same pint into a loss on the inclusive basis", () => {
+    const s = priceServing({ settings: inclusive(), price: 8, oz: 16, absorbedPerOz: perOz(7.15) });
     expect(s.net).toBe(7.1);
     expect(s.profit).toBeLessThan(0);
   });
@@ -232,15 +258,20 @@ describe("recommendedPrice", () => {
     expect(back.profit).toBeGreaterThanOrEqual(0);
   });
 
-  // Break-even on a $7.15 pint is well over the $8.00 on the board today.
-  it("prices break-even above the current board price at Slackers' costs", () => {
-    expect(recommendedPrice({ settings: complete(), costPerServing: 7.15, oz: 16, marginPct: 0 }))
+  // ✅ On Slackers' confirmed basis a $7.15 pint breaks even at $7.45, under the
+  // $8.00 on the board — so the pint clears. On the inclusive basis the same
+  // cost needs more than $8.00 and the board price does not.
+  it("prices break-even under the current board price at Slackers' costs", () => {
+    const breakEven = recommendedPrice({ settings: complete(), costPerServing: 7.15, oz: 16, marginPct: 0 });
+    expect(breakEven).toBe(7.45);
+    expect(breakEven).toBeLessThan(8);
+    expect(recommendedPrice({ settings: inclusive(), costPerServing: 7.15, oz: 16, marginPct: 0 }))
       .toBeGreaterThan(8);
   });
 
   it("wants more when tax comes out of the price than when it is added on", () => {
-    const inc = recommendedPrice({ settings: complete(), costPerServing: 5, oz: 16, marginPct: 20 });
-    const add = recommendedPrice({ settings: complete({ taxBasis: "added" }), costPerServing: 5, oz: 16, marginPct: 20 });
+    const inc = recommendedPrice({ settings: inclusive(), costPerServing: 5, oz: 16, marginPct: 20 });
+    const add = recommendedPrice({ settings: complete(), costPerServing: 5, oz: 16, marginPct: 20 });
     expect(inc).toBeGreaterThan(add);
   });
 
