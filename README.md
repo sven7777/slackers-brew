@@ -90,7 +90,17 @@ either way.
   view leads with the **fill floor** (ingredients, labor and those deductions) and
   greys out the absorbed figure, and a comparison row prices one packaged barrel
   both ways. Each beer's own wholesale price lives on that beer, per size, so a
-  beer that goes out dearer only on half barrels sets just that one.
+  beer that goes out dearer only on half barrels sets just that one. Two price
+  guides sit beside each other: a **suggested** price (cost-plus at your target
+  margin on direct cost, the basis the industry's 40–60% draft benchmark uses)
+  and a **ceiling** — the most an account could pay and still hit their own pour
+  cost, worked back from what they retail your beer for less the fifth of every
+  keg that never reaches a paying glass. They're shown together because at a
+  small brewery's cost per barrel the first often exceeds the second, which is
+  the one thing a cost-plus number alone can never tell you. The account's pour
+  size and retail price both belong to the beer, since a dear beer is poured
+  smaller and sold higher — and the ceiling needs both, because a $250 keg at
+  12 oz is still 27% pour cost against a $7 pint and only works at $8.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — the serving sizes and board

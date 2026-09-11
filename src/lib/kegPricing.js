@@ -44,7 +44,7 @@
 
 import { ceilCents, PINTS_PER_BBL } from "./cogs";
 import { costInputs, parseNum, pourKeep } from "./overhead";
-import { floorCents, OZ_PER_BBL } from "./menuPricing";
+import { floorCents, OZ_PER_BBL, OZ_PER_PINT } from "./menuPricing";
 
 // The wholesale inputs that are costs, in display order, with the label every
 // screen prints. Same arrangement as OVERHEAD_FIELDS: Settings collects them and
@@ -96,6 +96,41 @@ export function kegPriceFor(recipe, size) {
   const own = parseNum(recipe?.process?.kegPrices?.[size?.key]);
   if (own != null && own > 0) return { price: own, fromRecipe: true };
   return { price: size?.price ?? null, fromRecipe: false };
+}
+
+// The size an ACCOUNT pours a given beer at.
+//
+// ⚠️ Not the same thing as `pourFor()` next door, which is the size WE pour it
+// at in our own taproom. A beer can be a 16 oz pour at the bar here and a 12 oz
+// pour at an account, and for high-ABV beers it usually is.
+//
+// This is load-bearing rather than a detail: a $250 half barrel poured at 16 oz
+// puts the account at ~32% pour cost, which no bar accepts, and at 12 oz it is
+// ~24%, which is fine. Slackers' IPAs and specialty beers go into smaller
+// glasses at accounts (Derek, 2026-09-11), and without this the ceiling math
+// would flag every one of those kegs as overpriced when it is not.
+export function accountPourFor(recipe, settings) {
+  const c = costInputs(settings);
+  const own = parseNum(recipe?.process?.accountPourOz);
+  if (own != null && own > 0) return { oz: own, fromRecipe: true };
+  return { oz: c.accountPourOz > 0 ? c.accountPourOz : OZ_PER_PINT, fromRecipe: false };
+}
+
+// What an account RETAILS a given beer for.
+//
+// ⚠️ This has to be per-beer for the same reason the pour does, and the two
+// together are what the ceiling is made of (ceiling = pours x retail x their
+// target pour cost). Fixing only the pour gets the model half right and still
+// reads a fair price as overpriced: Slackers' specialty kegs at $250, poured at
+// 12 oz, still come to 27% pour cost against a $7 pint and only clear at $8 —
+// which is what a bar actually charges for a 9% beer. A dearer beer is poured
+// smaller AND sold higher, and leaving the second half brewery-wide would keep
+// flagging exactly the kegs the pour override was added to stop flagging.
+export function accountRetailFor(recipe, settings) {
+  const c = costInputs(settings);
+  const own = parseNum(recipe?.process?.accountRetailPint);
+  if (own != null && own > 0) return { price: own, fromRecipe: true };
+  return { price: c.accountRetailPint, fromRecipe: false };
 }
 
 // ── Deductions ────────────────────────────────────────────────────────────
@@ -290,6 +325,14 @@ export function kegPriceList({ settings, stack, marginPct = null, recipe = null 
     const directFloor = recommendedKegPrice({
       settings, costPerKeg: e.directCost, bbl: s.bbl, kegCost: s.kegCost, marginPct: 0,
     });
+    // The cost-plus suggestion, on DIRECT cost at the wholesale target margin —
+    // a different basis from the taproom board's, and the one the industry's
+    // 40–60% draft benchmark is quoted on. See defCosts.
+    const target_ = recommendedKegPrice({
+      settings, costPerKeg: e.directCost, bbl: s.bbl, kegCost: s.kegCost,
+      marginPct: c.wholesaleTargetMarginPct,
+    });
+    const acct = accountEconomics({ settings, price, bbl: s.bbl });
     return {
       ...s,
       ...e,
@@ -299,11 +342,70 @@ export function kegPriceList({ settings, stack, marginPct = null, recipe = null 
       listPrice: roundToKegPrice(recommended),
       breakEven,
       directFloor,
+      suggested: target_,
+      account: acct,
+      ceiling: acct.ceiling,
+      // ⚠️ The cost-plus target has risen above what the account can pay. At
+      // Slackers' scale this is the NORMAL case, not an error, and it is the one
+      // thing a cost-plus column alone could never tell you.
+      squeezed: target_ != null && acct.ceiling != null && target_ > acct.ceiling,
       shortfall: price != null && breakEven != null ? Number((price - breakEven).toFixed(2)) : null,
     };
   });
 
   return { rows, target, perBbl: per, stack, missing: missingWholesaleInputs(settings) };
+}
+
+// ── What the account sees ─────────────────────────────────────────────────
+
+// The bar's side of the deal, and the only thing in this module that can say a
+// keg price is too HIGH.
+//
+// ⚠️ EVERY OTHER FIGURE HERE IS A FLOOR. Cost, deductions, fill floor, the
+// cost-plus target — all of them answer "how little can we charge". None of them
+// knows that an account simply will not buy at $300, and a brewery that priced
+// off cost alone would get there honestly. A keg price is set by what the bar
+// can retail the beer for while hitting its own pour cost, and that is a
+// CEILING: the published craft-bar target is 20–26% (neighbourhood bars 22–28%,
+// a brewery's own taproom 15–22%), and above roughly a third the bar stops
+// making money and stops buying.
+//
+// ⚠️ The loss here is the ACCOUNT's, not `pourKeep()`, and it is much bigger —
+// the industry rule of thumb is that about 20% of a keg never reaches a paying
+// glass once tapping, line purge, the cloudy first pours, foam and buybacks are
+// counted, against the ~5% a brewery models on its own well-run lines. Using the
+// brewery's figure would overstate what the bar gets by fifteen points and make
+// every price look more affordable to them than it is.
+export function accountEconomics({ settings, price, bbl, pourOz: ozOverride = null, retailPint: retailOverride = null } = {}) {
+  const c = costInputs(settings);
+  const barrels = parseNum(bbl);
+  const p = parseNum(price);
+  const own = parseNum(ozOverride);
+  const pourOz = own != null && own > 0 ? own : (c.accountPourOz > 0 ? c.accountPourOz : OZ_PER_PINT);
+  const ownRetail = parseNum(retailOverride);
+  const retail = ownRetail != null && ownRetail > 0 ? ownRetail : c.accountRetailPint;
+  const target = c.accountPourCostPct / 100;
+
+  if (barrels == null || !(barrels > 0)) return { pints: null, revenue: null, pourCostPct: null, ceiling: null };
+
+  const ounces = barrels * OZ_PER_BBL;
+  // Pours the account actually SELLS, not the keg's nominal volume.
+  const pints = Math.floor((ounces * (1 - c.accountLossPct / 100)) / pourOz);
+  // Revenue floors, as all revenue does here.
+  const revenue = floorCents(pints * retail);
+
+  return {
+    pints,
+    revenue,
+    pourOz,
+    retailPint: retail,
+    // What our price costs the account as a share of what they sell it for.
+    pourCostPct: p == null || !(revenue > 0) ? null : (p / revenue) * 100,
+    // The most they could pay and still hit their target pour cost. Floors,
+    // because a ceiling rounded up is not a ceiling.
+    ceiling: !(revenue > 0) || !(target > 0) ? null : floorCents(revenue * target),
+    targetPourCostPct: c.accountPourCostPct,
+  };
 }
 
 // ── Taproom versus wholesale, on one barrel ───────────────────────────────
@@ -376,6 +478,8 @@ export function priceKegBeers({ settings, rows = [], recs = [], stackFor, sizeKe
     const per = costPerBbl({ settings, stack });
     const recipe = recs[r.index];
     const { price, fromRecipe } = kegPriceFor(recipe, size);
+    const pour = accountPourFor(recipe, settings);
+    const retail = accountRetailFor(recipe, settings);
 
     const keg = priceKeg({
       settings, price, bbl: size.bbl, kegCost: size.kegCost,
@@ -389,11 +493,23 @@ export function priceKegBeers({ settings, rows = [], recs = [], stackFor, sizeKe
       settings, costPerKeg: keg.directCost, bbl: size.bbl, kegCost: size.kegCost, marginPct: 0,
     });
 
+    const acct = accountEconomics({ settings, price, bbl: size.bbl, pourOz: pour.oz, retailPint: retail.price });
+
     return {
       ...r,
       sizeKey: size.key,
       sizeLabel: size.label,
       bbl: size.bbl,
+      accountPourOz: pour.oz,
+      accountPourFromRecipe: pour.fromRecipe,
+      accountRetailPint: retail.price,
+      accountRetailFromRecipe: retail.fromRecipe,
+      account: acct,
+      ceiling: acct.ceiling,
+      // ⚠️ Per BEER, because the pour is per beer. A specialty keg flagged
+      // against a 16 oz ceiling when the account pours it at 12 would be the
+      // app telling the brewery to cut a price that is actually fine.
+      overCeiling: price != null && acct.ceiling != null && price > acct.ceiling,
       price: keg.price,
       priceFromRecipe: fromRecipe,
       directCost: keg.directCost,

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import PriceInput from "../../components/PriceInput";
 import SortableTh from "../../components/SortableTh";
 import { costInputs } from "../../lib/overhead";
-import { sortPricedBeers } from "../../lib/menuPricing";
+import { OZ_PER_BBL, sortPricedBeers } from "../../lib/menuPricing";
 import {
   channelCompare, costPerBbl, kegPriceList, kegSizesOf, priceKegBeers,
   wholesaleHint, wholesaleLabel,
@@ -64,11 +64,17 @@ const profitStyle = (n) => (n == null ? null : { color: n < 0 ? "#b91c1c" : "#15
 const BEER_COLUMNS = [
   { key: "name", label: "Beer", align: "left" },
   { key: "price", label: "Price", align: "right" },
+  // ⚠️ The size the ACCOUNT pours it at, not ours. It is in this table because
+  // it moves the ceiling beside it by a third, and because it belongs to the
+  // beer — a 9% specialty goes into a smaller glass at a bar than a light lager.
+  { key: "accountPourOz", label: "Their pour", align: "right" },
+  { key: "accountRetailPint", label: "Their price", align: "right" },
   { key: "directCost", label: "Direct", align: "right" },
   { key: "net", label: "Net", align: "right" },
   { key: "contribution", label: "Contribution", align: "right" },
   { key: "contributionMarginPct", label: "Margin", align: "right" },
   { key: "directFloor", label: "Floor", align: "right" },
+  { key: "ceiling", label: "Ceiling", align: "right" },
 ];
 
 export default function WholesalePanel({ settings, setSettings, recs, setRecs, rows, stack, stackFor, taproomServing }) {
@@ -184,17 +190,24 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
 
       <div style={card}>
         <div style={hdr}>📦 Keg Price List</div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* ⚠️ overflowX, because the card is overflow:hidden and this table is
+            ten columns wide. Without it a narrow window slices the right-hand
+            columns clean off with nothing on screen to say so — the failure that
+            shipped twice already (#88, #90). Scrolling is the backstop; jsdom
+            has no layout, so no unit test can catch a regression here. */}
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", minWidth: 920, borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th style={{ ...th, textAlign: "left" }}>Size</th>
               <th style={th}>Price</th>
               <th style={th}>$/bbl</th>
-              <th style={th}>Keg cost</th>
               <th style={th}>Net</th>
               <th style={th}>Direct</th>
               <th style={th}>Contribution</th>
               <th style={th}>Fill floor</th>
+              <th style={th} title="cost-plus, at your wholesale target margin on direct cost">Suggested</th>
+              <th style={th} title="the most the account could pay and still hit their pour cost">Ceiling</th>
               <th style={th}>Absorbed</th>
             </tr>
           </thead>
@@ -207,16 +220,22 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
                     value={r.price} onCommit={(v) => setSizeField(r.key, "price", v)} />
                 </td>
                 <td style={num}>{whole(r.pricePerBbl)}</td>
-                <td style={num}>
-                  <PriceInput style={{ width: 80 }} aria-label={`Cost of an empty ${r.label} keg`}
-                    value={r.kegCost} onCommit={(v) => setSizeField(r.key, "kegCost", v)} />
-                </td>
                 <td style={num}>{money(r.net)}</td>
                 <td style={num}>{money(r.directCost)}</td>
                 <td style={{ ...num, ...profitStyle(r.contribution) }}>
                   {ceiling(signed(r.contribution), r.complete)}
                 </td>
                 <td style={num}>{money(r.directFloor)}</td>
+                {/* ⚠️ Printed as a PAIR, never alone. The cost-plus suggestion
+                    answers "how little can we charge"; the ceiling answers "what
+                    will they actually pay". At this brewery's scale the first
+                    routinely exceeds the second, and a suggested-price column on
+                    its own would read as an instruction to raise prices past the
+                    point any account buys. */}
+                <td style={{ ...num, ...(r.squeezed ? { color: "#b45309" } : null) }}>
+                  {money(r.suggested)}{r.squeezed && <span title="above what the account can pay"> ⚠</span>}
+                </td>
+                <td style={num}>{money(r.ceiling)}</td>
                 {/* Printed, but last and unemphasised: it is the number that
                     cannot be cleared, not the number to price against. */}
                 <td style={{ ...num, color: "#94a3b8" }}>{money(r.absorbedCost)}</td>
@@ -224,12 +243,17 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
             ))}
           </tbody>
         </table>
+        </div>
         <div style={noteStyle}>
           The house price list — what a beer goes out at unless that beer says otherwise. <strong>$/bbl</strong> is
           what the size is worth per barrel, which is why a sixtel is the dearest beer you sell by volume and a
           half barrel the cheapest. <strong>Fill floor</strong> covers ingredients, labor and the deductions
           below, and nothing else; <strong>Absorbed</strong> adds this beer's share of rent and payroll and is
-          the number wholesale is not expected to clear.
+          the number wholesale is not expected to clear. <strong>Suggested</strong> is cost-plus at your
+          wholesale target margin on direct cost — the basis the industry's 40–60% draft benchmark is quoted
+          on — and <strong>Ceiling</strong> is the most an account could pay and still hit their pour cost.
+          They are printed together because at this scale the first often exceeds the second; where it does it
+          is marked ⚠, and the answer is the next card, not a higher price.
           {c.kegDepositPerKeg != null && <> Deposits of {money(c.kegDepositPerKeg)} are collected on top and
             appear in no figure here — a deposit is the account's money held against the keg's return, not revenue.</>}
         </div>
@@ -285,6 +309,56 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
         </div>
       )}
 
+      {anchor && (
+        <div style={card}>
+          <div style={hdr}>🍸 What your account sees on {anchor.label ? `a ${anchor.label}` : "a keg"}</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <tbody>
+              <tr>
+                <td style={cell}>
+                  Pours they actually sell
+                  <span style={{ color: "#94a3b8", fontSize: 12 }}>
+                    {" "}— {Math.round((anchor.bbl || 0) * OZ_PER_BBL)} oz less {c.accountLossPct}% to tapping, line and
+                    foam, at {c.accountPourOz} oz
+                  </span>
+                </td>
+                <td style={num}>{anchor.account?.pints ?? "—"}</td>
+              </tr>
+              <tr>
+                <td style={cell}>
+                  Their revenue on the keg
+                  <span style={{ color: "#94a3b8", fontSize: 12 }}> — at {money(c.accountRetailPint)} a pour</span>
+                </td>
+                <td style={num}>{whole(anchor.account?.revenue)}</td>
+              </tr>
+              <tr>
+                <td style={cell}>
+                  Their pour cost at {money(anchor.price)}
+                  <span style={{ color: "#94a3b8", fontSize: 12 }}> — craft bars target {c.accountPourCostPct}%</span>
+                </td>
+                <td style={{ ...num, ...(anchor.account?.pourCostPct > c.accountPourCostPct ? { color: "#b45309", fontWeight: 600 } : profitStyle(1)) }}>
+                  {pct(anchor.account?.pourCostPct)}
+                </td>
+              </tr>
+              <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
+                <td style={cell}>Most they could pay</td>
+                <td style={num}>{money(anchor.ceiling)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={noteStyle}>
+            ⚠️ <strong>This is the only number here that can say a price is too HIGH.</strong> Everything else on
+            this screen is a floor built up from your costs, and a brewery pricing off cost alone will happily
+            arrive at a keg nobody buys. A bar decides what it pays by working backwards from its own pour cost:
+            what it can retail your beer for, less the fifth of every keg that never reaches a paying glass.
+            Above roughly a third, the bar stops making money on the handle and stops buying. Published targets
+            are 20–26% for a craft bar, 22–28% for a neighbourhood or sports bar, and 15–22% for a brewery's own
+            taproom. The retail price, pour size and loss are yours to set in{" "}
+            <strong>Settings ▸ Wholesale</strong> — if you know what a particular account charges, use theirs.
+          </div>
+        </div>
+      )}
+
       <div style={card}>
         <div style={hdr}>🍺 One barrel, two channels</div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -335,7 +409,8 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
             </select>
           </span>
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", minWidth: 880, borderCollapse: "collapse" }}>
           <thead>
             <tr>
               {BEER_COLUMNS.map((col) => (
@@ -366,6 +441,20 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
                     aria-label={`Wholesale price for ${b.name || "this beer"}`}
                     value={b.price} onCommit={(v) => setKegPrice(setRecs, recs, b.index, sizeKey, v)} />
                 </td>
+                <td style={num}>
+                  <input type="number" min="0" step="0.5" style={{ ...inp, width: 58,
+                    ...(b.accountPourFromRecipe ? { fontWeight: 700 } : { color: "#94a3b8" }) }}
+                    aria-label={`Account pour size for ${b.name || "this beer"}`}
+                    value={b.accountPourOz ?? ""}
+                    onChange={(e) => setProcessField(setRecs, recs, b.index, "accountPourOz", e.target.value)} />
+                </td>
+                <td style={num}>
+                  <PriceInput key={`retail-${b.index}`}
+                    style={{ width: 68, ...(b.accountRetailFromRecipe ? { fontWeight: 700 } : { color: "#94a3b8" }) }}
+                    aria-label={`Account retail price for ${b.name || "this beer"}`}
+                    value={b.accountRetailPint}
+                    onCommit={(v) => setProcessField(setRecs, recs, b.index, "accountRetailPint", v)} />
+                </td>
                 <td style={num}>{money(b.directCost)}</td>
                 <td style={num}>{money(b.net)}</td>
                 <td style={{ ...num, ...profitStyle(b.contribution) }}>
@@ -373,15 +462,26 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
                 </td>
                 <td style={num}>{b.contributionMarginPct == null ? "—" : pct(b.contributionMarginPct)}</td>
                 <td style={num}>{money(b.directFloor)}</td>
+                <td style={{ ...num, ...(b.overCeiling ? { color: "#b45309", fontWeight: 600 } : null) }}>
+                  {money(b.ceiling)}{b.overCeiling && <span title="your price is above what the account can pay at this pour"> ⚠</span>}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
         <div style={noteStyle}>
           Each beer at <strong>its own</strong> price and its own ingredient cost. A price in bold is that
           beer's own; a greyed one is the house price it inherits — type over it to set this beer's, clear it to
           go back to the house list. Prices are per size, so a beer that goes out dearer only on half barrels
-          sets that one and leaves the rest alone.
+          sets that one and leaves the rest alone. <strong>Their pour</strong> is the glass the ACCOUNT serves
+          it in — not ours — and <strong>Their price</strong> is what they charge for it. Those two are what the
+          ceiling is made of, and a dear beer moves BOTH: a 9% specialty poured at 12 oz rather than 16 gives
+          the bar a third more pours out of the same keg, and it sells for more per pour. Setting only the pour
+          gets you half way — at a $7 pint a $250 keg is still 27% pour cost even at 12 oz, and only clears at
+          $8, which is what a bar actually charges for a 9% beer. Bold is that beer's own, grey the house
+          default. A ceiling marked ⚠ means your price is above what that account can pay at that pour and
+          that price.
         </div>
       </div>
 
@@ -409,6 +509,22 @@ const WHOLESALE_SUMMARY = [["kegDeliveryPerKeg"], ["kegLossPct"]];
 // the panel reads as layout. An empty value REMOVES the override rather than
 // storing 0 — "use the house price" and "give it away" are different answers,
 // and the second one is a price a brewery might actually mean.
+// One field on a recipe's free-form `process` map. Empty REMOVES the override
+// rather than storing 0 — "use the house default" and "zero" differ, and for
+// both of these fields zero would divide the ceiling by nothing.
+function setProcessField(setRecs, recs, index, key, value) {
+  setRecs((prev) => {
+    const list = Array.isArray(prev) ? prev : recs;
+    return list.map((r, i) => {
+      if (i !== index) return r;
+      const process = { ...(r?.process || {}) };
+      if (value === "" || value == null) delete process[key];
+      else process[key] = value;
+      return { ...r, process };
+    });
+  });
+}
+
 function setKegPrice(setRecs, recs, index, sizeKey, value) {
   if (!sizeKey) return;
   setRecs((prev) => {

@@ -210,10 +210,19 @@ export const defCosts = {
   //
   // `bbl` is exact, not a rounded gallon figure — it is the denominator of every
   // per-barrel number on the screen.
+  // ✅ The 1/2 BBL price is Slackers' real base-tier price (Derek, 2026-09-11:
+  // $160 for the lightest beers, $220-250 for IPAs and specialty), the same way
+  // the 150 gal / 33% volume figures and `taxBasis: "added"` are his real
+  // numbers rather than generic ones. The house list is the BASE tier; the
+  // dearer beers carry their own price on their own row.
+  //
+  // The sixtel and quarter stay null because he sells mostly half barrels and
+  // has not quoted them — an unpriced size is one not on the list yet, and
+  // guessing one would be inventing a price the brewery never set.
   kegSizes: [
     { key: "sixtel", label: "1/6 BBL", bbl: 1 / 6, price: null, kegCost: null },
     { key: "quarter", label: "1/4 BBL", bbl: 1 / 4, price: null, kegCost: null },
-    { key: "halfbbl", label: "1/2 BBL", bbl: 1 / 2, price: null, kegCost: null },
+    { key: "halfbbl", label: "1/2 BBL", bbl: 1 / 2, price: 160, kegCost: null },
   ],
   // What it costs to get one keg to an account. Null until confirmed: a
   // brewery that has not entered it does not deliver for free, so it is named
@@ -235,6 +244,54 @@ export const defCosts = {
   // the brewery's to make, so it is a field rather than an assumption. At 0 the
   // absorbed figure collapses onto the direct one and the screen says so.
   wholesaleOverheadPct: 100,
+
+  // Gross margin to solve a suggested keg price for, on NET revenue against
+  // DIRECT cost.
+  //
+  // ⚠️ A DIFFERENT BASIS from `targetMarginPct` above, which the taproom board
+  // solves against ABSORBED cost — do not read the two numbers as comparable.
+  // The basis here is the one the industry benchmark is quoted on: craft
+  // breweries run roughly 40–60% gross margin on draft/keg against COGS, versus
+  // ~75% on taproom, and COGS in that figure is ingredients plus direct
+  // production labor. Absorbed would be meaningless here, since no keg price
+  // clears it.
+  //
+  // ⚠️ 45 is the LOW end of that band on purpose, and it is still optimistic at
+  // Slackers' scale. The 40–60% benchmark comes from breweries with enough
+  // volume to spread production labor thin; on a 3.5 BBL brewhouse at ~40
+  // batches a year, labor alone is over $150/bbl and direct cost lands near
+  // $270/bbl where a regional brewery's is under $110. Solving for 50% against
+  // that produces a price no account in Texas would pay. The suggested-price
+  // column is therefore printed BESIDE the account ceiling rather than on its
+  // own, and the panel says outright when the two have crossed.
+  wholesaleTargetMarginPct: 45,
+
+  // ── What the ACCOUNT sees ──
+  //
+  // The real ceiling on a keg price is not the brewery's cost at all — it is
+  // whether the bar can retail the beer and still hit its own pour cost. These
+  // four inputs are the bar's side of the deal, and they are the only reason
+  // the app can say a price is too HIGH rather than only too low.
+  //
+  // Defaults are the published craft-bar norms: a ~20% keg yield loss at the
+  // account (foam, line purge, the cloudy first pours, buybacks — larger than a
+  // brewery's own pour loss because it includes tapping and cleaning waste), a
+  // 20–26% target pour cost for a craft bar, and a $7.00 Texas craft pint.
+  //
+  // ⚠️ `accountPourOz` is the BREWERY-WIDE default only. Which size a given beer
+  // is poured at by an account is a property of THAT BEER — Derek's high-ABV
+  // IPAs and specialty beers go into smaller glasses (2026-09-11) — and it lives
+  // on `recipe.process.accountPourOz`, exactly as the taproom's `pourOz` does.
+  // It is load-bearing, not a detail: a $250 half barrel poured at 16 oz puts an
+  // account at ~32% pour cost, which no bar accepts, and at 12 oz it is ~24%,
+  // which is fine. Without the per-beer override the app would flag every
+  // specialty keg as priced above the ceiling when it is not. It is also most of
+  // why a published list like Reformation's can charge $225 for its 12 oz series
+  // against $175 for its 16 oz one.
+  accountRetailPint: 7.0,
+  accountPourOz: 16,
+  accountLossPct: 20,
+  accountPourCostPct: 25,
   // Target margin on NET revenue, absorbed basis — what the recommended price
   // is solved for.
   targetMarginPct: 20,

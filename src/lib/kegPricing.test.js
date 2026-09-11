@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  channelCompare, costPerBbl, kegDeductions, kegPriceFor, kegPriceList, kegSizesOf,
-  missingWholesaleInputs, priceKeg, priceKegBeers, recommendedKegPrice, roundToKegPrice,
+  accountEconomics, accountPourFor, channelCompare, costPerBbl, kegDeductions, kegPriceFor,
+  kegPriceList, kegSizesOf, missingWholesaleInputs, priceKeg, priceKegBeers,
+  recommendedKegPrice, roundToKegPrice,
 } from "./kegPricing";
 import { costStack } from "./overhead";
 import { deductions, priceServing } from "./menuPricing";
@@ -36,8 +37,14 @@ describe("kegSizesOf", () => {
     expect(half.bbl).toBe(0.5);
   });
 
-  it("ships unpriced — a price list is the brewery's, not a default", () => {
-    expect(kegSizesOf({}).every((s) => s.price == null)).toBe(true);
+  // The half barrel ships at Slackers' real base-tier price, like the volume and
+  // tax-basis defaults. The sizes he does not quote stay unpriced — an unpriced
+  // size is one not on the list yet, never a guess.
+  it("ships the half barrel priced and the rest unpriced", () => {
+    const sizes = kegSizesOf({});
+    expect(sizes.find((s) => s.key === "halfbbl").price).toBe(160);
+    expect(sizes.find((s) => s.key === "sixtel").price).toBeNull();
+    expect(sizes.find((s) => s.key === "quarter").price).toBeNull();
   });
 
   it("drops a size with no usable volume rather than dividing by zero barrels", () => {
@@ -139,7 +146,11 @@ describe("missingWholesaleInputs", () => {
   });
 
   it("names delivery and loss when unset", () => {
-    expect(missingWholesaleInputs({ costs: {} })).toEqual(["kegDeliveryPerKeg", "kegLossPct"]);
+    const m = missingWholesaleInputs({ costs: {} });
+    expect(m).toContain("kegDeliveryPerKeg");
+    expect(m).toContain("kegLossPct");
+    // The shipped half-barrel price means a keg cost is now a real gap too.
+    expect(m).toContain("kegCost");
   });
 
   it("asks for a keg cost only once a size is actually priced", () => {
@@ -357,3 +368,182 @@ describe("priceKegBeers", () => {
     expect(priceKegBeers({ settings: none, rows, recs, stackFor })).toEqual([]);
   });
 });
+
+describe("accountEconomics", () => {
+  const s = full();
+
+  // Cross-checked against a published Texas draft-pricing guide: a half barrel
+  // is 1,984 oz, a bar loses ~20% to tapping/line/foam/buybacks, leaving ~1,587
+  // oz — about 99 sixteen-ounce pints.
+  it("counts the pours the ACCOUNT actually sells, not the keg's volume", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    expect(a.pints).toBe(99);
+    // The nominal count a naive calculation would use.
+    expect(1984 / 16).toBe(124);
+  });
+
+  // ⚠️ The account's loss is the industry's ~20%, NOT the brewery's ~5%
+  // pourKeep. Using the brewery's would overstate what the bar gets by fifteen
+  // points and make every price look cheaper to them than it is.
+  it("uses the account's loss, which is far larger than the brewery's", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    const atBreweryLoss = Math.floor((1984 * (1 - 0.03)) * (1 - 0.02) / 16);
+    expect(atBreweryLoss).toBeGreaterThan(a.pints);
+    expect(atBreweryLoss - a.pints).toBeGreaterThan(15);
+  });
+
+  it("reports what our price costs the account as a pour cost", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    // 99 pints x $7.00 = $693 of revenue for the bar.
+    expect(a.revenue).toBe(693);
+    expect(a.pourCostPct).toBeCloseTo(25.97, 1);
+  });
+
+  it("back-solves the most the account could pay at their target pour cost", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    // 25% of $693.
+    expect(a.ceiling).toBe(173.25);
+  });
+
+  it("moves the ceiling with what the account can retail it for", () => {
+    const cheap = accountEconomics({ settings: full({ accountRetailPint: 6 }), price: 180, bbl: 0.5 });
+    const dear = accountEconomics({ settings: full({ accountRetailPint: 8 }), price: 180, bbl: 0.5 });
+    expect(cheap.ceiling).toBeLessThan(dear.ceiling);
+    // A $6 pint cannot support a $180 keg at a 25% pour cost.
+    expect(cheap.ceiling).toBeLessThan(180);
+  });
+
+  it("scales with keg size", () => {
+    const half = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    const sixth = accountEconomics({ settings: s, price: 95, bbl: 1 / 6 });
+    expect(sixth.pints).toBe(Math.floor(half.pints / 3));
+  });
+
+  it("returns nulls rather than dividing by a keg with no volume", () => {
+    expect(accountEconomics({ settings: s, price: 180, bbl: null }).ceiling).toBeNull();
+  });
+});
+
+describe("kegPriceList — price guidance", () => {
+  const s = full();
+  const stack = costStack({ settings: s, ingredientCostPerBbl: 120 });
+
+  it("suggests a cost-plus price on DIRECT cost, not absorbed", () => {
+    const { rows } = kegPriceList({ settings: s, stack });
+    const half = rows.find((r) => r.key === "halfbbl");
+    expect(half.suggested).toBeGreaterThan(half.directCost);
+    // Absorbed is an order of magnitude away and must not be the basis.
+    expect(half.suggested).toBeLessThan(half.absorbedCost);
+  });
+
+  it("carries the account ceiling beside it", () => {
+    const { rows } = kegPriceList({ settings: s, stack });
+    expect(rows.find((r) => r.key === "halfbbl").ceiling).toBe(173.25);
+  });
+
+  // ⚠️ The finding this column exists for. At a 3.5 BBL brewhouse's cost per
+  // barrel, the industry's own draft margin benchmark solves to a price no
+  // account would pay — and a cost-plus column alone could never say so.
+  it("flags a suggestion that has risen above what the account can pay", () => {
+    const { rows } = kegPriceList({ settings: s, stack });
+    const half = rows.find((r) => r.key === "halfbbl");
+    expect(half.squeezed).toBe(true);
+    expect(half.suggested).toBeGreaterThan(half.ceiling);
+  });
+
+  it("does not flag a squeeze when the margin is achievable", () => {
+    const cheap = costStack({ settings: s, ingredientCostPerBbl: 20 });
+    const lowTarget = full({ wholesaleTargetMarginPct: 5, accountRetailPint: 12 });
+    const { rows } = kegPriceList({ settings: lowTarget, stack: cheap });
+    expect(rows.find((r) => r.key === "halfbbl").squeezed).toBe(false);
+  });
+});
+
+describe("accountPourFor", () => {
+  it("falls back to the brewery-wide default", () => {
+    expect(accountPourFor({}, full())).toEqual({ oz: 16, fromRecipe: false });
+  });
+
+  it("prefers the beer's own — a high-ABV beer goes in a smaller glass", () => {
+    expect(accountPourFor({ process: { accountPourOz: 12 } }, full()))
+      .toEqual({ oz: 12, fromRecipe: true });
+  });
+
+  // ⚠️ Distinct from pourFor(), which is the size WE pour it at. A beer can be a
+  // 16 oz pour in our taproom and a 12 oz pour at an account.
+  it("is independent of our own taproom pour", () => {
+    const r = { process: { pourOz: 8, accountPourOz: 12 } };
+    expect(accountPourFor(r, full()).oz).toBe(12);
+  });
+});
+
+describe("the account pour moves the ceiling", () => {
+  const s = full();
+
+  // ⚠️ The finding this exists for. Derek's specialty kegs invoice at $220-250,
+  // which reads as unsellable at a 16 oz pour and is perfectly normal at 12 oz.
+  it("makes a dear keg workable at a smaller pour", () => {
+    const at16 = accountEconomics({ settings: s, price: 250, bbl: 0.5, pourOz: 16 });
+    const at12 = accountEconomics({ settings: s, price: 250, bbl: 0.5, pourOz: 12 });
+
+    // A third more pours out of the same keg.
+    expect(at12.pints).toBe(132);
+    expect(at16.pints).toBe(99);
+    // At 16 oz the bar is over 30% and refuses it outright.
+    expect(at16.pourCostPct).toBeGreaterThan(30);
+    expect(at16.ceiling).toBeLessThan(250);
+
+    // ⚠️ But the smaller pour ALONE does not rescue it: against a $7 pint it is
+    // still 27%, over the 25% target. The pour is only half the ceiling.
+    expect(at12.pourCostPct).toBeCloseTo(27.06, 1);
+    expect(at12.ceiling).toBeLessThan(250);
+
+    // It clears at $8 — what a bar actually charges for a 9% beer. Both halves
+    // are needed, which is why both are per-beer.
+    const real = accountEconomics({ settings: s, price: 250, bbl: 0.5, pourOz: 12, retailPint: 8 });
+    expect(real.pourCostPct).toBeLessThan(25);
+    expect(real.ceiling).toBeGreaterThan(250);
+  });
+});
+
+describe("priceKegBeers — account ceiling per beer", () => {
+  const s = full();
+  const stackFor = (perBbl) => costStack({ settings: s, ingredientCostPerBbl: perBbl });
+  const rows = [
+    { index: 0, name: "Light", costPerBbl: 80, complete: true },
+    { index: 1, name: "Specialty", costPerBbl: 210, complete: true },
+  ];
+  const recs = [
+    { n: "Light" },
+    { n: "Specialty", process: { kegPrices: { halfbbl: 250 }, accountPourOz: 12, accountRetailPint: 8 } },
+  ];
+
+  it("resolves each beer's own account pour", () => {
+    const out = priceKegBeers({ settings: s, rows, recs, stackFor, sizeKey: "halfbbl" });
+    expect(out[0].accountPourOz).toBe(16);
+    expect(out[0].accountPourFromRecipe).toBe(false);
+    expect(out[1].accountPourOz).toBe(12);
+    expect(out[1].accountPourFromRecipe).toBe(true);
+    expect(out[0].accountRetailPint).toBe(7);
+    expect(out[1].accountRetailPint).toBe(8);
+    expect(out[1].accountRetailFromRecipe).toBe(true);
+  });
+
+  // Without the per-beer pour this beer would be flagged as overpriced when it
+  // is not — the app telling the brewery to cut a price that works fine.
+  it("does not flag a dear specialty keg that the account pours smaller", () => {
+    const out = priceKegBeers({ settings: s, rows, recs, stackFor, sizeKey: "halfbbl" });
+    const specialty = out.find((b) => b.name === "Specialty");
+    expect(specialty.price).toBe(250);
+    expect(specialty.overCeiling).toBe(false);
+
+    // The same beer on the house pour and house retail price would be flagged —
+    // the app telling the brewery to cut a price that works perfectly well.
+    const flat = priceKegBeers({
+      settings: s, rows, stackFor, sizeKey: "halfbbl",
+      recs: [recs[0], { ...recs[1], process: { kegPrices: { halfbbl: 250 } } }],
+    });
+    expect(flat.find((b) => b.name === "Specialty").overCeiling).toBe(true);
+  });
+});
+
