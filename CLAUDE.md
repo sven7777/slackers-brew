@@ -43,6 +43,9 @@ src/
                 #   — incl. analytics.js (every recipe costed, side by side)
                 #   — incl. menuPricing.js (the PRICE model, above overhead.js's
                 #   cost model; NOT pricing.js, which converts vendor packs)
+                #   — incl. kegPricing.js (the same PRICE model for the OTHER
+                #   channel: kegs to accounts, where none of menuPricing's
+                #   deductions apply)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
                 #   and, off the same parse, catalog → catalogChanges (the
@@ -155,6 +158,38 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   confident green profit beside a cost with no rent in it is the `+` convention failing in
   the one place where it would flatter rather than alarm.
 
+  ⚠️ **CHANNEL is the axis, not size.** A `Taproom | Wholesale` toggle at the top of the
+  view prices kegs to accounts ([kegPricing.js](src/lib/kegPricing.js) +
+  [WholesalePanel.jsx](src/features/analytics/WholesalePanel.jsx)). It is a sibling module
+  rather than three more rows in `servings` because **a keg is not a large serving size**
+  and every one of menuPricing's deductions is wrong on it: a keg to a licensed account is
+  a sale for **resale** (no sales tax at all, so the basis question below simply does not
+  arise), it is **invoiced rather than swiped** (no card fee), and it **leaves the building
+  full** — the account eats the foam, so no pour loss. That last one is a trap in both
+  directions, since `pourKeep()` is also what spreads excise per ounce: a keg priced as a
+  serving carries ~5% more excise than it owes. And `servings` feeds `pourFor()`, so a
+  1/2 BBL on the board would make a beer able to "pour" a half barrel. Slackers
+  **self-distributes** (Derek, 2026-09-11), so there is no distributor margin line; if that
+  changes it belongs in `kegDeductions()` beside excise. Four more rules:
+  **The denominator is PACKAGED barrels, not sold pints** — `costPerBbl()` divides
+  `stack.annual` by `packagedBbl` rather than multiplying `perPint` by 248, which would
+  charge the account's foam to the brewery twice and amplify a rounded per-pint figure by
+  248 besides. **The emphasis is INVERTED from the taproom board**: there the absorbed
+  figure leads, here the DIRECT one does, because wholesale cannot carry a taproom's rent
+  and never could — one barrel nets ~5× more poured than kegged ($1,813 vs $321 on the
+  local numbers), so a keg asked to absorb its full share would have to invoice at ~$714.
+  Hence `wholesaleOverheadPct` is a **field, not an assumption** (defaulting to 100, the
+  allocation that cannot flatter), and the view prices against the **fill floor** with the
+  absorbed figure greyed out beside it. **The price belongs to the BEER** — Derek prices
+  beers differently from one another, so a beer's own price lives on
+  `recipe.process.kegPrices` (per size, free-form JSONB, no migration) exactly as `pourOz`
+  does, and falls back to the house list in `settings.costs.kegSizes` **per size**. ⚠️ That
+  per-beer `PriceInput` is **keyed by size as well as by beer**: PriceInput holds the
+  keystrokes while focused, so without the key React reuses the instance across a size
+  switch and a half-barrel draft sits on top of the sixtel's house price — the row's
+  arithmetic right and the number in the box wrong. And a **deposit is a liability, not
+  revenue**: it prints on the price list and is in no margin on the screen.
+
   ⚠️ **The tax basis is asked, not assumed, and it is the single biggest input on the
   screen.** `costs.taxBasis` (`included`/`added`) decides whether an $8.00 board price is
   $8.00 the customer pays or $8.66 — worth $0.61 at 8.25%, which is more than a pint's
@@ -174,7 +209,10 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   comes back ~2¢ short of its own target and is nudged a cent at a time until it actually
   clears. Its own test caught that; don't simplify it back to the algebra
 - **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), **operating costs** ([CostInputs.jsx](src/features/settings/CostInputs.jsx) — production/capacity, taproom losses, production labor, monthly overhead and price deductions, all under the single `settings.costs` object; it and Analytics ▸ Overhead read the one `OVERHEAD_FIELDS` list in overhead.js, so a line cannot be called "Austin Energy" where it is entered and "electric" where it is totalled — the list also carries the per-field HINT, because ⚠️ `fohPayroll` is the one input whose meaning its name doesn't give: it is **front of house ONLY**, and a figure that included the brewer and cellar hours double-counted them against `annualLabor()` and read a pint as costing $7.94 when it cost $7.15), **the board** (serving sizes, their prices, the house pour and the target margin the
-  Pricing view solves for), and data backup (export/import all app data as JSON)
+  Pricing view solves for), **wholesale** (the house keg price list, what an empty keg
+  costs, delivery, keg loss, deposit, and the overhead share a wholesale barrel carries —
+  `WHOLESALE_FIELDS` in kegPricing.js plays the same one-list role `OVERHEAD_FIELDS` does),
+  and data backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 

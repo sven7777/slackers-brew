@@ -180,6 +180,61 @@ export const defCosts = {
   ],
   // The size a beer pours at unless its own recipe says otherwise.
   defaultServing: "pint",
+
+  // ── Wholesale: kegs sold to accounts ──
+  //
+  // ⚠️ A keg is NOT a large serving size, which is why these live in their own
+  // list rather than in `servings` above. Four things differ, and all four are
+  // in the taproom arithmetic that `servings` feeds:
+  //
+  //   * Sales tax does not apply. A keg to a licensed account is a sale for
+  //     RESALE — the bar collects tax from its own customers. Running a $180
+  //     keg through `deductionFactors()` would print $14.85 of tax nobody owes.
+  //   * Neither does the card fee. Accounts pay on invoice, not a swipe.
+  //   * `pourKeep()` is the TAPROOM's loss. Line purge and comps happen on our
+  //     draft lines; a keg leaves the building full and the account eats that
+  //     foam. Since pourKeep is what spreads excise per ounce, a keg priced as a
+  //     serving would carry ~5% more excise than it actually owes.
+  //   * `pourFor()` reads `servings` as candidate POUR sizes — a beer could end
+  //     up "pouring" a half barrel.
+  //
+  // Slackers self-distributes (Derek, 2026-09-11), so there is no distributor
+  // margin line: the price entered here is the price the account is invoiced
+  // and the brewery collects all of it.
+  //
+  // `price` is the HOUSE price list — what a beer sells for unless that beer
+  // says otherwise. A beer's own price lives on `recipe.process.kegPrices`,
+  // the same way its pour size lives on `process.pourOz`: Beachbomber going out
+  // dearer than the Kölsch is a fact about Beachbomber, not an exception list
+  // inside the pricing code.
+  //
+  // `bbl` is exact, not a rounded gallon figure — it is the denominator of every
+  // per-barrel number on the screen.
+  kegSizes: [
+    { key: "sixtel", label: "1/6 BBL", bbl: 1 / 6, price: null, kegCost: null },
+    { key: "quarter", label: "1/4 BBL", bbl: 1 / 4, price: null, kegCost: null },
+    { key: "halfbbl", label: "1/2 BBL", bbl: 1 / 2, price: null, kegCost: null },
+  ],
+  // What it costs to get one keg to an account. Null until confirmed: a
+  // brewery that has not entered it does not deliver for free, so it is named
+  // and left out rather than silently zeroed.
+  kegDeliveryPerKeg: null,
+  // Share of kegs that never come back, per fill. With `kegCost` above this is
+  // the shrinkage charged against each keg sold — a real cost of the channel
+  // that has no taproom equivalent at all.
+  kegLossPct: null,
+  // A deposit is the account's money held against the keg's return. It is a
+  // LIABILITY, not revenue, and is excluded from every margin on the screen; it
+  // is stored only so the printed price list can carry it.
+  kegDepositPerKeg: null,
+  // How much of the taproom's overhead a wholesale barrel should absorb.
+  //
+  // ⚠️ Defaults to 100 — charging wholesale its full share — because the
+  // conservative allocation is the one that cannot flatter. Whether rent on a
+  // taproom belongs on a keg going out the door is a real judgement and it is
+  // the brewery's to make, so it is a field rather than an assumption. At 0 the
+  // absorbed figure collapses onto the direct one and the screen says so.
+  wholesaleOverheadPct: 100,
   // Target margin on NET revenue, absorbed basis — what the recommended price
   // is solved for.
   targetMarginPct: 20,
