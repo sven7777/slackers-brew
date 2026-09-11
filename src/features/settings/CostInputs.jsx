@@ -373,7 +373,29 @@ export default function CostInputs({ settings, setSettings }) {
               hint="the account's money, held against the keg coming back — not revenue, and in no margin" />
             <Num {...num("wholesaleOverheadPct")} text="Overhead absorbed" suffix="%" width={70}
               hint="share of taproom overhead a wholesale barrel carries" />
+            <Num {...num("wholesaleTargetMarginPct")} text="Target margin" suffix="%" width={70}
+              hint="on net revenue against DIRECT cost — industry draft benchmark is 40–60%" />
           </div>
+
+          <p style={{ ...basis, marginTop: 16, marginBottom: 4, fontWeight: 600, color: "#475569" }}>
+            What the account sees
+          </p>
+          <div style={row}>
+            <Num {...num("accountRetailPint")} text="Their retail price" prefix="$" width={80}
+              hint="what a bar charges for a pour of your beer" />
+            <Num {...num("accountPourOz")} text="Their pour" suffix="oz" width={64} />
+            <Num {...num("accountLossPct")} text="Their keg loss" suffix="%" width={64}
+              hint="tapping, line purge, foam and buybacks — ~20% is the industry rule of thumb, far more than your own" />
+            <Num {...num("accountPourCostPct")} text="Their target pour cost" suffix="%" width={64}
+              hint="craft bar 20–26%, neighbourhood bar 22–28%" />
+          </div>
+          <p style={basis}>
+            ⚠️ <strong>These four are the only inputs in the app that can say a price is too HIGH.</strong>{" "}
+            Every other figure is a floor built up from your costs, and cost-plus alone will happily arrive at
+            a keg nobody buys. A bar works backwards from its own pour cost — what it can retail your beer for,
+            less the fifth of every keg that never reaches a paying glass — so that is what sets the ceiling on
+            what you can charge. If you know what a particular account charges, use their number.
+          </p>
           <p style={basis}>
             Delivery and keg loss are <strong>yours</strong> because you self-distribute, and both are
             left out of every figure until they are entered rather than counted as zero. ⚠️{" "}

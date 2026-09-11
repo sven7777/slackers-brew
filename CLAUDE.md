@@ -190,6 +190,29 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   arithmetic right and the number in the box wrong. And a **deposit is a liability, not
   revenue**: it prints on the price list and is in no margin on the screen.
 
+  ⚠️ **Every other figure in the wholesale view is a FLOOR; the account ceiling is the only
+  thing that can say a price is too HIGH.** `accountEconomics()` is the bar's side of the
+  deal — what they can retail the beer for, less the ~20% of a keg that never reaches a
+  paying glass (tapping, line purge, cloudy first pours, buybacks — **far** larger than the
+  brewery's own ~5% `pourKeep`, and using the brewery's figure would overstate what the bar
+  gets by fifteen points), against their target pour cost. Published targets: craft bar
+  20–26%, neighbourhood/sports bar 22–28%, a brewery's own taproom 15–22%. A brewery pricing
+  off cost alone will arrive at a keg nobody buys, honestly and by arithmetic. ⚠️ **The
+  cost-plus `suggested` price is therefore printed as a PAIR with `ceiling`, never alone**,
+  and `squeezed` marks where the first exceeds the second. `wholesaleTargetMarginPct`
+  (default 45) is on NET revenue against **DIRECT** cost — a **different basis** from
+  `targetMarginPct`, which the board solves against absorbed, so the two numbers are not
+  comparable. 45 is the low end of the industry's 40–60% draft gross-margin band and is
+  **still optimistic here**: that benchmark comes from breweries with volume to spread
+  production labor thin, and on a 3.5 BBL brewhouse at ~40 batches/yr direct cost lands near
+  $270/bbl where a regional's is under $110. On the local numbers a 1/2 BBL solves to
+  **$264.75 against a $173.25 ceiling** — the squeeze is the NORMAL case at this scale, not
+  an error, and it is the one thing a cost-plus column alone could never tell you. ⚠️ The
+  price-list table is **ten columns** and lives in an `overflowX: auto` wrapper at
+  `minWidth: 920` (820 still let "1/6 BBL" and "Fill floor" wrap); the card is
+  `overflow: hidden`, so without it a narrow window slices columns off silently — #88 and
+  #90 both shipped exactly that, and jsdom has no layout to catch it.
+
   ⚠️ **The tax basis is asked, not assumed, and it is the single biggest input on the
   screen.** `costs.taxBasis` (`included`/`added`) decides whether an $8.00 board price is
   $8.00 the customer pays or $8.66 — worth $0.61 at 8.25%, which is more than a pint's

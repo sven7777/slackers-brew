@@ -44,7 +44,7 @@
 
 import { ceilCents, PINTS_PER_BBL } from "./cogs";
 import { costInputs, parseNum, pourKeep } from "./overhead";
-import { floorCents, OZ_PER_BBL } from "./menuPricing";
+import { floorCents, OZ_PER_BBL, OZ_PER_PINT } from "./menuPricing";
 
 // The wholesale inputs that are costs, in display order, with the label every
 // screen prints. Same arrangement as OVERHEAD_FIELDS: Settings collects them and
@@ -290,6 +290,14 @@ export function kegPriceList({ settings, stack, marginPct = null, recipe = null 
     const directFloor = recommendedKegPrice({
       settings, costPerKeg: e.directCost, bbl: s.bbl, kegCost: s.kegCost, marginPct: 0,
     });
+    // The cost-plus suggestion, on DIRECT cost at the wholesale target margin —
+    // a different basis from the taproom board's, and the one the industry's
+    // 40–60% draft benchmark is quoted on. See defCosts.
+    const target_ = recommendedKegPrice({
+      settings, costPerKeg: e.directCost, bbl: s.bbl, kegCost: s.kegCost,
+      marginPct: c.wholesaleTargetMarginPct,
+    });
+    const acct = accountEconomics({ settings, price, bbl: s.bbl });
     return {
       ...s,
       ...e,
@@ -299,11 +307,67 @@ export function kegPriceList({ settings, stack, marginPct = null, recipe = null 
       listPrice: roundToKegPrice(recommended),
       breakEven,
       directFloor,
+      suggested: target_,
+      account: acct,
+      ceiling: acct.ceiling,
+      // ⚠️ The cost-plus target has risen above what the account can pay. At
+      // Slackers' scale this is the NORMAL case, not an error, and it is the one
+      // thing a cost-plus column alone could never tell you.
+      squeezed: target_ != null && acct.ceiling != null && target_ > acct.ceiling,
       shortfall: price != null && breakEven != null ? Number((price - breakEven).toFixed(2)) : null,
     };
   });
 
   return { rows, target, perBbl: per, stack, missing: missingWholesaleInputs(settings) };
+}
+
+// ── What the account sees ─────────────────────────────────────────────────
+
+// The bar's side of the deal, and the only thing in this module that can say a
+// keg price is too HIGH.
+//
+// ⚠️ EVERY OTHER FIGURE HERE IS A FLOOR. Cost, deductions, fill floor, the
+// cost-plus target — all of them answer "how little can we charge". None of them
+// knows that an account simply will not buy at $300, and a brewery that priced
+// off cost alone would get there honestly. A keg price is set by what the bar
+// can retail the beer for while hitting its own pour cost, and that is a
+// CEILING: the published craft-bar target is 20–26% (neighbourhood bars 22–28%,
+// a brewery's own taproom 15–22%), and above roughly a third the bar stops
+// making money and stops buying.
+//
+// ⚠️ The loss here is the ACCOUNT's, not `pourKeep()`, and it is much bigger —
+// the industry rule of thumb is that about 20% of a keg never reaches a paying
+// glass once tapping, line purge, the cloudy first pours, foam and buybacks are
+// counted, against the ~5% a brewery models on its own well-run lines. Using the
+// brewery's figure would overstate what the bar gets by fifteen points and make
+// every price look more affordable to them than it is.
+export function accountEconomics({ settings, price, bbl } = {}) {
+  const c = costInputs(settings);
+  const barrels = parseNum(bbl);
+  const p = parseNum(price);
+  const pourOz = c.accountPourOz > 0 ? c.accountPourOz : OZ_PER_PINT;
+  const target = c.accountPourCostPct / 100;
+
+  if (barrels == null || !(barrels > 0)) return { pints: null, revenue: null, pourCostPct: null, ceiling: null };
+
+  const ounces = barrels * OZ_PER_BBL;
+  // Pours the account actually SELLS, not the keg's nominal volume.
+  const pints = Math.floor((ounces * (1 - c.accountLossPct / 100)) / pourOz);
+  // Revenue floors, as all revenue does here.
+  const revenue = floorCents(pints * c.accountRetailPint);
+
+  return {
+    pints,
+    revenue,
+    pourOz,
+    retailPint: c.accountRetailPint,
+    // What our price costs the account as a share of what they sell it for.
+    pourCostPct: p == null || !(revenue > 0) ? null : (p / revenue) * 100,
+    // The most they could pay and still hit their target pour cost. Floors,
+    // because a ceiling rounded up is not a ceiling.
+    ceiling: !(revenue > 0) || !(target > 0) ? null : floorCents(revenue * target),
+    targetPourCostPct: c.accountPourCostPct,
+  };
 }
 
 // ── Taproom versus wholesale, on one barrel ───────────────────────────────

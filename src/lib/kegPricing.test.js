@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  channelCompare, costPerBbl, kegDeductions, kegPriceFor, kegPriceList, kegSizesOf,
-  missingWholesaleInputs, priceKeg, priceKegBeers, recommendedKegPrice, roundToKegPrice,
+  accountEconomics, channelCompare, costPerBbl, kegDeductions, kegPriceFor, kegPriceList,
+  kegSizesOf, missingWholesaleInputs, priceKeg, priceKegBeers, recommendedKegPrice,
+  roundToKegPrice,
 } from "./kegPricing";
 import { costStack } from "./overhead";
 import { deductions, priceServing } from "./menuPricing";
@@ -355,5 +356,95 @@ describe("priceKegBeers", () => {
   it("returns nothing rather than guessing when no size has a usable volume", () => {
     const none = { ...s, costs: { ...s.costs, kegSizes: [{ key: "junk", label: "?", bbl: "" }] } };
     expect(priceKegBeers({ settings: none, rows, recs, stackFor })).toEqual([]);
+  });
+});
+
+describe("accountEconomics", () => {
+  const s = full();
+
+  // Cross-checked against a published Texas draft-pricing guide: a half barrel
+  // is 1,984 oz, a bar loses ~20% to tapping/line/foam/buybacks, leaving ~1,587
+  // oz — about 99 sixteen-ounce pints.
+  it("counts the pours the ACCOUNT actually sells, not the keg's volume", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    expect(a.pints).toBe(99);
+    // The nominal count a naive calculation would use.
+    expect(1984 / 16).toBe(124);
+  });
+
+  // ⚠️ The account's loss is the industry's ~20%, NOT the brewery's ~5%
+  // pourKeep. Using the brewery's would overstate what the bar gets by fifteen
+  // points and make every price look cheaper to them than it is.
+  it("uses the account's loss, which is far larger than the brewery's", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    const atBreweryLoss = Math.floor((1984 * (1 - 0.03)) * (1 - 0.02) / 16);
+    expect(atBreweryLoss).toBeGreaterThan(a.pints);
+    expect(atBreweryLoss - a.pints).toBeGreaterThan(15);
+  });
+
+  it("reports what our price costs the account as a pour cost", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    // 99 pints x $7.00 = $693 of revenue for the bar.
+    expect(a.revenue).toBe(693);
+    expect(a.pourCostPct).toBeCloseTo(25.97, 1);
+  });
+
+  it("back-solves the most the account could pay at their target pour cost", () => {
+    const a = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    // 25% of $693.
+    expect(a.ceiling).toBe(173.25);
+  });
+
+  it("moves the ceiling with what the account can retail it for", () => {
+    const cheap = accountEconomics({ settings: full({ accountRetailPint: 6 }), price: 180, bbl: 0.5 });
+    const dear = accountEconomics({ settings: full({ accountRetailPint: 8 }), price: 180, bbl: 0.5 });
+    expect(cheap.ceiling).toBeLessThan(dear.ceiling);
+    // A $6 pint cannot support a $180 keg at a 25% pour cost.
+    expect(cheap.ceiling).toBeLessThan(180);
+  });
+
+  it("scales with keg size", () => {
+    const half = accountEconomics({ settings: s, price: 180, bbl: 0.5 });
+    const sixth = accountEconomics({ settings: s, price: 95, bbl: 1 / 6 });
+    expect(sixth.pints).toBe(Math.floor(half.pints / 3));
+  });
+
+  it("returns nulls rather than dividing by a keg with no volume", () => {
+    expect(accountEconomics({ settings: s, price: 180, bbl: null }).ceiling).toBeNull();
+  });
+});
+
+describe("kegPriceList — price guidance", () => {
+  const s = full();
+  const stack = costStack({ settings: s, ingredientCostPerBbl: 120 });
+
+  it("suggests a cost-plus price on DIRECT cost, not absorbed", () => {
+    const { rows } = kegPriceList({ settings: s, stack });
+    const half = rows.find((r) => r.key === "halfbbl");
+    expect(half.suggested).toBeGreaterThan(half.directCost);
+    // Absorbed is an order of magnitude away and must not be the basis.
+    expect(half.suggested).toBeLessThan(half.absorbedCost);
+  });
+
+  it("carries the account ceiling beside it", () => {
+    const { rows } = kegPriceList({ settings: s, stack });
+    expect(rows.find((r) => r.key === "halfbbl").ceiling).toBe(173.25);
+  });
+
+  // ⚠️ The finding this column exists for. At a 3.5 BBL brewhouse's cost per
+  // barrel, the industry's own draft margin benchmark solves to a price no
+  // account would pay — and a cost-plus column alone could never say so.
+  it("flags a suggestion that has risen above what the account can pay", () => {
+    const { rows } = kegPriceList({ settings: s, stack });
+    const half = rows.find((r) => r.key === "halfbbl");
+    expect(half.squeezed).toBe(true);
+    expect(half.suggested).toBeGreaterThan(half.ceiling);
+  });
+
+  it("does not flag a squeeze when the margin is achievable", () => {
+    const cheap = costStack({ settings: s, ingredientCostPerBbl: 20 });
+    const lowTarget = full({ wholesaleTargetMarginPct: 5, accountRetailPint: 12 });
+    const { rows } = kegPriceList({ settings: lowTarget, stack: cheap });
+    expect(rows.find((r) => r.key === "halfbbl").squeezed).toBe(false);
   });
 });

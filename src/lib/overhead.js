@@ -235,6 +235,43 @@ export const defCosts = {
   // the brewery's to make, so it is a field rather than an assumption. At 0 the
   // absorbed figure collapses onto the direct one and the screen says so.
   wholesaleOverheadPct: 100,
+
+  // Gross margin to solve a suggested keg price for, on NET revenue against
+  // DIRECT cost.
+  //
+  // ⚠️ A DIFFERENT BASIS from `targetMarginPct` above, which the taproom board
+  // solves against ABSORBED cost — do not read the two numbers as comparable.
+  // The basis here is the one the industry benchmark is quoted on: craft
+  // breweries run roughly 40–60% gross margin on draft/keg against COGS, versus
+  // ~75% on taproom, and COGS in that figure is ingredients plus direct
+  // production labor. Absorbed would be meaningless here, since no keg price
+  // clears it.
+  //
+  // ⚠️ 45 is the LOW end of that band on purpose, and it is still optimistic at
+  // Slackers' scale. The 40–60% benchmark comes from breweries with enough
+  // volume to spread production labor thin; on a 3.5 BBL brewhouse at ~40
+  // batches a year, labor alone is over $150/bbl and direct cost lands near
+  // $270/bbl where a regional brewery's is under $110. Solving for 50% against
+  // that produces a price no account in Texas would pay. The suggested-price
+  // column is therefore printed BESIDE the account ceiling rather than on its
+  // own, and the panel says outright when the two have crossed.
+  wholesaleTargetMarginPct: 45,
+
+  // ── What the ACCOUNT sees ──
+  //
+  // The real ceiling on a keg price is not the brewery's cost at all — it is
+  // whether the bar can retail the beer and still hit its own pour cost. These
+  // four inputs are the bar's side of the deal, and they are the only reason
+  // the app can say a price is too HIGH rather than only too low.
+  //
+  // Defaults are the published craft-bar norms: a ~20% keg yield loss at the
+  // account (foam, line purge, the cloudy first pours, buybacks — larger than a
+  // brewery's own pour loss because it includes tapping and cleaning waste), a
+  // 20–26% target pour cost for a craft bar, and a $7.00 Texas craft pint.
+  accountRetailPint: 7.0,
+  accountPourOz: 16,
+  accountLossPct: 20,
+  accountPourCostPct: 25,
   // Target margin on NET revenue, absorbed basis — what the recommended price
   // is solved for.
   targetMarginPct: 20,
