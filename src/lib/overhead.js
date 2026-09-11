@@ -117,20 +117,27 @@ export const defCosts = {
   linePct: 3,  // draft line + foam
   compsPct: 2, // comps, staff pours, tasters
 
-  // Gallons sold through the TAPROOM in a year — the one channel figure the
-  // brewery actually counts, so it is what the app asks for. Everything else
-  // packaged went out as kegs, and the split is derived rather than entered as a
-  // percentage. Same principle as `avgKegs`: ask for the measurement, back-solve
-  // the ratio.
+  // Gallons sold to OUTSIDE ACCOUNTS in a year. The taproom share is the
+  // remainder, and the split is derived rather than entered as a percentage —
+  // the `avgKegs` principle: ask for the measurement, back-solve the ratio.
   //
-  // ⚠️ It exists because POUR LOSS IS THE TAPROOM'S ALONE. Line purge, foam and
+  // ⚠️ It asks for the WHOLESALE side, not the taproom side, because that is the
+  // number a brewery knows exactly: it is invoiced, keg by keg, and sits on the
+  // books. Taproom volume is a POS report about pours. Slackers is ~1,000 gal to
+  // accounts (Derek, 2026-09-11) — about 64 half barrels a year across five
+  // accounts, or one a month each. ⚠️ The first version of this field asked for
+  // the taproom figure and I read his 1,000 gal as that, which inverted the
+  // whole split and made 40 batches/yr look impossible; ask for the side the
+  // brewery invoices.
+  //
+  // It exists because POUR LOSS IS THE TAPROOM'S ALONE. Line purge, foam and
   // comps happen on our own draft lines; a keg leaves the building full and the
   // account eats that loss. Applying `pourKeep()` to all packaged beer — which
   // is what happened before this field — charges the taproom's foam to beer that
   // never touched a tap, and shrinks the denominator every fixed cost is spread
   // over. Null means "assume it all goes through the taps", the old behaviour,
   // so an unset value changes nothing.
-  retailGalPerYear: null,
+  wholesaleGalPerYear: null,
 
   // ── Production labor (direct) ──
   brewerRate: 12.0,
@@ -403,10 +410,10 @@ export function annualVolume({ settings } = {}) {
   // mix — rejected back to all-retail with a flag, the same way `batchVolume()`
   // rejects a yield larger than the boil. Costing must never divide by beer the
   // brewery did not make.
-  const retailGal = c.retailGalPerYear;
-  const retailOverflow = retailGal != null && packagedGal > 0 && retailGal > packagedGal;
-  const splitKnown = retailGal != null && packagedGal > 0 && !retailOverflow;
-  const wholesaleGal = splitKnown ? packagedGal - retailGal : null;
+  const wholesaleGal = c.wholesaleGalPerYear;
+  const wholesaleOverflow = wholesaleGal != null && packagedGal > 0 && wholesaleGal > packagedGal;
+  const splitKnown = wholesaleGal != null && packagedGal > 0 && !wholesaleOverflow;
+  const retailGal = splitKnown ? packagedGal - wholesaleGal : null;
   const channelKeep = splitKnown
     ? (retailGal * keep + wholesaleGal) / packagedGal
     : keep;
@@ -431,14 +438,15 @@ export function annualVolume({ settings } = {}) {
     soldBbl: pintsSold / PINTS_PER_BBL,
     lossToPourPct: (1 - keep) * 100,
     // The channel split, for the panels that print it.
-    retailGal: splitKnown ? retailGal : null,
-    wholesaleGal,
+    retailGal,
+    wholesaleGal: splitKnown ? wholesaleGal : null,
     retailSharePct: splitKnown ? (retailGal / packagedGal) * 100 : null,
+    wholesaleSharePct: splitKnown ? (wholesaleGal / packagedGal) * 100 : null,
     // Blended over both channels; equals pourKeep when the split is unknown.
     channelKeep,
-    // The retail figure exceeds everything packaged — reported so the panel can
-    // say so rather than silently ignoring the input.
-    retailOverflow,
+    // The wholesale figure exceeds everything packaged — reported so the panel
+    // can say so rather than silently ignoring the input.
+    wholesaleOverflow,
   };
 }
 

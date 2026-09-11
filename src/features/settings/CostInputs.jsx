@@ -204,13 +204,15 @@ export default function CostInputs({ settings, setSettings }) {
           <div style={row}>
             <Num {...num("linePct")} text="Draft line & foam" width={70} suffix="%" />
             <Num {...num("compsPct")} text="Comps & staff pours" width={70} suffix="%" />
-            <Num {...num("retailGalPerYear", { placeholder: "" })} text="Sold in the taproom"
-              suffix="gal/yr" width={90}
-              hint="gallons poured here in a year — the rest went out as kegs and takes none of this loss" />
           </div>
+          {/* ⚠️ The rate quoted here must be the one actually APPLIED. Once a
+              keg figure is entered, pints sold uses the blended `channelKeep`,
+              not `lossToPourPct` — printing "less 4.9%" beside a figure that
+              took 3.7% is an equation that does not add up on its own screen,
+              which is the thing cogs.js's line-item rule exists to prevent. */}
           <p style={basis}>
             {Math.round(v.pintsPackaged).toLocaleString()} pints packaged less{" "}
-            {v.lossToPourPct.toFixed(1)}% ={" "}
+            {((1 - v.channelKeep) * 100).toFixed(1)}%{v.retailGal != null && " blended"} ={" "}
             <strong>{Math.round(v.pintsSold).toLocaleString()} pints sold</strong> a year (≈{" "}
             {Math.round(v.pintsSold / 12).toLocaleString()} a month).
           </p>
@@ -218,25 +220,21 @@ export default function CostInputs({ settings, setSettings }) {
               a brewery should be able to check the arithmetic it is being costed
               on. The reconciliation is also the fastest way to catch a wrong
               batches-per-year, which is the denominator for everything. */}
-          {v.retailOverflow && (
-            <p style={{ ...basis, color: "#b45309" }}>
-              ⚠️ That is more than the {Math.round(v.packagedGal).toLocaleString()} gal you package
-              in a year, so it is being ignored and the whole batch treated as taproom beer. Check
-              it against <strong>batches per year</strong> above — if the taproom figure is right,
-              the batch count is what is wrong.
-            </p>
-          )}
-          {v.retailGal != null && (
+          {v.retailGal != null ? (
             <p style={basis}>
               Of {Math.round(v.packagedGal).toLocaleString()} gal packaged,{" "}
               <strong>{Math.round(v.retailGal).toLocaleString()} gal ({v.retailSharePct.toFixed(0)}%)</strong>{" "}
-              pours here and {Math.round(v.wholesaleGal).toLocaleString()} gal (
-              {Math.round(v.wholesaleGal / 15.5)} half barrels) goes out as kegs. ⚠️{" "}
-              <strong>Only the taproom share carries pour loss</strong> — a keg leaves full and the
-              account eats that foam — so the blended figure above spreads your fixed costs over{" "}
+              pours here and {Math.round(v.wholesaleGal).toLocaleString()} gal goes out as kegs. ⚠️{" "}
+              <strong>Only the taproom share carries this loss</strong> — a keg leaves full and the
+              account eats that foam — so your fixed costs spread over{" "}
               {((1 - v.channelKeep) * 100).toFixed(1)}% loss rather than {v.lossToPourPct.toFixed(1)}%.
-              If the keg figure looks wrong, <strong>batches per year</strong> is the input to check:
-              it is the denominator for every cost in the app.
+              The keg figure is set under <strong>Wholesale</strong> below.
+            </p>
+          ) : (
+            <p style={basis}>
+              That assumes every drop pours here. If you sell kegs to accounts, enter the gallons
+              under <strong>Wholesale</strong> below — kegs leave full and take none of this loss,
+              so counting them as taproom beer overstates every cost per pint.
             </p>
           )}
         </div>
@@ -404,6 +402,29 @@ export default function CostInputs({ settings, setSettings }) {
             <Num {...num("wholesaleTargetMarginPct")} text="Target margin" suffix="%" width={70}
               hint="on net revenue against DIRECT cost — industry draft benchmark is 40–60%" />
           </div>
+
+          <div style={{ ...row, marginTop: 4 }}>
+            <Num {...num("wholesaleGalPerYear", { placeholder: "" })} text="Sold to accounts"
+              suffix="gal/yr" width={90}
+              hint="gallons invoiced out as kegs in a year — you know this one exactly" />
+          </div>
+          {v.wholesaleOverflow ? (
+            <p style={{ ...basis, color: "#b45309" }}>
+              ⚠️ That is more than the {Math.round(v.packagedGal).toLocaleString()} gal you package
+              in a year, so it is being ignored and everything treated as taproom beer. If the keg
+              figure is right, <strong>batches per year</strong> is what to check — it is the
+              denominator for every cost in the app.
+            </p>
+          ) : v.wholesaleGal != null ? (
+            <p style={basis}>
+              {Math.round(v.wholesaleGal).toLocaleString()} gal is{" "}
+              <strong>{Math.round(v.wholesaleGal / 15.5)} half barrels a year</strong> (
+              {v.wholesaleSharePct.toFixed(0)}% of what you package), leaving{" "}
+              {Math.round(v.retailGal).toLocaleString()} gal for the taproom. ⚠️ This is not just a
+              statistic: kegs take none of the taproom's pour loss, so entering it spreads your
+              fixed costs over more sellable beer and lowers every cost per pint.
+            </p>
+          ) : null}
 
           <p style={{ ...basis, marginTop: 16, marginBottom: 4, fontWeight: 600, color: "#475569" }}>
             What the account sees
