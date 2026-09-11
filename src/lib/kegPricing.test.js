@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  accountEconomics, channelCompare, costPerBbl, kegDeductions, kegPriceFor, kegPriceList,
-  kegSizesOf, missingWholesaleInputs, priceKeg, priceKegBeers, recommendedKegPrice,
-  roundToKegPrice,
+  accountEconomics, accountPourFor, channelCompare, costPerBbl, kegDeductions, kegPriceFor,
+  kegPriceList, kegSizesOf, missingWholesaleInputs, priceKeg, priceKegBeers,
+  recommendedKegPrice, roundToKegPrice,
 } from "./kegPricing";
 import { costStack } from "./overhead";
 import { deductions, priceServing } from "./menuPricing";
@@ -37,8 +37,14 @@ describe("kegSizesOf", () => {
     expect(half.bbl).toBe(0.5);
   });
 
-  it("ships unpriced — a price list is the brewery's, not a default", () => {
-    expect(kegSizesOf({}).every((s) => s.price == null)).toBe(true);
+  // The half barrel ships at Slackers' real base-tier price, like the volume and
+  // tax-basis defaults. The sizes he does not quote stay unpriced — an unpriced
+  // size is one not on the list yet, never a guess.
+  it("ships the half barrel priced and the rest unpriced", () => {
+    const sizes = kegSizesOf({});
+    expect(sizes.find((s) => s.key === "halfbbl").price).toBe(160);
+    expect(sizes.find((s) => s.key === "sixtel").price).toBeNull();
+    expect(sizes.find((s) => s.key === "quarter").price).toBeNull();
   });
 
   it("drops a size with no usable volume rather than dividing by zero barrels", () => {
@@ -140,7 +146,11 @@ describe("missingWholesaleInputs", () => {
   });
 
   it("names delivery and loss when unset", () => {
-    expect(missingWholesaleInputs({ costs: {} })).toEqual(["kegDeliveryPerKeg", "kegLossPct"]);
+    const m = missingWholesaleInputs({ costs: {} });
+    expect(m).toContain("kegDeliveryPerKeg");
+    expect(m).toContain("kegLossPct");
+    // The shipped half-barrel price means a keg cost is now a real gap too.
+    expect(m).toContain("kegCost");
   });
 
   it("asks for a keg cost only once a size is actually priced", () => {
@@ -448,3 +458,92 @@ describe("kegPriceList — price guidance", () => {
     expect(rows.find((r) => r.key === "halfbbl").squeezed).toBe(false);
   });
 });
+
+describe("accountPourFor", () => {
+  it("falls back to the brewery-wide default", () => {
+    expect(accountPourFor({}, full())).toEqual({ oz: 16, fromRecipe: false });
+  });
+
+  it("prefers the beer's own — a high-ABV beer goes in a smaller glass", () => {
+    expect(accountPourFor({ process: { accountPourOz: 12 } }, full()))
+      .toEqual({ oz: 12, fromRecipe: true });
+  });
+
+  // ⚠️ Distinct from pourFor(), which is the size WE pour it at. A beer can be a
+  // 16 oz pour in our taproom and a 12 oz pour at an account.
+  it("is independent of our own taproom pour", () => {
+    const r = { process: { pourOz: 8, accountPourOz: 12 } };
+    expect(accountPourFor(r, full()).oz).toBe(12);
+  });
+});
+
+describe("the account pour moves the ceiling", () => {
+  const s = full();
+
+  // ⚠️ The finding this exists for. Derek's specialty kegs invoice at $220-250,
+  // which reads as unsellable at a 16 oz pour and is perfectly normal at 12 oz.
+  it("makes a dear keg workable at a smaller pour", () => {
+    const at16 = accountEconomics({ settings: s, price: 250, bbl: 0.5, pourOz: 16 });
+    const at12 = accountEconomics({ settings: s, price: 250, bbl: 0.5, pourOz: 12 });
+
+    // A third more pours out of the same keg.
+    expect(at12.pints).toBe(132);
+    expect(at16.pints).toBe(99);
+    // At 16 oz the bar is over 30% and refuses it outright.
+    expect(at16.pourCostPct).toBeGreaterThan(30);
+    expect(at16.ceiling).toBeLessThan(250);
+
+    // ⚠️ But the smaller pour ALONE does not rescue it: against a $7 pint it is
+    // still 27%, over the 25% target. The pour is only half the ceiling.
+    expect(at12.pourCostPct).toBeCloseTo(27.06, 1);
+    expect(at12.ceiling).toBeLessThan(250);
+
+    // It clears at $8 — what a bar actually charges for a 9% beer. Both halves
+    // are needed, which is why both are per-beer.
+    const real = accountEconomics({ settings: s, price: 250, bbl: 0.5, pourOz: 12, retailPint: 8 });
+    expect(real.pourCostPct).toBeLessThan(25);
+    expect(real.ceiling).toBeGreaterThan(250);
+  });
+});
+
+describe("priceKegBeers — account ceiling per beer", () => {
+  const s = full();
+  const stackFor = (perBbl) => costStack({ settings: s, ingredientCostPerBbl: perBbl });
+  const rows = [
+    { index: 0, name: "Light", costPerBbl: 80, complete: true },
+    { index: 1, name: "Specialty", costPerBbl: 210, complete: true },
+  ];
+  const recs = [
+    { n: "Light" },
+    { n: "Specialty", process: { kegPrices: { halfbbl: 250 }, accountPourOz: 12, accountRetailPint: 8 } },
+  ];
+
+  it("resolves each beer's own account pour", () => {
+    const out = priceKegBeers({ settings: s, rows, recs, stackFor, sizeKey: "halfbbl" });
+    expect(out[0].accountPourOz).toBe(16);
+    expect(out[0].accountPourFromRecipe).toBe(false);
+    expect(out[1].accountPourOz).toBe(12);
+    expect(out[1].accountPourFromRecipe).toBe(true);
+    expect(out[0].accountRetailPint).toBe(7);
+    expect(out[1].accountRetailPint).toBe(8);
+    expect(out[1].accountRetailFromRecipe).toBe(true);
+  });
+
+  // Without the per-beer pour this beer would be flagged as overpriced when it
+  // is not — the app telling the brewery to cut a price that works fine.
+  it("does not flag a dear specialty keg that the account pours smaller", () => {
+    const out = priceKegBeers({ settings: s, rows, recs, stackFor, sizeKey: "halfbbl" });
+    const specialty = out.find((b) => b.name === "Specialty");
+    expect(specialty.price).toBe(250);
+    expect(specialty.overCeiling).toBe(false);
+
+    // The same beer on the house pour and house retail price would be flagged —
+    // the app telling the brewery to cut a price that works perfectly well.
+    const flat = priceKegBeers({
+      settings: s, rows, stackFor, sizeKey: "halfbbl",
+      recs: [recs[0], { ...recs[1], process: { kegPrices: { halfbbl: 250 } } }],
+    });
+    expect(flat.find((b) => b.name === "Specialty").overCeiling).toBe(true);
+  });
+});
+

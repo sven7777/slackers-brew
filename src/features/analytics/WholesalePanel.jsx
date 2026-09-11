@@ -64,11 +64,17 @@ const profitStyle = (n) => (n == null ? null : { color: n < 0 ? "#b91c1c" : "#15
 const BEER_COLUMNS = [
   { key: "name", label: "Beer", align: "left" },
   { key: "price", label: "Price", align: "right" },
+  // ⚠️ The size the ACCOUNT pours it at, not ours. It is in this table because
+  // it moves the ceiling beside it by a third, and because it belongs to the
+  // beer — a 9% specialty goes into a smaller glass at a bar than a light lager.
+  { key: "accountPourOz", label: "Their pour", align: "right" },
+  { key: "accountRetailPint", label: "Their price", align: "right" },
   { key: "directCost", label: "Direct", align: "right" },
   { key: "net", label: "Net", align: "right" },
   { key: "contribution", label: "Contribution", align: "right" },
   { key: "contributionMarginPct", label: "Margin", align: "right" },
   { key: "directFloor", label: "Floor", align: "right" },
+  { key: "ceiling", label: "Ceiling", align: "right" },
 ];
 
 export default function WholesalePanel({ settings, setSettings, recs, setRecs, rows, stack, stackFor, taproomServing }) {
@@ -404,7 +410,7 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
           </span>
         </div>
         <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", minWidth: 620, borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", minWidth: 880, borderCollapse: "collapse" }}>
           <thead>
             <tr>
               {BEER_COLUMNS.map((col) => (
@@ -435,6 +441,20 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
                     aria-label={`Wholesale price for ${b.name || "this beer"}`}
                     value={b.price} onCommit={(v) => setKegPrice(setRecs, recs, b.index, sizeKey, v)} />
                 </td>
+                <td style={num}>
+                  <input type="number" min="0" step="0.5" style={{ ...inp, width: 58,
+                    ...(b.accountPourFromRecipe ? { fontWeight: 700 } : { color: "#94a3b8" }) }}
+                    aria-label={`Account pour size for ${b.name || "this beer"}`}
+                    value={b.accountPourOz ?? ""}
+                    onChange={(e) => setProcessField(setRecs, recs, b.index, "accountPourOz", e.target.value)} />
+                </td>
+                <td style={num}>
+                  <PriceInput key={`retail-${b.index}`}
+                    style={{ width: 68, ...(b.accountRetailFromRecipe ? { fontWeight: 700 } : { color: "#94a3b8" }) }}
+                    aria-label={`Account retail price for ${b.name || "this beer"}`}
+                    value={b.accountRetailPint}
+                    onCommit={(v) => setProcessField(setRecs, recs, b.index, "accountRetailPint", v)} />
+                </td>
                 <td style={num}>{money(b.directCost)}</td>
                 <td style={num}>{money(b.net)}</td>
                 <td style={{ ...num, ...profitStyle(b.contribution) }}>
@@ -442,6 +462,9 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
                 </td>
                 <td style={num}>{b.contributionMarginPct == null ? "—" : pct(b.contributionMarginPct)}</td>
                 <td style={num}>{money(b.directFloor)}</td>
+                <td style={{ ...num, ...(b.overCeiling ? { color: "#b45309", fontWeight: 600 } : null) }}>
+                  {money(b.ceiling)}{b.overCeiling && <span title="your price is above what the account can pay at this pour"> ⚠</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -451,7 +474,14 @@ export default function WholesalePanel({ settings, setSettings, recs, setRecs, r
           Each beer at <strong>its own</strong> price and its own ingredient cost. A price in bold is that
           beer's own; a greyed one is the house price it inherits — type over it to set this beer's, clear it to
           go back to the house list. Prices are per size, so a beer that goes out dearer only on half barrels
-          sets that one and leaves the rest alone.
+          sets that one and leaves the rest alone. <strong>Their pour</strong> is the glass the ACCOUNT serves
+          it in — not ours — and <strong>Their price</strong> is what they charge for it. Those two are what the
+          ceiling is made of, and a dear beer moves BOTH: a 9% specialty poured at 12 oz rather than 16 gives
+          the bar a third more pours out of the same keg, and it sells for more per pour. Setting only the pour
+          gets you half way — at a $7 pint a $250 keg is still 27% pour cost even at 12 oz, and only clears at
+          $8, which is what a bar actually charges for a 9% beer. Bold is that beer's own, grey the house
+          default. A ceiling marked ⚠ means your price is above what that account can pay at that pour and
+          that price.
         </div>
       </div>
 
@@ -479,6 +509,22 @@ const WHOLESALE_SUMMARY = [["kegDeliveryPerKeg"], ["kegLossPct"]];
 // the panel reads as layout. An empty value REMOVES the override rather than
 // storing 0 — "use the house price" and "give it away" are different answers,
 // and the second one is a price a brewery might actually mean.
+// One field on a recipe's free-form `process` map. Empty REMOVES the override
+// rather than storing 0 — "use the house default" and "zero" differ, and for
+// both of these fields zero would divide the ceiling by nothing.
+function setProcessField(setRecs, recs, index, key, value) {
+  setRecs((prev) => {
+    const list = Array.isArray(prev) ? prev : recs;
+    return list.map((r, i) => {
+      if (i !== index) return r;
+      const process = { ...(r?.process || {}) };
+      if (value === "" || value == null) delete process[key];
+      else process[key] = value;
+      return { ...r, process };
+    });
+  });
+}
+
 function setKegPrice(setRecs, recs, index, sizeKey, value) {
   if (!sizeKey) return;
   setRecs((prev) => {

@@ -190,6 +190,17 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   arithmetic right and the number in the box wrong. And a **deposit is a liability, not
   revenue**: it prints on the price list and is in no margin on the screen.
 
+  ⚠️ **A DEAR BEER IS POURED SMALLER AND SOLD HIGHER, and the ceiling needs BOTH.** The
+  account's pour size (`recipe.process.accountPourOz`) and its retail price
+  (`recipe.process.accountRetailPint`) are per-beer, resolved by `accountPourFor()` /
+  `accountRetailFor()` over the brewery-wide defaults — the same `process` arrangement
+  `pourOz` and `kegPrices` use. ⚠️ Neither is the same as `pourFor()`, which is the size WE
+  pour at: a beer can be 16 oz here and 12 oz at an account. Slackers' IPAs and specialty
+  beers go into smaller glasses at accounts and invoice at $220–250 against a $160 base tier
+  (Derek, 2026-09-11). Fixing only the pour gets the model HALF right and still flags a fair
+  price: $250 at 12 oz is 27% pour cost against a $7 pint and only clears at $8. Its own test
+  caught that — don't collapse either field back into settings.
+
   ⚠️ **Every other figure in the wholesale view is a FLOOR; the account ceiling is the only
   thing that can say a price is too HIGH.** `accountEconomics()` is the bar's side of the
   deal — what they can retail the beer for, less the ~20% of a keg that never reaches a

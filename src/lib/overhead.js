@@ -210,10 +210,19 @@ export const defCosts = {
   //
   // `bbl` is exact, not a rounded gallon figure — it is the denominator of every
   // per-barrel number on the screen.
+  // ✅ The 1/2 BBL price is Slackers' real base-tier price (Derek, 2026-09-11:
+  // $160 for the lightest beers, $220-250 for IPAs and specialty), the same way
+  // the 150 gal / 33% volume figures and `taxBasis: "added"` are his real
+  // numbers rather than generic ones. The house list is the BASE tier; the
+  // dearer beers carry their own price on their own row.
+  //
+  // The sixtel and quarter stay null because he sells mostly half barrels and
+  // has not quoted them — an unpriced size is one not on the list yet, and
+  // guessing one would be inventing a price the brewery never set.
   kegSizes: [
     { key: "sixtel", label: "1/6 BBL", bbl: 1 / 6, price: null, kegCost: null },
     { key: "quarter", label: "1/4 BBL", bbl: 1 / 4, price: null, kegCost: null },
-    { key: "halfbbl", label: "1/2 BBL", bbl: 1 / 2, price: null, kegCost: null },
+    { key: "halfbbl", label: "1/2 BBL", bbl: 1 / 2, price: 160, kegCost: null },
   ],
   // What it costs to get one keg to an account. Null until confirmed: a
   // brewery that has not entered it does not deliver for free, so it is named
@@ -268,6 +277,17 @@ export const defCosts = {
   // account (foam, line purge, the cloudy first pours, buybacks — larger than a
   // brewery's own pour loss because it includes tapping and cleaning waste), a
   // 20–26% target pour cost for a craft bar, and a $7.00 Texas craft pint.
+  //
+  // ⚠️ `accountPourOz` is the BREWERY-WIDE default only. Which size a given beer
+  // is poured at by an account is a property of THAT BEER — Derek's high-ABV
+  // IPAs and specialty beers go into smaller glasses (2026-09-11) — and it lives
+  // on `recipe.process.accountPourOz`, exactly as the taproom's `pourOz` does.
+  // It is load-bearing, not a detail: a $250 half barrel poured at 16 oz puts an
+  // account at ~32% pour cost, which no bar accepts, and at 12 oz it is ~24%,
+  // which is fine. Without the per-beer override the app would flag every
+  // specialty keg as priced above the ceiling when it is not. It is also most of
+  // why a published list like Reformation's can charge $225 for its 12 oz series
+  // against $175 for its 16 oz one.
   accountRetailPint: 7.0,
   accountPourOz: 16,
   accountLossPct: 20,

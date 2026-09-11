@@ -97,7 +97,10 @@ either way.
   cost, worked back from what they retail your beer for less the fifth of every
   keg that never reaches a paying glass. They're shown together because at a
   small brewery's cost per barrel the first often exceeds the second, which is
-  the one thing a cost-plus number alone can never tell you.
+  the one thing a cost-plus number alone can never tell you. The account's pour
+  size and retail price both belong to the beer, since a dear beer is poured
+  smaller and sold higher — and the ceiling needs both, because a $250 keg at
+  12 oz is still 27% pour cost against a $7 pint and only works at $8.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — the serving sizes and board

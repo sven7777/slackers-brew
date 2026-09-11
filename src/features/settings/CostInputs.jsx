@@ -382,8 +382,9 @@ export default function CostInputs({ settings, setSettings }) {
           </p>
           <div style={row}>
             <Num {...num("accountRetailPint")} text="Their retail price" prefix="$" width={80}
-              hint="what a bar charges for a pour of your beer" />
-            <Num {...num("accountPourOz")} text="Their pour" suffix="oz" width={64} />
+              hint="what a bar charges for a pour of your beer — a dearer beer sells higher, so set those on the beer's own row too" />
+            <Num {...num("accountPourOz")} text="Their pour" suffix="oz" width={64}
+              hint="high-ABV beers go in smaller glasses — set those on the beer's own row" />
             <Num {...num("accountLossPct")} text="Their keg loss" suffix="%" width={64}
               hint="tapping, line purge, foam and buybacks — ~20% is the industry rule of thumb, far more than your own" />
             <Num {...num("accountPourCostPct")} text="Their target pour cost" suffix="%" width={64}
@@ -394,7 +395,11 @@ export default function CostInputs({ settings, setSettings }) {
             Every other figure is a floor built up from your costs, and cost-plus alone will happily arrive at
             a keg nobody buys. A bar works backwards from its own pour cost — what it can retail your beer for,
             less the fifth of every keg that never reaches a paying glass — so that is what sets the ceiling on
-            what you can charge. If you know what a particular account charges, use their number.
+            what you can charge. These two are the brewery-wide defaults; <strong>pour size and retail price
+            both belong to the beer</strong> and are set per beer in{" "}
+            <strong>Analytics ▸ Pricing ▸ Wholesale</strong>, because a dear beer is poured smaller AND sold
+            higher. Setting only one gets you half way: a $250 half barrel at 12 oz is still 27% pour cost
+            against a $7 pint and only clears at $8.
           </p>
           <p style={basis}>
             Delivery and keg loss are <strong>yours</strong> because you self-distribute, and both are
