@@ -80,12 +80,24 @@ either way.
   the point, since one price for a 12 oz and a 16 oz makes the pint the cheapest
   beer on the menu by volume — recommends a price for a target margin, and prices
   every beer at *its own* pour, because a 9% tripel poured at 8 oz is a property
-  of that beer and is set on its row.
+  of that beer and is set on its row. A **Taproom | Wholesale** switch prices the
+  other channel: kegs (1/6, 1/4 and 1/2 BBL) sold to accounts. A keg is not a big
+  serving size — it's a sale for resale, so no sales tax comes off it, it's
+  invoiced rather than swiped so no card fee does either, and it leaves the
+  building full so none of the taproom's pour loss applies. What's left is excise,
+  delivery and the kegs that never come back. Because wholesale can't carry a
+  taproom's rent — a barrel nets roughly five times more poured than kegged — the
+  view leads with the **fill floor** (ingredients, labor and those deductions) and
+  greys out the absorbed figure, and a comparison row prices one packaged barrel
+  both ways. Each beer's own wholesale price lives on that beer, per size, so a
+  beer that goes out dearer only on half barrels sets just that one.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — the serving sizes and board
   prices the Pricing view works from, operating costs (production, taproom
-  losses, labor, monthly overhead and what comes off a retail price), ingredient
+  losses, labor, monthly overhead and what comes off a retail price), the
+  wholesale keg price list (house prices, delivery, keg loss, deposit and how
+  much overhead a wholesale barrel should carry), ingredient
   pricing (upload the
   vendor's PDF price list, see exactly which prices would change, then apply —
   the spot hop list is read too, from its text when it has one and by OCR when

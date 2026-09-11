@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { OVERHEAD_FIELDS, annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs, overheadHint, overheadLabel } from "../../lib/overhead";
+import { wholesaleHint, wholesaleLabel } from "../../lib/kegPricing";
 import { parseNum } from "../../lib/overhead";
 import { article, deductions, pourFor, servingsOf } from "../../lib/menuPricing";
 import PriceInput from "../../components/PriceInput";
@@ -114,6 +115,15 @@ export default function CostInputs({ settings, setSettings }) {
     const size = servingsOf(settings).find((s) => s.oz === housePour.oz);
     return deductions({ settings, price: size?.price ?? null, oz: housePour.oz });
   }, [settings, housePour]);
+
+  // Resolved through costInputs() for the same reason `setServing` is: the
+  // first edit to a list still on the shipped sizes must write the whole list
+  // rather than one orphaned row.
+  const setKegSize = (i, patch) =>
+    setSettings((p) => {
+      const list = costInputs(p).kegSizes.map((k, idx) => (idx === i ? { ...k, ...patch } : k));
+      return { ...p, costs: { ...(p.costs || {}), kegSizes: list } };
+    });
 
   const num = (key, extra = {}) => ({
     id: `cost-${key}`,
@@ -316,6 +326,62 @@ export default function CostInputs({ settings, setSettings }) {
             The size every beer pours at unless its own recipe says otherwise, and the margin{" "}
             <strong>Analytics ▸ Pricing</strong> solves its recommended prices for. Margin is on{" "}
             <strong>net</strong> revenue — after tax, card fees and excise — not on the menu price.
+          </p>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={hdr}>📦 Wholesale</div>
+        <div style={{ padding: 16 }}>
+          <p style={note}>
+            Kegs sold to accounts. ⚠️ <strong>A keg is not a large serving size</strong> — it is a
+            sale for <strong>resale</strong>, so no sales tax comes off it, it is invoiced rather
+            than swiped so no card fee does either, and it leaves the building full so none of the
+            taproom's pour loss applies. Excise still does, on the full barrel. You self-distribute,
+            so there is no distributor margin: the price here is what the account is invoiced and
+            what you collect. This is the <strong>house</strong> price list —{" "}
+            <strong>what a given beer goes out at is a property of that beer</strong> and is set on
+            its row in <strong>Analytics ▸ Pricing ▸ Wholesale</strong>, the same way its pour size is.
+          </p>
+          {c.kegSizes.map((k, i) => (
+            <div key={k.key ?? i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <input style={{ ...inp, width: 110, textAlign: "left" }} value={k.label ?? ""}
+                aria-label={`Keg size ${i + 1} name`}
+                onChange={(e) => setKegSize(i, { label: e.target.value })} />
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>price $</span>
+              <PriceInput value={parseNum(k.price)} style={{ width: 78 }}
+                aria-label={`Keg size ${i + 1} house price`}
+                onCommit={(v) => setKegSize(i, { price: v === "" ? null : v })} />
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>empty keg $</span>
+              <PriceInput value={parseNum(k.kegCost)} style={{ width: 78 }}
+                aria-label={`Keg size ${i + 1} empty keg cost`}
+                onCommit={(v) => setKegSize(i, { kegCost: v === "" ? null : v })} />
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                {parseNum(k.bbl) == null ? "" : `${parseNum(k.bbl).toFixed(3)} bbl`}
+              </span>
+            </div>
+          ))}
+
+          <div style={{ ...row, marginTop: 14 }}>
+            <Num {...num("kegDeliveryPerKeg")} text={wholesaleLabel("kegDeliveryPerKeg")}
+              hint={wholesaleHint("kegDeliveryPerKeg")} prefix="$" width={90}
+              unconfirmed={parseNum(stored.kegDeliveryPerKeg) == null} />
+            <Num {...num("kegLossPct")} text={wholesaleLabel("kegLossPct")}
+              hint={wholesaleHint("kegLossPct")} suffix="%" width={70}
+              unconfirmed={parseNum(stored.kegLossPct) == null} />
+            <Num {...num("kegDepositPerKeg", { placeholder: "" })} text="Deposit per keg" prefix="$" width={90}
+              hint="the account's money, held against the keg coming back — not revenue, and in no margin" />
+            <Num {...num("wholesaleOverheadPct")} text="Overhead absorbed" suffix="%" width={70}
+              hint="share of taproom overhead a wholesale barrel carries" />
+          </div>
+          <p style={basis}>
+            Delivery and keg loss are <strong>yours</strong> because you self-distribute, and both are
+            left out of every figure until they are entered rather than counted as zero. ⚠️{" "}
+            <strong>Overhead absorbed</strong> is the judgement call on this screen: at 100% a keg is
+            charged the same share of rent and payroll as a barrel poured at the bar, which no keg
+            price can clear — a barrel nets roughly five times more poured than kegged. That is why
+            the wholesale view prices against the <strong>fill floor</strong> (ingredients, labor and
+            the deductions above) and prints the absorbed figure greyed out beside it.
           </p>
         </div>
       </div>
