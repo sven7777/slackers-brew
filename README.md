@@ -105,8 +105,8 @@ either way.
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — the serving sizes and board
   prices the Pricing view works from, operating costs (production, taproom
-  losses — including how many gallons a year actually pour in the taproom, since
-  kegs leave the building full and take none of that loss — labor, monthly
+  losses — including how many gallons a year go out as kegs, since those leave
+  the building full and take none of that loss — labor, monthly
   overhead and what comes off a retail price), the
   wholesale keg price list (house prices, delivery, keg loss, deposit and how
   much overhead a wholesale barrel should carry), ingredient

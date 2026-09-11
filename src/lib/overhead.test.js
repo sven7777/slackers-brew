@@ -224,7 +224,11 @@ describe("costStack", () => {
 describe("the denominator splits by channel", () => {
   // 40 batches x 6.5 kegs x 15.5 gal = 4,030 gal packaged.
   const base = { postBoilYield: "150", avgKegs: "6.5", costs: { linePct: 3, compsPct: 2 } };
-  const withRetail = (gal) => ({ ...base, costs: { ...base.costs, retailGalPerYear: gal } });
+  // ⚠️ The input is the WHOLESALE side — the number a brewery invoices and knows
+  // exactly. Slackers is ~1,000 gal to accounts, not ~1,000 gal in the taproom;
+  // reading it the other way inverts the split and makes the batch count look
+  // impossible.
+  const withWholesale = (gal) => ({ ...base, costs: { ...base.costs, wholesaleGalPerYear: gal } });
 
   it("assumes all-taproom when the retail figure is unset — the old behaviour", () => {
     const v = annualVolume({ settings: base });
@@ -236,47 +240,62 @@ describe("the denominator splits by channel", () => {
   // ⚠️ The point of the field. Pour loss is the taproom's alone, so applying it
   // to kegged beer shrinks the denominator every fixed cost is spread over.
   it("spares wholesale gallons the taproom's pour loss", () => {
-    const v = annualVolume({ settings: withRetail(1000) });
+    const v = annualVolume({ settings: withWholesale(1000) });
     expect(Math.round(v.packagedGal)).toBe(4030);
-    expect(Math.round(v.wholesaleGal)).toBe(3030);
+    // 1,000 gal goes out as kegs; the rest pours here.
+    expect(Math.round(v.wholesaleGal)).toBe(1000);
+    expect(Math.round(v.retailGal)).toBe(3030);
     expect(v.channelKeep).toBeGreaterThan(pourKeep(base));
-    // Only the retail quarter carries the loss.
-    expect(v.channelKeep).toBeCloseTo((1000 * pourKeep(base) + 3030) / 4030, 10);
+    // Only the taproom's three quarters carries the loss.
+    expect(v.channelKeep).toBeCloseTo((3030 * pourKeep(base) + 1000) / 4030, 10);
+  });
+
+  // Slackers' real figures: ~64 half barrels a year across five accounts, about
+  // one per account per month — which is what makes 40 batches/yr reconcile.
+  it("reconciles Slackers' actual channel mix", () => {
+    const v = annualVolume({ settings: withWholesale(1000) });
+    expect(Math.round(v.wholesaleGal / 15.5)).toBe(65);
+    expect(v.wholesaleSharePct).toBeCloseTo(24.8, 1);
+    expect(v.retailSharePct).toBeCloseTo(75.2, 1);
   });
 
   it("raises pints sold, which lowers every cost per pint", () => {
     const flat = annualVolume({ settings: base });
-    const split = annualVolume({ settings: withRetail(1000) });
+    const split = annualVolume({ settings: withWholesale(1000) });
     expect(split.pintsSold).toBeGreaterThan(flat.pintsSold);
 
-    const cheaper = costStack({ settings: withRetail(1000), ingredientCostPerBbl: 120 });
+    const cheaper = costStack({ settings: withWholesale(1000), ingredientCostPerBbl: 120 });
     const dearer = costStack({ settings: base, ingredientCostPerBbl: 120 });
     expect(cheaper.perPint.absorbed).toBeLessThanOrEqual(dearer.perPint.absorbed);
   });
 
-  it("converges on the old answer when everything goes through the taps", () => {
-    const v = annualVolume({ settings: withRetail(4030) });
+  it("converges on the old answer when nothing goes out as kegs", () => {
+    const v = annualVolume({ settings: withWholesale(0) });
     expect(v.channelKeep).toBeCloseTo(pourKeep(base), 6);
-    expect(Math.round(v.wholesaleGal)).toBe(0);
+    expect(Math.round(v.retailGal)).toBe(4030);
+  });
+
+  it("takes no pour loss at all when everything goes out as kegs", () => {
+    const v = annualVolume({ settings: withWholesale(4030) });
+    expect(v.channelKeep).toBeCloseTo(1, 6);
+    expect(Math.round(v.retailGal)).toBe(0);
   });
 
   // A retail figure larger than everything packaged is a typo, not a mix.
-  it("rejects a retail figure above everything packaged rather than dividing by it", () => {
-    const v = annualVolume({ settings: withRetail(9999) });
-    expect(v.retailOverflow).toBe(true);
+  it("rejects a keg figure above everything packaged rather than dividing by it", () => {
+    const v = annualVolume({ settings: withWholesale(9999) });
+    expect(v.wholesaleOverflow).toBe(true);
     expect(v.channelKeep).toBeCloseTo(pourKeep(base), 10);
+    expect(v.wholesaleGal).toBeNull();
     expect(v.retailGal).toBeNull();
   });
 
-  it("reports the retail share for the panels to print", () => {
-    const v = annualVolume({ settings: withRetail(1000) });
-    expect(v.retailSharePct).toBeCloseTo(24.8, 1);
-  });
+
 
   // The capacity curve must scale at today's mix, not silently become
   // all-taproom at the far end of the curve.
   it("holds the channel mix when the volume is overridden", () => {
-    const s = withRetail(1000);
+    const s = withWholesale(1000);
     const v = annualVolume({ settings: s });
     const scaled = costStack({ settings: s, ingredientCostPerBbl: 120, volumeBbl: 300 });
     expect(scaled.pintsSold).toBeCloseTo(300 * PINTS_PER_BBL * v.channelKeep, 6);
