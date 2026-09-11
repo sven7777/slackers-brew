@@ -204,6 +204,9 @@ export default function CostInputs({ settings, setSettings }) {
           <div style={row}>
             <Num {...num("linePct")} text="Draft line & foam" width={70} suffix="%" />
             <Num {...num("compsPct")} text="Comps & staff pours" width={70} suffix="%" />
+            <Num {...num("retailGalPerYear", { placeholder: "" })} text="Sold in the taproom"
+              suffix="gal/yr" width={90}
+              hint="gallons poured here in a year — the rest went out as kegs and takes none of this loss" />
           </div>
           <p style={basis}>
             {Math.round(v.pintsPackaged).toLocaleString()} pints packaged less{" "}
@@ -211,6 +214,31 @@ export default function CostInputs({ settings, setSettings }) {
             <strong>{Math.round(v.pintsSold).toLocaleString()} pints sold</strong> a year (≈{" "}
             {Math.round(v.pintsSold / 12).toLocaleString()} a month).
           </p>
+          {/* ⚠️ The split, printed because it is derived rather than entered and
+              a brewery should be able to check the arithmetic it is being costed
+              on. The reconciliation is also the fastest way to catch a wrong
+              batches-per-year, which is the denominator for everything. */}
+          {v.retailOverflow && (
+            <p style={{ ...basis, color: "#b45309" }}>
+              ⚠️ That is more than the {Math.round(v.packagedGal).toLocaleString()} gal you package
+              in a year, so it is being ignored and the whole batch treated as taproom beer. Check
+              it against <strong>batches per year</strong> above — if the taproom figure is right,
+              the batch count is what is wrong.
+            </p>
+          )}
+          {v.retailGal != null && (
+            <p style={basis}>
+              Of {Math.round(v.packagedGal).toLocaleString()} gal packaged,{" "}
+              <strong>{Math.round(v.retailGal).toLocaleString()} gal ({v.retailSharePct.toFixed(0)}%)</strong>{" "}
+              pours here and {Math.round(v.wholesaleGal).toLocaleString()} gal (
+              {Math.round(v.wholesaleGal / 15.5)} half barrels) goes out as kegs. ⚠️{" "}
+              <strong>Only the taproom share carries pour loss</strong> — a keg leaves full and the
+              account eats that foam — so the blended figure above spreads your fixed costs over{" "}
+              {((1 - v.channelKeep) * 100).toFixed(1)}% loss rather than {v.lossToPourPct.toFixed(1)}%.
+              If the keg figure looks wrong, <strong>batches per year</strong> is the input to check:
+              it is the denominator for every cost in the app.
+            </p>
+          )}
         </div>
       </div>
 

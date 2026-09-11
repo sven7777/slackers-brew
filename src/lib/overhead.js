@@ -117,6 +117,21 @@ export const defCosts = {
   linePct: 3,  // draft line + foam
   compsPct: 2, // comps, staff pours, tasters
 
+  // Gallons sold through the TAPROOM in a year — the one channel figure the
+  // brewery actually counts, so it is what the app asks for. Everything else
+  // packaged went out as kegs, and the split is derived rather than entered as a
+  // percentage. Same principle as `avgKegs`: ask for the measurement, back-solve
+  // the ratio.
+  //
+  // ⚠️ It exists because POUR LOSS IS THE TAPROOM'S ALONE. Line purge, foam and
+  // comps happen on our own draft lines; a keg leaves the building full and the
+  // account eats that loss. Applying `pourKeep()` to all packaged beer — which
+  // is what happened before this field — charges the taproom's foam to beer that
+  // never touched a tap, and shrinks the denominator every fixed cost is spread
+  // over. Null means "assume it all goes through the taps", the old behaviour,
+  // so an unset value changes nothing.
+  retailGalPerYear: null,
+
   // ── Production labor (direct) ──
   brewerRate: 12.0,
   brewerHrsWeek: 20, // stated 18–22
@@ -379,7 +394,24 @@ export function annualVolume({ settings } = {}) {
   const pintsPackaged = packagedBbl * PINTS_PER_BBL;
 
   const keep = pourKeep(settings);
-  const pintsSold = pintsPackaged * keep;
+
+  // ⚠️ THE DENOMINATOR IS SPLIT BY CHANNEL. Retail gallons suffer pour loss;
+  // wholesale gallons do not. `channelKeep` is the blended survival rate over
+  // ALL packaged beer, and it is what every fixed cost is spread over.
+  //
+  // A retail figure larger than everything packaged is a typo, not a channel
+  // mix — rejected back to all-retail with a flag, the same way `batchVolume()`
+  // rejects a yield larger than the boil. Costing must never divide by beer the
+  // brewery did not make.
+  const retailGal = c.retailGalPerYear;
+  const retailOverflow = retailGal != null && packagedGal > 0 && retailGal > packagedGal;
+  const splitKnown = retailGal != null && packagedGal > 0 && !retailOverflow;
+  const wholesaleGal = splitKnown ? packagedGal - retailGal : null;
+  const channelKeep = splitKnown
+    ? (retailGal * keep + wholesaleGal) / packagedGal
+    : keep;
+
+  const pintsSold = pintsPackaged * channelKeep;
 
   return {
     batches,
@@ -398,6 +430,15 @@ export function annualVolume({ settings } = {}) {
     pintsSold,
     soldBbl: pintsSold / PINTS_PER_BBL,
     lossToPourPct: (1 - keep) * 100,
+    // The channel split, for the panels that print it.
+    retailGal: splitKnown ? retailGal : null,
+    wholesaleGal,
+    retailSharePct: splitKnown ? (retailGal / packagedGal) * 100 : null,
+    // Blended over both channels; equals pourKeep when the split is unknown.
+    channelKeep,
+    // The retail figure exceeds everything packaged — reported so the panel can
+    // say so rather than silently ignoring the input.
+    retailOverflow,
   };
 }
 
@@ -496,7 +537,11 @@ export function costStack({ settings, ingredientCostPerBbl = null, volumeBbl = n
   // Scale to an arbitrary volume for the capacity curve, keeping the same pour
   // losses so pints SOLD stays the denominator at every point on it.
   const packagedBbl = volumeBbl != null ? volumeBbl : v.packagedBbl;
-  const pintsSold = packagedBbl * PINTS_PER_BBL * pourKeep(settings);
+  // ⚠️ `channelKeep`, not `pourKeep` — wholesale barrels suffer no pour loss.
+  // Held constant when `volumeBbl` overrides the modelled volume, so the
+  // capacity curve scales at today's channel mix rather than silently becoming
+  // all-taproom at 300 bbl.
+  const pintsSold = packagedBbl * PINTS_PER_BBL * v.channelKeep;
 
   const labor = annualLabor({ settings });
   const overhead = annualOverhead({ settings });

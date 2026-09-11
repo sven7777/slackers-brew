@@ -252,6 +252,24 @@ The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop
 
 **Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`. ⚠️ `tab` is a persisted INDEX into `tabNames`, so inserting a tab renumbers the ones after it — adding Analytics at 3 moved Settings from 3 to 4, and a stored `tab` lands somewhere new exactly once. Harmless because every panel is rendered on an explicit `tab===n`, so an index off the end shows nothing rather than crashing; append rather than insert if that one-time jump ever matters.
 
+⚠️ **The cost denominator is SPLIT BY CHANNEL, and pour loss is the taproom's alone.**
+`settings.costs.retailGalPerYear` is gallons sold through the taps in a year — the one channel
+figure a brewery actually counts, so it is what the app asks for; wholesale is derived as the
+remainder, never entered as a percentage (the `avgKegs` principle: ask for the measurement,
+back-solve the ratio). `annualVolume()` returns **`channelKeep`**, the blended survival rate
+over all packaged beer, and both it and `costStack()` divide by that rather than `pourKeep()`.
+Applying `pourKeep` to everything charged the taproom's line purge and comps to beer that never
+touched a tap and shrank the denominator every fixed cost is spread over. ⚠️ `pourKeep()` itself
+is unchanged and still correct where it is used — a taproom OUNCE really does carry the taproom's
+foam, so menuPricing's excise-per-ounce keeps using it. A retail figure above everything packaged
+is a typo, not a mix: rejected back to all-retail with `retailOverflow`, the way `batchVolume()`
+rejects a yield larger than the boil. Null means all-retail, so an unset value changes nothing.
+⚠️ When `costStack()`'s `volumeBbl` overrides the modelled volume for the capacity curve,
+`channelKeep` is **held constant** — the curve scales at today's channel mix rather than silently
+becoming all-taproom at 300 bbl. And ⚠️ the Settings card prints the derived split because
+reconciling it is the fastest way to catch a wrong `batchesPerYear`, which is the denominator for
+every cost in the app.
+
 ⚠️ **A long-open tab is stale, and a stale save used to be able to delete data.** The app reads each key once on mount and never refetches — no polling, no realtime — so a tab open since before an edit shows the data as of the moment it opened (2026-08-27: a tab predating an import was still offering the old recipe list, and the two imported recipes looked lost). The display was the harmless half: every save is a whole-list delete-then-insert, so editing anything in that tab would have written the old list over the new recipes and deleted them. Two members share one database; this needs two windows, not a day-old tab. Two mechanisms, in [src/lib/freshness.js](src/lib/freshness.js) and migration 0014:
 
 - **Say so.** On tab focus (and on becoming visible), `repo.staleKeys()` asks the backend which loaded keys have moved, and [StaleDataBanner](src/components/StaleDataBanner.jsx) offers a reload. It **reports, never refetches** — silently swapping the data under an open editor would throw away whatever is half-typed.
