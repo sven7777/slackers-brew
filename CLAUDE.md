@@ -40,6 +40,8 @@ src/
                 #   — incl. hopCatalog.js (the spot hop list as catalog rows)
                 #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
+                #   — incl. orderCost.js (the order in PACKS, priced, + the
+                #   plain-text list to paste into the vendor email)
                 #   — incl. analytics.js (every recipe costed, side by side)
                 #   — incl. menuPricing.js (the PRICE model, above overhead.js's
                 #   cost model; NOT pricing.js, which converts vendor packs)
@@ -93,7 +95,56 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
-- **Order Calculator** — select recipes (single/double batch) → computed order summary
+- **Order Calculator** — select recipes (single/double batch) → computed order summary,
+  then what it will **cost** and the list to paste into the vendor email
+  ([orderCost.js](src/lib/orderCost.js) + [OrderEstimate.jsx](src/features/order/OrderEstimate.jsx)).
+  ⚠️ **This is a different arithmetic from COGS, in two ways that `computeOrder()` is right
+  not to do.** **You buy whole PACKS**: 40 lbs of Munich is one 55 lb sack and costs a whole
+  sack, so the rounding up is the feature — `inventory.cpu` is per lb/oz/pack (exactly right
+  for costing a batch, exactly wrong for an order) and is converted back UP to a pack price
+  here. And **the SKU is what you order, not the name**: `computeOrder()` aggregates by
+  ingredient NAME and deliberately stops there, because a brew sheet distinguishes Midnight
+  Wheat from Carafa Special III — the vendor does not, they are one sack under `MWEY1067`,
+  and 30 lbs of each is TWO bags of one thing rather than one bag of each. Lines merge by
+  `skuFor()` (curated map, then the row's own `sku`), never by walking `products.js`, which
+  has never heard of an adopted ingredient. ⚠️ `orderPack` is **not** `packQty`/`packUnit`:
+  the latter is the pack a PRICE applies to, which for every malt and hop on the vendor's
+  list is one pound, and conflating them orders 55 bags of Munich. A product whose pack
+  can't be read is printed with its raw quantity and no count — never sized at a guess.
+  cogs.js's honesty rule carries over: an unpriced ingredient is listed, left out, and the
+  subtotal prints `+`. **Copy for email** is plain text (it pastes into any mail client;
+  anything richer needs `text/html` on the clipboard) in Derek's own shape — pack count,
+  name, pack size, in his section order (malts, yeast, hops, adjuncts). The pack price
+  carries applyPrices.js's cent rounding (~$0.28 on a sack, ~$0.88 on an 11 lb hop box).
+
+  ⚠️ **What the VENDOR adds is five FLAT per-order lines, and the invoice is what settles
+  that** (`ORDER_FEE_FIELDS` in orderCost.js, playing the same one-list role
+  `OVERHEAD_FIELDS` and `WHOLESALE_FIELDS` do): liftgate, pallet charges, fuel surcharge,
+  freight — printed in the invoice's own order, under the goods, so the estimate can be read
+  against a real one. On Derek's (2026-09-14) they are **$177.75 against $1,205.72 of
+  goods**, so an ingredients-only estimate is ~13% under the bill. The one that
+  sounds like a rate and is not is the **fuel surcharge**: $5.25 on $1,205.72 is 0.435%,
+  which is no published rate — it tracks the freight line, and modelling it as a percentage
+  of the subtotal would have looked right on this invoice and drifted on every other. ⚠️
+  **A blank fee is UNKNOWN, not zero** — named on the card, and `totalFloor` prints `+` —
+  while an explicit **0** is a confirmed "never charged". ⚠️ `floor` (an unpriced
+  ingredient) and `totalFloor` (that, or a missing fee) are kept **separate**, because the
+  two gaps are fixed on different screens by different acts: one is an import that hasn't
+  run, the other a Settings field nobody has filled. ⚠️ The amounts are **never committed**
+  — same rule as vendor prices, same reason; `defCosts` ships them null and tests use
+  fabricated numbers.
+
+  ⚠️ **There is deliberately NO sales-tax line, and the reason is the interesting part.** The
+  invoice carries one ($1.15) and flags pallet + freight with a `T`, but 8.25% of that
+  $147.50 is $12.17, and nothing else on the page divides cleanly either — $1.15 is 0.78% of
+  the flagged lines, 9.2% of the pallet charge, and implies a $13.94 base at the Texas rate.
+  One invoice revealed the AMOUNT and not the RULE, and a flat "typical tax" field would have
+  been a number with no basis sitting in a column where every other figure has one — on a
+  screen whose whole argument is that it says where each figure comes from. Ingredients
+  bought for resale are mostly exempt and tax is not normally part of an order, so the
+  estimate is a few dollars light rather than wrong in kind (Derek's call, 2026-09-14).
+  **Bring it back as a rate × a per-line taxable flag if BSG ever says what the `T` taxes —
+  never as a flat amount**
 - **Analytics** — three views of the whole book, behind a segmented sub-nav
   ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
   state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
@@ -246,7 +297,10 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   Pricing view solves for), **wholesale** (the house keg price list, what an empty keg
   costs, delivery, keg loss, deposit, and the overhead share a wholesale barrel carries —
   `WHOLESALE_FIELDS` in kegPricing.js plays the same one-list role `OVERHEAD_FIELDS` does),
-  and data backup (export/import all app data as JSON)
+  **order fees** (what BSG adds under an ingredient order's subtotal — `ORDER_FEE_FIELDS` in
+  orderCost.js, the third list of that shape; ⚠️ blank means unknown and is flagged amber,
+  an explicit 0 means never charged; ⚠️ no tax line, deliberately — see above), and data
+  backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
@@ -500,7 +554,7 @@ Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.tes
 
 - **Persist the roadmap to memory by default.** When we make a significant decision, finish a work chunk, or define the next step, save it to project memory so it survives across sessions — keep the relevant roadmap file (e.g. `data-layer-roadmap.md`) current rather than relying on the session todo list (which is ephemeral). Update or prune stale entries instead of duplicating.
 - **Branch → PR workflow.** `main` is protected; land all changes through a PR that passes CI (lint + test + build + CodeQL). Branch prefixes: `feat/`, `fix/`, `chore/`.
-- **CodeRabbit reviews PRs, advisory only.** A GitHub App (not a workflow) configured by [.coderabbit.yaml](.coderabbit.yaml); free on public repos. Its value is *independence* — nearly all code here is written by the same model that reviews it — so expect it on generic footguns (unguarded reads, the cause of all three white screens) and NOT on what this repo actually gets wrong: the 442px table budget, rounding direction, crop-year column geometry, CAS staleness. ⚠️ **It must never gate a merge**: merging runs `supabase db push` against prod and deploys, so the gate stays CI. `request_changes_workflow` is pinned false — don't add its commit status to branch protection. The config disables its bundled eslint/biome/oxc (`npm run lint` is the one lint authority; a second linter reports non-violations, and noise is what gets a reviewer ignored) while keeping secret scanning on, since the never-commit-a-price rule is only as good as its last diff. `CLAUDE.md` is registered as its code guidelines, which is what stops this file's deliberate decisions reading as bugs; `path_instructions` cover migrations, the money code, `products.js` and the table widths. Config is read from the **PR head branch**, so a change to it applies to its own PR.
+- **CodeRabbit reviewed PRs, advisory only — ⚠️ OFF since 2026-09-14.** The free-public-repo grant turned out to be a **trial**, not a tier: it expired and the App now wants a card, so `gh pr checks` reports `Review skipped: manual review required for this OSS repository`. That is the expired-trial state — not an outage, and not the deliberate skip on `Bump` titles. **Ignore it** (Derek's call) and don't wait on it; CI was always the gate. [.coderabbit.yaml](.coderabbit.yaml) and this entry stay for if it is ever paid for. Its value was *independence* — nearly all code here is written by the same model that reviews it — so expect it on generic footguns (unguarded reads, the cause of all three white screens) and NOT on what this repo actually gets wrong: the 442px table budget, rounding direction, crop-year column geometry, CAS staleness. ⚠️ **It must never gate a merge**: merging runs `supabase db push` against prod and deploys, so the gate stays CI. `request_changes_workflow` is pinned false — don't add its commit status to branch protection. The config disables its bundled eslint/biome/oxc (`npm run lint` is the one lint authority; a second linter reports non-violations, and noise is what gets a reviewer ignored) while keeping secret scanning on, since the never-commit-a-price rule is only as good as its last diff. `CLAUDE.md` is registered as its code guidelines, which is what stops this file's deliberate decisions reading as bugs; `path_instructions` cover migrations, the money code, `products.js` and the table widths. Config is read from the **PR head branch**, so a change to it applies to its own PR.
 - **Nightly DB backups.** [.github/workflows/backup.yml](.github/workflows/backup.yml) dumps the live Supabase DB every night into the private `slackers-brew-backups` repo (commit-on-change, so its git log is a daily changelog of the data; restore notes in that repo's README). The free tier has no built-in backups — this is the safety net for prod data.
 - **Merge = migrated + deployed.** [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs on every push to `main`: it applies any new Supabase migrations (`supabase db push`; no-op when none), then builds the SPA and sftp-uploads `dist/` to DreamHost (brew.slackersbrewing.com). No manual SQL Editor runs or hand deploys. Secrets it uses: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `DREAMHOST_SSH_KEY` (see [supabase/README.md](supabase/README.md)).
 

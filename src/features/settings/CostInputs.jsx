@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { OVERHEAD_FIELDS, annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs, overheadHint, overheadLabel } from "../../lib/overhead";
 import { wholesaleHint, wholesaleLabel } from "../../lib/kegPricing";
+import { ORDER_FEE_FIELDS, orderFeeHint, orderFeeLabel, orderFees } from "../../lib/orderCost";
 import { parseNum } from "../../lib/overhead";
 import { article, deductions, pourFor, servingsOf } from "../../lib/menuPricing";
 import PriceInput from "../../components/PriceInput";
@@ -58,6 +59,7 @@ export default function CostInputs({ settings, setSettings }) {
   const stored = settings?.costs || {};
   const c = costInputs(settings);
   const missing = missingInputs(settings);
+  const fees = orderFees(settings);
 
   const setCost = (key, value) =>
     setSettings((p) => ({ ...p, costs: { ...(p.costs || {}), [key]: value } }));
@@ -516,6 +518,40 @@ export default function CostInputs({ settings, setSettings }) {
                 + {cents(preview.card)} card + {cents(preview.excise)} excise ={" "}
                 <strong>{cents(preview.net)}</strong> reaching the brewery.
                 {c.permitType !== "mb" && " No gross receipts tax on this permit."}</>}
+          </p>
+        </div>
+      </div>
+
+      {/* ⚠️ These are what the VENDOR adds to an order — the other direction
+          from every card above, which is what comes off a price we charge. They
+          sit under `settings.costs` anyway, for the reason overhead.js gives:
+          one nested object is one entry in SETTINGS_PREFS forever. */}
+      <div style={card}>
+        <div style={hdr}>🚚 Order Fees</div>
+        <div style={{ padding: 16 }}>
+          <p style={note}>
+            What BSG adds under the subtotal on an ingredient order. Each is a{" "}
+            <strong>flat amount per order</strong>, not a rate — on a real invoice they came to
+            about 15% of a $1,200 order, so an estimate without them is not close. A line left{" "}
+            <strong>blank is unknown, not free</strong>: it's named on the Order Calculator and
+            the total there prints as a floor. Enter <strong>0</strong> for anything you're never
+            charged. No sales tax line — ingredients for resale are mostly exempt, and one invoice
+            showed a tax amount without showing the rule behind it.
+          </p>
+          <div style={{ ...row, alignItems: "flex-start" }}>
+            {ORDER_FEE_FIELDS.map(([key, text]) => (
+              <Num key={key} {...num(key)} text={text} hint={orderFeeHint(key)} width={96} prefix="$"
+                unconfirmed={fees.missing.includes(key)} />
+            ))}
+          </div>
+          <p style={basis}>
+            {fees.missing.length > 0
+              ? <>{fees.missing.length} of {ORDER_FEE_FIELDS.length} not entered
+                ({fees.missing.map(orderFeeLabel).join(", ")}) — the Order Calculator adds{" "}
+                <strong>{cents(fees.total)}+</strong> to an order until they are.</>
+              : <>Every order carries <strong>{cents(fees.total)}</strong> on top of the
+                ingredients. Freight is the movable one: BSG bills it per shipment, so one large
+                order pays it once where two small ones pay it twice.</>}
           </p>
         </div>
       </div>

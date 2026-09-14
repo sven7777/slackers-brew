@@ -53,7 +53,19 @@ either way.
     average keg yield when one is set.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
-  order. Malts also roll up into 55 lb bag counts.
+  order. Malts also roll up into 55 lb bag counts. Below that, the **estimated
+  cost** of the order: what you need turned into the packs you actually buy —
+  40 lbs of a malt is one 55 lb sack and costs a whole sack — with two
+  ingredient names that are one vendor product merged into a single line. An
+  ingredient with no price is listed and left out rather than costed at $0, so
+  the subtotal reads as the floor it is. **Copy for email** puts the whole order
+  on the clipboard as plain text, a pack count and a pack size per line. Under the
+  goods it adds what the vendor charges on top — liftgate, pallet charges, fuel
+  surcharge and freight, entered once under Settings ▸ Order Fees — in the same
+  order an invoice prints them, so the two can be read side by side. A fee left
+  blank counts as unknown rather than free, and the total says so. There's no
+  sales tax line: ingredients bought for resale are mostly exempt, so an
+  invoice's tax is usually a few dollars on something incidental.
 - **Analytics** — three views of the whole book. **Beers** costs every beer side by
   side: batch total, cost per bbl, per keg and per 16 oz pint, sortable by any of
   them, with brewery-wide averages and the cheapest and dearest beer per barrel.
