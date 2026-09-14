@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { computeOrder, maltBags } from "../../lib/orderCalc";
 import { sortedWithIndex } from "../../lib/sortNames";
+import OrderEstimate from "./OrderEstimate";
 import { card, hdr, badge, btn, cell, num, th } from "../../styles";
 
 // Order Calculator tab: select recipes (single/double), then show how much of
@@ -89,9 +90,10 @@ export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, 
               </table>
             </div>
           ))}
+          <OrderEstimate order={orderCalc} malts={malts} hops={hops} yeast={yeast} adj={adj} />
         </div>
       )}
-      {!anySel && <p style={{textAlign:'center',color:'#94a3b8',padding:40,fontSize:14}}>Select one or more recipes above to calculate your order.</p>}
+      {!anySel &&<p style={{textAlign:'center',color:'#94a3b8',padding:40,fontSize:14}}>Select one or more recipes above to calculate your order.</p>}
     </div>
   );
 }

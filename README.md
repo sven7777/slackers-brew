@@ -53,7 +53,14 @@ either way.
     average keg yield when one is set.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
-  order. Malts also roll up into 55 lb bag counts.
+  order. Malts also roll up into 55 lb bag counts. Below that, the **estimated
+  cost** of the order: what you need turned into the packs you actually buy —
+  40 lbs of a malt is one 55 lb sack and costs a whole sack — with two
+  ingredient names that are one vendor product merged into a single line. An
+  ingredient with no price is listed and left out rather than costed at $0, so
+  the subtotal reads as the floor it is. **Copy for email** puts the whole order
+  on the clipboard as plain text, a pack count and a pack size per line. Freight,
+  fuel surcharge, pallet fees and tax are not in the number yet.
 - **Analytics** — three views of the whole book. **Beers** costs every beer side by
   side: batch total, cost per bbl, per keg and per 16 oz pint, sortable by any of
   them, with brewery-wide averages and the cheapest and dearest beer per barrel.

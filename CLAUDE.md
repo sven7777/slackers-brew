@@ -40,6 +40,8 @@ src/
                 #   — incl. hopCatalog.js (the spot hop list as catalog rows)
                 #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
+                #   — incl. orderCost.js (the order in PACKS, priced, + the
+                #   plain-text list to paste into the vendor email)
                 #   — incl. analytics.js (every recipe costed, side by side)
                 #   — incl. menuPricing.js (the PRICE model, above overhead.js's
                 #   cost model; NOT pricing.js, which converts vendor packs)
@@ -93,7 +95,29 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
-- **Order Calculator** — select recipes (single/double batch) → computed order summary
+- **Order Calculator** — select recipes (single/double batch) → computed order summary,
+  then what it will **cost** and the list to paste into the vendor email
+  ([orderCost.js](src/lib/orderCost.js) + [OrderEstimate.jsx](src/features/order/OrderEstimate.jsx)).
+  ⚠️ **This is a different arithmetic from COGS, in two ways that `computeOrder()` is right
+  not to do.** **You buy whole PACKS**: 40 lbs of Munich is one 55 lb sack and costs a whole
+  sack, so the rounding up is the feature — `inventory.cpu` is per lb/oz/pack (exactly right
+  for costing a batch, exactly wrong for an order) and is converted back UP to a pack price
+  here. And **the SKU is what you order, not the name**: `computeOrder()` aggregates by
+  ingredient NAME and deliberately stops there, because a brew sheet distinguishes Midnight
+  Wheat from Carafa Special III — the vendor does not, they are one sack under `MWEY1067`,
+  and 30 lbs of each is TWO bags of one thing rather than one bag of each. Lines merge by
+  `skuFor()` (curated map, then the row's own `sku`), never by walking `products.js`, which
+  has never heard of an adopted ingredient. ⚠️ `orderPack` is **not** `packQty`/`packUnit`:
+  the latter is the pack a PRICE applies to, which for every malt and hop on the vendor's
+  list is one pound, and conflating them orders 55 bags of Munich. A product whose pack
+  can't be read is printed with its raw quantity and no count — never sized at a guess.
+  cogs.js's honesty rule carries over: an unpriced ingredient is listed, left out, and the
+  subtotal prints `+`. **Copy for email** is plain text (it pastes into any mail client;
+  anything richer needs `text/html` on the clipboard) in Derek's own shape — pack count,
+  name, pack size, in his section order (malts, yeast, hops, adjuncts). ⚠️ Freight, fuel
+  surcharge, pallet fees and tax are **not** in the number yet and the card says so; they
+  are Settings fields waiting on a real BSG invoice to shape them, and the pack price
+  carries applyPrices.js's cent rounding (~$0.28 on a sack, ~$0.88 on an 11 lb hop box)
 - **Analytics** — three views of the whole book, behind a segmented sub-nav
   ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
   state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
