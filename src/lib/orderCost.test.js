@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildOrderEstimate,
   orderEmailText,
+  orderFees,
   orderPackFor,
   parseOrderPack,
   recipeUnitFor,
@@ -196,6 +197,73 @@ describe("buildOrderEstimate", () => {
     });
     expect(est.sections).toEqual([]);
     expect(est.subtotal).toBe(0);
+  });
+});
+
+// ⚠️ Fabricated fee amounts, like every price here. The real ones are off a BSG
+// invoice and live only in the private database.
+const FEES = {
+  costs: { liftgateFee: 20, palletFee: 10, fuelSurcharge: 5, freightFee: 100, orderSalesTax: 1 },
+};
+
+describe("orderFees", () => {
+  it("totals the five lines in invoice order", () => {
+    const f = orderFees(FEES);
+    expect(f.lines.map((l) => l.key)).toEqual([
+      "liftgateFee", "palletFee", "fuelSurcharge", "freightFee", "orderSalesTax",
+    ]);
+    expect(f.total).toBe(136);
+    expect(f.missing).toEqual([]);
+  });
+
+  // ⚠️ The rule that matters. On the real invoice the fees are 15% of the goods,
+  // so "not entered yet" silently meaning "not charged" would quote an order
+  // well under its bill.
+  it("treats a blank fee as unknown, not zero", () => {
+    const f = orderFees({ costs: { liftgateFee: 20, freightFee: 100 } });
+    expect(f.total).toBe(120);
+    expect(f.missing).toEqual(["palletFee", "fuelSurcharge", "orderSalesTax"]);
+  });
+
+  it("treats an explicit 0 as a confirmed answer", () => {
+    const f = orderFees({ ...FEES, costs: { ...FEES.costs, liftgateFee: 0 } });
+    expect(f.missing).toEqual([]);
+    expect(f.total).toBe(116);
+  });
+
+  it("reports every line missing when nothing is set", () => {
+    expect(orderFees(null).missing).toHaveLength(5);
+    expect(orderFees(null).total).toBe(0);
+  });
+});
+
+describe("buildOrderEstimate with fees", () => {
+  const order = { malts: [{ n: "Munich", order: 40 }], hops: [], yeast: [], adj: [] };
+  const inventory = { malts: inv([{ n: "Munich", cpu: 1 }]) };
+
+  it("adds the fees to the goods subtotal", () => {
+    const est = buildOrderEstimate({ order, inventory, settings: FEES });
+    expect(est.subtotal).toBe(55);
+    expect(est.total).toBe(191); // 55 + 136
+    expect(est.floor).toBe(false);
+    expect(est.totalFloor).toBe(false);
+  });
+
+  // ⚠️ Two gaps, two fixes, two different screens: an unpriced ingredient is an
+  // import that hasn't run, an unentered fee is a Settings field. The goods
+  // subtotal must not be marked a floor because a FEE is missing.
+  it("keeps the ingredient floor separate from the fee floor", () => {
+    const est = buildOrderEstimate({ order, inventory, settings: { costs: { liftgateFee: 20 } } });
+    expect(est.floor).toBe(false);
+    expect(est.totalFloor).toBe(true);
+    expect(est.total).toBe(75);
+    expect(est.fees.missing).toHaveLength(4);
+  });
+
+  it("is ingredients-only when no settings are passed at all", () => {
+    const est = buildOrderEstimate({ order, inventory });
+    expect(est.total).toBe(est.subtotal);
+    expect(est.totalFloor).toBe(true);
   });
 });
 

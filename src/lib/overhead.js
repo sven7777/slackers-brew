@@ -157,6 +157,19 @@ export const defCosts = {
   otherFixed: null,
   fohPayroll: null,
 
+  // ── What the vendor adds to an ingredient order ──
+  //
+  // ⚠️ Blank on purpose, and blank means UNKNOWN, not free. These are real
+  // amounts off a real BSG invoice and must never be committed (public repo,
+  // same rule as vendor prices) — they are entered in Settings ▸ Order Fees and
+  // live only in the private database. See ORDER_FEE_FIELDS in orderCost.js for
+  // why each is a flat per-order amount rather than a rate.
+  liftgateFee: null,
+  palletFee: null,
+  fuelSurcharge: null,
+  freightFee: null,
+  orderSalesTax: null,
+
   // ── Deductions from retail price ──
   cardPct: 3.0,
   exciseStateBbl: 6.0,

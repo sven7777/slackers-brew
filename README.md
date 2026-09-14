@@ -59,8 +59,11 @@ either way.
   ingredient names that are one vendor product merged into a single line. An
   ingredient with no price is listed and left out rather than costed at $0, so
   the subtotal reads as the floor it is. **Copy for email** puts the whole order
-  on the clipboard as plain text, a pack count and a pack size per line. Freight,
-  fuel surcharge, pallet fees and tax are not in the number yet.
+  on the clipboard as plain text, a pack count and a pack size per line. Under the
+  goods it adds what the vendor charges on top — liftgate, pallet charges, fuel
+  surcharge, freight and sales tax, entered once under Settings ▸ Order Fees —
+  in the same order an invoice prints them, so the two can be read side by side.
+  A fee left blank counts as unknown rather than free, and the total says so.
 - **Analytics** — three views of the whole book. **Beers** costs every beer side by
   side: batch total, cost per bbl, per keg and per 16 oz pint, sortable by any of
   them, with brewery-wide averages and the cheapest and dearest beer per barrel.

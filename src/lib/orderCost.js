@@ -32,6 +32,7 @@
 import { ceilCents } from "./cogs";
 import { skuFor } from "./applyPrices";
 import { adjUnits } from "./defaults";
+import { parseNum } from "./overhead";
 import { normalizeUnit, unitsPerPack } from "./pricing";
 import { categoryUnit, productsBySku } from "./products";
 import { compareNames } from "./sortNames";
@@ -117,6 +118,57 @@ function resolveLine(category, row, cpu, catalog) {
   return { sku, product, pack, per, packPrice, reason: packPrice == null ? "unpriced" : null };
 }
 
+// --- what the vendor adds to the goods ------------------------------------
+
+// The lines BSG puts under the subtotal, in the order the invoice prints them.
+// Taken from a real one (Derek, 2026-09-14), which is the only way to know this
+// list: a price list carries none of it, and `parsePriceList()` deliberately
+// rejects prose that merely mentions money ("Pallet fee: $12.50") so it can
+// never be mistaken for a product row.
+//
+// ⚠️ Every one is a FLAT AMOUNT PER ORDER, not a percentage, and the invoice is
+// what settles that. "Fuel surcharge adjustment" is the one that sounds like a
+// rate and is not: $5.25 against $1,205.72 of goods is 0.435%, which is not a
+// rate anybody publishes — it tracks the freight line, not the order. Modelling
+// it as a percentage of the subtotal would have looked right on this invoice
+// and drifted on every other one.
+//
+// ⚠️ And the amounts themselves are NEVER committed — same rule as vendor
+// prices, same reason (this repo is public, tests use fabricated numbers). They
+// live in `settings.costs` in the private database, entered in the app.
+export const ORDER_FEE_FIELDS = [
+  ["liftgateFee", "Liftgate", "charged when there's no dock to unload onto"],
+  ["palletFee", "Pallet charges", "flat per order on the invoice — say so if yours scales with pallet count"],
+  ["fuelSurcharge", "Fuel surcharge", "the invoice's \"fuel surcharge adjustment\" — it tracks freight, not order size"],
+  ["freightFee", "Freight", "an average: BSG bills it per shipment, so a small order won't pay this much"],
+  ["orderSalesTax", "Sales tax", "the invoice taxes SOME lines only — enter what a typical order is charged"],
+];
+
+export const orderFeeLabel = (key) => ORDER_FEE_FIELDS.find(([k]) => k === key)?.[1] || key;
+export const orderFeeHint = (key) => ORDER_FEE_FIELDS.find(([k]) => k === key)?.[2] || null;
+
+// The fee lines as entered, plus the ones that aren't.
+//
+// ⚠️ A BLANK FEE IS UNKNOWN, NOT ZERO — overhead.js's rule, and it matters more
+// here than anywhere: on Derek's invoice the fees and tax are $178.90 against
+// $1,205.72 of goods, so treating "not entered yet" as "not charged" would quote
+// an order 13% under its bill. That is the very failure this whole module exists
+// to prevent, arriving by a different door. An explicit **0** is a confirmed
+// answer and reads as free; empty is named on screen and makes the total a floor.
+export function orderFees(settings) {
+  const stored = settings?.costs || {};
+  const lines = [];
+  const missing = [];
+  let total = 0;
+  for (const [key, label] of ORDER_FEE_FIELDS) {
+    const amount = parseNum(stored[key]);
+    if (amount == null) missing.push(key);
+    else total = ceilCents(total + amount);
+    lines.push({ key, label, amount });
+  }
+  return { lines, total, missing };
+}
+
 // --- the estimate ---------------------------------------------------------
 
 // Build the priced order from computeOrder()'s output.
@@ -126,10 +178,11 @@ function resolveLine(category, row, cpu, catalog) {
 //   inventory — {malts, hops, yeast, adj} rows, for `cpu` and `sku`
 //   catalog   — optional {sku: entry} for products products.js has never heard
 //               of, i.e. every adopted ingredient
+//   settings  — for `costs`, which carries the vendor's fee lines
 //
-// Returns one section per category with its merged lines, plus the goods
-// subtotal and what was left out of it.
-export function buildOrderEstimate({ order, inventory = {}, catalog = {} } = {}) {
+// Returns one section per category with its merged lines, the goods subtotal,
+// the fees under it, the order total, and everything left out of any of them.
+export function buildOrderEstimate({ order, inventory = {}, catalog = {}, settings = null } = {}) {
   const sections = [];
   const unpriced = [];
   const nopack = [];
@@ -177,14 +230,25 @@ export function buildOrderEstimate({ order, inventory = {}, catalog = {} } = {})
     if (lines.length) sections.push({ key, category, label, lines });
   }
 
+  const fees = orderFees(settings);
+
   return {
     sections,
     subtotal,
     unpriced,
     nopack,
+    fees,
+    // The invoice's own shape: goods, then what the vendor adds.
+    total: ceilCents(subtotal + fees.total),
     // Anything left out makes the subtotal a floor, and the UI marks it `+`,
     // the same convention cogs.js and analytics.js use.
     floor: unpriced.length > 0 || nopack.length > 0,
+    // ⚠️ Kept SEPARATE from `floor`, because the two gaps are fixed in different
+    // places and by different people: an unpriced ingredient is an import that
+    // hasn't run, an unentered fee is a Settings field nobody has filled. The
+    // total is a floor if EITHER is true, but a card that said only "incomplete"
+    // would send a brewer to the wrong screen.
+    totalFloor: unpriced.length > 0 || nopack.length > 0 || fees.missing.length > 0,
   };
 }
 

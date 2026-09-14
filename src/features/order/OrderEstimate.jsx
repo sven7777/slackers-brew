@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { load as loadKey } from "../../lib/repo";
-import { buildOrderEstimate, orderEmailText } from "../../lib/orderCost";
+import { buildOrderEstimate, orderEmailText, orderFeeLabel } from "../../lib/orderCost";
 import { card, hdr, th, cell, num, btn, badge } from "../../styles";
 
 // What the order costs, and the list to paste into the email.
@@ -13,7 +13,7 @@ import { card, hdr, th, cell, num, btn, badge } from "../../styles";
 // The catalog is loaded HERE, not from App state, for the same reason
 // CatalogBrowser loads it: hundreds of rows that only a few panels need. It is
 // what prices an ADOPTED ingredient — products.js has never heard of one.
-export default function OrderEstimate({ order, malts, hops, yeast, adj }) {
+export default function OrderEstimate({ order, malts, hops, yeast, adj, settings }) {
   const [catalog, setCatalog] = useState({});
   const [copied, setCopied] = useState(false);
 
@@ -30,8 +30,8 @@ export default function OrderEstimate({ order, malts, hops, yeast, adj }) {
   }, []);
 
   const est = useMemo(
-    () => buildOrderEstimate({ order, inventory: { malts, hops, yeast, adj }, catalog }),
-    [order, malts, hops, yeast, adj, catalog],
+    () => buildOrderEstimate({ order, inventory: { malts, hops, yeast, adj }, catalog, settings }),
+    [order, malts, hops, yeast, adj, catalog, settings],
   );
 
   const email = useMemo(() => orderEmailText(est), [est]);
@@ -80,6 +80,21 @@ export default function OrderEstimate({ order, malts, hops, yeast, adj }) {
               <td style={cell} colSpan={4}>Ingredients subtotal</td>
               <td style={num}>{money(est.subtotal)}{est.floor ? "+" : ""}</td>
             </tr>
+            {/* The invoice's own shape, line for line: goods, then what the
+                vendor adds under them, then the total. Reading the estimate
+                against a real BSG invoice is the point. */}
+            {est.fees.lines.map((f) => (
+              <tr key={f.key}>
+                <td style={{ ...cell, color: "#64748b" }} colSpan={4}>{f.label}</td>
+                <td style={{ ...num, color: f.amount == null ? "#b45309" : "#64748b" }}>
+                  {f.amount == null ? "not set" : money(f.amount)}
+                </td>
+              </tr>
+            ))}
+            <tr style={{ borderTop: "1px solid #e2e8f0", fontWeight: 700 }}>
+              <td style={cell} colSpan={4}>Estimated total</td>
+              <td style={num}>{money(est.total)}{est.totalFloor ? "+" : ""}</td>
+            </tr>
           </tfoot>
         </table>
       </div>
@@ -103,10 +118,19 @@ export default function OrderEstimate({ order, malts, hops, yeast, adj }) {
           Whole packs: 40 lbs of a malt is one 55 lb sack and costs a whole sack. Two ingredient names
           that are one vendor product are merged into one line.
         </p>
+        {est.fees.missing.length > 0 && (
+          <p style={{ margin: "0 0 4px" }}>
+            <strong>{est.fees.missing.length} order fee{est.fees.missing.length > 1 ? "s" : ""} not
+            entered</strong> — {est.fees.missing.map(orderFeeLabel).join(", ")}. On a real BSG
+            invoice these run to about 15% of a $1,200 order, so the total is a floor until they're
+            filled in under <strong>Settings ▸ Order Fees</strong> (enter <strong>0</strong> for
+            anything you're never charged).
+          </p>
+        )}
         <p style={{ margin: 0 }}>
-          Ingredients only — <strong>freight, fuel surcharge, pallet fees and tax are not in this
-          number yet</strong>. Pack prices are derived from the stored per-unit price, which is rounded
-          to the cent, so a sack can be off by a quarter.
+          Pack prices are derived from the stored per-unit price, which is rounded to the cent, so a
+          sack can be off by a quarter. Freight is billed per shipment, not per pound — one large
+          order pays it once where two small ones pay it twice.
         </p>
       </div>
 

@@ -6,7 +6,7 @@ import { card, hdr, badge, btn, cell, num, th } from "../../styles";
 
 // Order Calculator tab: select recipes (single/double), then show how much of
 // each ingredient must be ordered given current inventory.
-export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, adj }) {
+export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, adj, settings }) {
   const orderCalc = useMemo(
     () => computeOrder({ orders, recs, malts, hops, yeast, adj }),
     [orders, malts, hops, yeast, adj, recs]
@@ -90,7 +90,7 @@ export default function OrderTab({ orders, setOrders, recs, malts, hops, yeast, 
               </table>
             </div>
           ))}
-          <OrderEstimate order={orderCalc} malts={malts} hops={hops} yeast={yeast} adj={adj} />
+          <OrderEstimate order={orderCalc} malts={malts} hops={hops} yeast={yeast} adj={adj} settings={settings} />
         </div>
       )}
       {!anySel &&<p style={{textAlign:'center',color:'#94a3b8',padding:40,fontSize:14}}>Select one or more recipes above to calculate your order.</p>}

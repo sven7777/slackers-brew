@@ -114,10 +114,27 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   cogs.js's honesty rule carries over: an unpriced ingredient is listed, left out, and the
   subtotal prints `+`. **Copy for email** is plain text (it pastes into any mail client;
   anything richer needs `text/html` on the clipboard) in Derek's own shape — pack count,
-  name, pack size, in his section order (malts, yeast, hops, adjuncts). ⚠️ Freight, fuel
-  surcharge, pallet fees and tax are **not** in the number yet and the card says so; they
-  are Settings fields waiting on a real BSG invoice to shape them, and the pack price
-  carries applyPrices.js's cent rounding (~$0.28 on a sack, ~$0.88 on an 11 lb hop box)
+  name, pack size, in his section order (malts, yeast, hops, adjuncts). The pack price
+  carries applyPrices.js's cent rounding (~$0.28 on a sack, ~$0.88 on an 11 lb hop box).
+
+  ⚠️ **What the VENDOR adds is five FLAT per-order lines, and the invoice is what settles
+  that** (`ORDER_FEE_FIELDS` in orderCost.js, playing the same one-list role
+  `OVERHEAD_FIELDS` and `WHOLESALE_FIELDS` do): liftgate, pallet charges, fuel surcharge,
+  freight, sales tax — printed in the invoice's own order, under the goods, so the estimate
+  can be read against a real one. On Derek's (2026-09-14) they are **$178.90 against
+  $1,205.72 of goods**, so an ingredients-only estimate is ~13% under the bill. The one that
+  sounds like a rate and is not is the **fuel surcharge**: $5.25 on $1,205.72 is 0.435%,
+  which is no published rate — it tracks the freight line, and modelling it as a percentage
+  of the subtotal would have looked right on this invoice and drifted on every other. ⚠️
+  **A blank fee is UNKNOWN, not zero** — named on the card, and `totalFloor` prints `+` —
+  while an explicit **0** is a confirmed "never charged". ⚠️ `floor` (an unpriced
+  ingredient) and `totalFloor` (that, or a missing fee) are kept **separate**, because the
+  two gaps are fixed on different screens by different acts: one is an import that hasn't
+  run, the other a Settings field nobody has filled. ⚠️ The amounts are **never committed**
+  — same rule as vendor prices, same reason; `defCosts` ships them null and tests use
+  fabricated numbers. Still open: the invoice's `T` flags mark pallet + freight taxable but
+  $1.15 is not 8.25% of $147.50, so the tax RULE is unknown and the field asks for a typical
+  amount rather than deriving one
 - **Analytics** — three views of the whole book, behind a segmented sub-nav
   ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
   state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
@@ -270,7 +287,9 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   Pricing view solves for), **wholesale** (the house keg price list, what an empty keg
   costs, delivery, keg loss, deposit, and the overhead share a wholesale barrel carries —
   `WHOLESALE_FIELDS` in kegPricing.js plays the same one-list role `OVERHEAD_FIELDS` does),
-  and data backup (export/import all app data as JSON)
+  **order fees** (what BSG adds under an ingredient order's subtotal — `ORDER_FEE_FIELDS` in
+  orderCost.js, the third list of that shape; ⚠️ blank means unknown and is flagged amber,
+  an explicit 0 means never charged), and data backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
