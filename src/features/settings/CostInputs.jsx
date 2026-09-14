@@ -535,7 +535,8 @@ export default function CostInputs({ settings, setSettings }) {
             about 15% of a $1,200 order, so an estimate without them is not close. A line left{" "}
             <strong>blank is unknown, not free</strong>: it's named on the Order Calculator and
             the total there prints as a floor. Enter <strong>0</strong> for anything you're never
-            charged.
+            charged. No sales tax line — ingredients for resale are mostly exempt, and one invoice
+            showed a tax amount without showing the rule behind it.
           </p>
           <div style={{ ...row, alignItems: "flex-start" }}>
             {ORDER_FEE_FIELDS.map(([key, text]) => (

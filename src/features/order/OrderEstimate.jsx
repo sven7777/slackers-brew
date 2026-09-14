@@ -130,7 +130,9 @@ export default function OrderEstimate({ order, malts, hops, yeast, adj, settings
         <p style={{ margin: 0 }}>
           Pack prices are derived from the stored per-unit price, which is rounded to the cent, so a
           sack can be off by a quarter. Freight is billed per shipment, not per pound — one large
-          order pays it once where two small ones pay it twice.
+          order pays it once where two small ones pay it twice. No sales tax line: ingredients
+          bought for resale are mostly exempt, so an invoice's tax is usually a few dollars on
+          something incidental.
         </p>
       </div>
 

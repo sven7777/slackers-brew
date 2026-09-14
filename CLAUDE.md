@@ -120,9 +120,9 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   ⚠️ **What the VENDOR adds is five FLAT per-order lines, and the invoice is what settles
   that** (`ORDER_FEE_FIELDS` in orderCost.js, playing the same one-list role
   `OVERHEAD_FIELDS` and `WHOLESALE_FIELDS` do): liftgate, pallet charges, fuel surcharge,
-  freight, sales tax — printed in the invoice's own order, under the goods, so the estimate
-  can be read against a real one. On Derek's (2026-09-14) they are **$178.90 against
-  $1,205.72 of goods**, so an ingredients-only estimate is ~13% under the bill. The one that
+  freight — printed in the invoice's own order, under the goods, so the estimate can be read
+  against a real one. On Derek's (2026-09-14) they are **$177.75 against $1,205.72 of
+  goods**, so an ingredients-only estimate is ~13% under the bill. The one that
   sounds like a rate and is not is the **fuel surcharge**: $5.25 on $1,205.72 is 0.435%,
   which is no published rate — it tracks the freight line, and modelling it as a percentage
   of the subtotal would have looked right on this invoice and drifted on every other. ⚠️
@@ -132,9 +132,19 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   two gaps are fixed on different screens by different acts: one is an import that hasn't
   run, the other a Settings field nobody has filled. ⚠️ The amounts are **never committed**
   — same rule as vendor prices, same reason; `defCosts` ships them null and tests use
-  fabricated numbers. Still open: the invoice's `T` flags mark pallet + freight taxable but
-  $1.15 is not 8.25% of $147.50, so the tax RULE is unknown and the field asks for a typical
-  amount rather than deriving one
+  fabricated numbers.
+
+  ⚠️ **There is deliberately NO sales-tax line, and the reason is the interesting part.** The
+  invoice carries one ($1.15) and flags pallet + freight with a `T`, but 8.25% of that
+  $147.50 is $12.17, and nothing else on the page divides cleanly either — $1.15 is 0.78% of
+  the flagged lines, 9.2% of the pallet charge, and implies a $13.94 base at the Texas rate.
+  One invoice revealed the AMOUNT and not the RULE, and a flat "typical tax" field would have
+  been a number with no basis sitting in a column where every other figure has one — on a
+  screen whose whole argument is that it says where each figure comes from. Ingredients
+  bought for resale are mostly exempt and tax is not normally part of an order, so the
+  estimate is a few dollars light rather than wrong in kind (Derek's call, 2026-09-14).
+  **Bring it back as a rate × a per-line taxable flag if BSG ever says what the `T` taxes —
+  never as a flat amount**
 - **Analytics** — three views of the whole book, behind a segmented sub-nav
   ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
   state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
@@ -289,7 +299,8 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   `WHOLESALE_FIELDS` in kegPricing.js plays the same one-list role `OVERHEAD_FIELDS` does),
   **order fees** (what BSG adds under an ingredient order's subtotal — `ORDER_FEE_FIELDS` in
   orderCost.js, the third list of that shape; ⚠️ blank means unknown and is flagged amber,
-  an explicit 0 means never charged), and data backup (export/import all app data as JSON)
+  an explicit 0 means never charged; ⚠️ no tax line, deliberately — see above), and data
+  backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 

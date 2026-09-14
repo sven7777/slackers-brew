@@ -203,17 +203,29 @@ describe("buildOrderEstimate", () => {
 // ⚠️ Fabricated fee amounts, like every price here. The real ones are off a BSG
 // invoice and live only in the private database.
 const FEES = {
-  costs: { liftgateFee: 20, palletFee: 10, fuelSurcharge: 5, freightFee: 100, orderSalesTax: 1 },
+  costs: { liftgateFee: 20, palletFee: 10, fuelSurcharge: 5, freightFee: 100 },
 };
 
 describe("orderFees", () => {
-  it("totals the five lines in invoice order", () => {
+  it("totals the fee lines in invoice order", () => {
     const f = orderFees(FEES);
     expect(f.lines.map((l) => l.key)).toEqual([
-      "liftgateFee", "palletFee", "fuelSurcharge", "freightFee", "orderSalesTax",
+      "liftgateFee", "palletFee", "fuelSurcharge", "freightFee",
     ]);
-    expect(f.total).toBe(136);
+    expect(f.total).toBe(135);
     expect(f.missing).toEqual([]);
+  });
+
+  // ⚠️ The invoice HAS a tax line and this deliberately does not. One invoice
+  // showed $1.15 of tax against a `T` on pallet + freight, but 8.25% of that
+  // $147.50 is $12.17 and nothing else divides cleanly either — so the rule was
+  // never visible, only the amount. A flat "typical tax" field would be a number
+  // with no basis in a column where every other figure has one. Ingredients for
+  // resale are mostly exempt anyway. Bring it back as a rate x a per-line
+  // taxable flag, never as a flat amount.
+  it("carries no sales tax field", () => {
+    expect(orderFees(FEES).lines.some((l) => /tax/i.test(l.key))).toBe(false);
+    expect(orderFees({ costs: { orderSalesTax: 99 } }).total).toBe(0);
   });
 
   // ⚠️ The rule that matters. On the real invoice the fees are 15% of the goods,
@@ -222,17 +234,17 @@ describe("orderFees", () => {
   it("treats a blank fee as unknown, not zero", () => {
     const f = orderFees({ costs: { liftgateFee: 20, freightFee: 100 } });
     expect(f.total).toBe(120);
-    expect(f.missing).toEqual(["palletFee", "fuelSurcharge", "orderSalesTax"]);
+    expect(f.missing).toEqual(["palletFee", "fuelSurcharge"]);
   });
 
   it("treats an explicit 0 as a confirmed answer", () => {
     const f = orderFees({ ...FEES, costs: { ...FEES.costs, liftgateFee: 0 } });
     expect(f.missing).toEqual([]);
-    expect(f.total).toBe(116);
+    expect(f.total).toBe(115);
   });
 
   it("reports every line missing when nothing is set", () => {
-    expect(orderFees(null).missing).toHaveLength(5);
+    expect(orderFees(null).missing).toHaveLength(4);
     expect(orderFees(null).total).toBe(0);
   });
 });
@@ -244,7 +256,7 @@ describe("buildOrderEstimate with fees", () => {
   it("adds the fees to the goods subtotal", () => {
     const est = buildOrderEstimate({ order, inventory, settings: FEES });
     expect(est.subtotal).toBe(55);
-    expect(est.total).toBe(191); // 55 + 136
+    expect(est.total).toBe(190); // 55 + 135
     expect(est.floor).toBe(false);
     expect(est.totalFloor).toBe(false);
   });
@@ -257,7 +269,7 @@ describe("buildOrderEstimate with fees", () => {
     expect(est.floor).toBe(false);
     expect(est.totalFloor).toBe(true);
     expect(est.total).toBe(75);
-    expect(est.fees.missing).toHaveLength(4);
+    expect(est.fees.missing).toHaveLength(3);
   });
 
   it("is ingredients-only when no settings are passed at all", () => {

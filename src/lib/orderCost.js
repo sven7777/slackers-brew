@@ -136,12 +136,25 @@ function resolveLine(category, row, cpu, catalog) {
 // ⚠️ And the amounts themselves are NEVER committed — same rule as vendor
 // prices, same reason (this repo is public, tests use fabricated numbers). They
 // live in `settings.costs` in the private database, entered in the app.
+//
+// ⚠️ SALES TAX IS DELIBERATELY ABSENT, and this is the interesting omission.
+// The invoice carries a $1.15 tax line and flags pallet + freight with a `T`,
+// but 8.25% of that $147.50 is $12.17, and nothing else on the page divides
+// cleanly either ($1.15 is 0.78% of the flagged lines, 9.2% of the pallet
+// charge, and implies a $13.94 base at the Texas rate). So one invoice does not
+// reveal the RULE — only that some small thing was taxed. A flat "typical tax"
+// field would have been a number with no basis sitting in a column of numbers
+// that all have one, which is worse than no line at all on a screen whose whole
+// argument is that it says where each figure comes from. Ingredients bought for
+// resale are mostly exempt anyway and tax is not normally part of an order, so
+// the estimate is a few dollars light rather than wrong in kind (Derek,
+// 2026-09-14). **Bring it back as a rate × a per-line taxable flag if BSG ever
+// says what the `T` actually taxes** — not as a flat amount.
 export const ORDER_FEE_FIELDS = [
   ["liftgateFee", "Liftgate", "charged when there's no dock to unload onto"],
   ["palletFee", "Pallet charges", "flat per order on the invoice — say so if yours scales with pallet count"],
   ["fuelSurcharge", "Fuel surcharge", "the invoice's \"fuel surcharge adjustment\" — it tracks freight, not order size"],
   ["freightFee", "Freight", "an average: BSG bills it per shipment, so a small order won't pay this much"],
-  ["orderSalesTax", "Sales tax", "the invoice taxes SOME lines only — enter what a typical order is charged"],
 ];
 
 export const orderFeeLabel = (key) => ORDER_FEE_FIELDS.find(([k]) => k === key)?.[1] || key;

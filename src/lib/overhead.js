@@ -168,7 +168,9 @@ export const defCosts = {
   palletFee: null,
   fuelSurcharge: null,
   freightFee: null,
-  orderSalesTax: null,
+  // ⚠️ No sales tax field on purpose — see the note above ORDER_FEE_FIELDS.
+  // One invoice showed a tax line but not the rule behind it, and ingredients
+  // bought for resale are mostly exempt.
 
   // ── Deductions from retail price ──
   cardPct: 3.0,
