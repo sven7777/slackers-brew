@@ -108,6 +108,94 @@ describe("save serialization", () => {
   });
 });
 
+describe("debounced saves (async backend)", () => {
+  // Every input in the app is onChange, and an async save is a whole-list
+  // delete-then-insert with an EMPTY table between its two halves. Typing
+  // "4250" into one field fired four of those over all 18 recipes. A burst of
+  // typing has to become one write.
+  beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+  afterEach(() => vi.useRealTimers());
+
+  // Mount against an async load and wait for it to settle.
+  const mountAsync = async (key, initial) => {
+    load.mockReturnValue(Promise.resolve(initial));
+    const view = renderHook(() => usePersistentState(key, initial));
+    await act(async () => {});
+    expect(view.result.current[2].loading).toBe(false);
+    return view;
+  };
+
+  it("collapses a burst of edits into a single write of the newest value", async () => {
+    save.mockResolvedValue(undefined);
+    const { result } = await mountAsync("recipes", 0);
+
+    act(() => result.current[1](1));
+    act(() => result.current[1](2));
+    act(() => result.current[1](3));
+    await act(async () => { vi.advanceTimersByTime(400); });
+    expect(save).not.toHaveBeenCalled(); // still settling
+
+    await act(async () => { vi.advanceTimersByTime(200); });
+    expect(save.mock.calls).toEqual([["recipes", 3]]);
+  });
+
+  it("writes within the cap even while the keys keep coming", async () => {
+    save.mockResolvedValue(undefined);
+    const { result } = await mountAsync("recipes", 0);
+
+    // An edit every 300 ms never lets the 500 ms idle timer expire; without a
+    // cap the write would be deferred for as long as the typing lasts.
+    for (let i = 1; i <= 10; i++) {
+      act(() => result.current[1](i));
+      await act(async () => { vi.advanceTimersByTime(300); });
+    }
+    expect(save).toHaveBeenCalled();
+    expect(save.mock.calls.length).toBeLessThanOrEqual(3); // ~one per 2 s cap
+  });
+
+  it("writes a pending edit immediately when the page is hidden", async () => {
+    save.mockResolvedValue(undefined);
+    const { result } = await mountAsync("malts", 0);
+
+    act(() => result.current[1](9));
+    expect(save).not.toHaveBeenCalled();
+
+    await act(async () => { window.dispatchEvent(new Event("pagehide")); });
+    expect(save).toHaveBeenCalledWith("malts", 9); // no timer advance
+  });
+
+  it("writes a pending edit on unmount rather than dropping it", async () => {
+    save.mockResolvedValue(undefined);
+    const { result, unmount } = await mountAsync("settings", 0);
+
+    act(() => result.current[1]({ name: "Slackers" }));
+    expect(save).not.toHaveBeenCalled();
+
+    await act(async () => { unmount(); });
+    expect(save).toHaveBeenCalledWith("settings", { name: "Slackers" });
+  });
+
+  it("does not write twice when the page is hidden mid-burst", async () => {
+    save.mockResolvedValue(undefined);
+    const { result } = await mountAsync("hops", 0);
+
+    act(() => result.current[1](4));
+    await act(async () => { window.dispatchEvent(new Event("pagehide")); });
+    await act(async () => { vi.advanceTimersByTime(1000) }); // the cancelled timer
+    expect(save.mock.calls).toEqual([["hops", 4]]);
+  });
+
+  it("leaves the synchronous localStorage path undebounced", async () => {
+    load.mockReturnValue(0);
+    save.mockResolvedValue(undefined);
+    const { result } = renderHook(() => usePersistentState("tab", 0));
+
+    act(() => result.current[1](2));
+    await act(async () => {}); // chain microtasks only, no timers advanced
+    expect(save).toHaveBeenCalledWith("tab", 2);
+  });
+});
+
 describe("save failure reporting", () => {
   // A dropped save is invisible: the edit stays in React state, so the UI
   // still shows it. Failures have to reach the store that feeds the banner.

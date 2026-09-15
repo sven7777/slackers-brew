@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createSupabaseBackend } from "./supabaseBackend";
+import { createSupabaseBackend, buildOps } from "./supabaseBackend";
 
 // --- in-memory fake of the supabase-js query builder -----------------------
 // Just enough of the chainable API the backend uses: from().select().eq()
@@ -99,6 +99,43 @@ class Query {
   }
 }
 
+// Stands in for the save_shared function from migration 0018. It is the one
+// piece of the fake that has to be faithful rather than merely convenient: the
+// property these tests assert is that a refusal leaves every data row alone,
+// which in the real thing is the transaction rolling back. Here the claim is
+// checked BEFORE anything is mutated, which is the same guarantee reached the
+// only way an in-memory fake can reach it.
+function saveShared(store, { p_key, p_expected, p_ops }) {
+  if (store._failNext) {
+    store._failNext = false;
+    return { data: null, error: { message: "boom" } };
+  }
+  const row = store.data_versions.find((r) => r.key === p_key);
+  let claimed;
+  if (!row) {
+    // No version row: nothing to be stale against, so create one and carry on.
+    store.data_versions.push({ key: p_key, version: 1 });
+    claimed = 1;
+  } else if (Number(row.version) === p_expected) {
+    row.version = p_expected + 1;
+    claimed = row.version;
+  } else {
+    return { data: null, error: { message: "stale_write" } };
+  }
+
+  for (const op of p_ops) {
+    store[op.table] = "whereCol" in op
+      ? store[op.table].filter((r) => r[op.whereCol] !== op.whereVal)
+      : [];
+    if (op.table === "recipes") { // FK cascade
+      store.recipe_ingredients = [];
+      store.recipe_schedule = [];
+    }
+    store[op.table].push(...op.rows.map((r) => ({ ...r, id: r.id ?? `id-${++store._seq}` })));
+  }
+  return { data: claimed, error: null };
+}
+
 function fakeClient() {
   const store = {
     inventory: [],
@@ -106,6 +143,7 @@ function fakeClient() {
     recipe_ingredients: [],
     recipe_schedule: [],
     settings: [],
+    products: [],
     data_versions: [
       { key: "malts", version: 0 }, { key: "hops", version: 0 },
       { key: "yeast", version: 0 }, { key: "adj", version: 0 },
@@ -114,7 +152,14 @@ function fakeClient() {
     _seq: 0,
     _failNext: false,
   };
-  return { store, from: (table) => new Query(store, table) };
+  return {
+    store,
+    from: (table) => new Query(store, table),
+    rpc: async (fn, args) =>
+      fn === "save_shared"
+        ? saveShared(store, args)
+        : { data: null, error: { message: `no such function ${fn}` } },
+  };
 }
 
 let client, backend;
@@ -308,6 +353,82 @@ describe("errors", () => {
   it("save throws on a backend error", async () => {
     client.store._failNext = true;
     await expect(backend.save("settings", { name: "x" })).rejects.toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One transaction per save (migration 0018). A save used to be four sequential
+// client calls with the table EMPTY between two of them, so an interruption
+// right there lost the catalog. It is now a single RPC that either lands whole
+// or not at all.
+// ---------------------------------------------------------------------------
+
+describe("transactional save", () => {
+  it("writes through one RPC call, never a client-side delete-then-insert", async () => {
+    const calls = [];
+    const b = createSupabaseBackend({
+      ...client,
+      from: (t) => { calls.push(`from:${t}`); return client.from(t); },
+      rpc: (...a) => { calls.push("rpc"); return client.rpc(...a); },
+    });
+    await b.load("recipes", []); // reads the version table, as any mounted key does
+    calls.length = 0;
+
+    await b.save("recipes", [{ n: "Solo", m: [["Pils", 100]], sc: [[0, "Brew Date"]] }]);
+    // Previously: delete recipes, insert recipes, insert ingredients, insert
+    // schedule — four chances to be interrupted with the table empty.
+    expect(calls).toEqual(["rpc"]);
+    expect(client.store.recipes).toHaveLength(1);
+    expect(client.store.recipe_ingredients).toHaveLength(1);
+  });
+
+  it("plans recipes so children can name a parent that does not exist yet", () => {
+    const ops = buildOps("recipes", [
+      { n: "A", m: [["Pils", 100]], sc: [[0, "Brew Date"]] },
+      { n: "B", h: [["Citra", 4, "boil", 10]] },
+    ]);
+    expect(ops.map((o) => o.table)).toEqual(["recipes", "recipe_ingredients", "recipe_schedule"]);
+
+    // Ids are generated client-side, so the whole write is one round trip.
+    const [a, bRec] = ops[0].rows;
+    expect(a.id).toBeTruthy();
+    expect(a.id).not.toBe(bRec.id);
+    expect(ops[1].rows.map((r) => r.recipe_id)).toEqual([a.id, bRec.id]);
+    expect(ops[2].rows).toEqual([{ recipe_id: a.id, day: 0, action: "Brew Date", ord: 0 }]);
+  });
+
+  it("scopes an inventory save to its own category and leaves the others alone", async () => {
+    const ops = buildOps("hops", [{ n: "Citra", q: 4 }]);
+    expect(ops).toEqual([{
+      table: "inventory", whereCol: "category", whereVal: "hop",
+      rows: [expect.objectContaining({ category: "hop", name: "Citra", qty: 4, ord: 0 })],
+    }]);
+
+    await backend.save("malts", [{ n: "Pils", q: 5 }]);
+    await backend.save("hops", [{ n: "Citra", q: 4 }]);
+    expect(await backend.load("malts", null)).toEqual([{ n: "Pils", q: 5 }]);
+  });
+
+  it("replaces the settings row rather than adding one", () => {
+    const ops = buildOps("settings", { name: "Slackers", avgKegs: "7" });
+    expect(ops).toHaveLength(1);
+    expect(ops[0].table).toBe("settings");
+    expect(ops[0].rows).toEqual([expect.objectContaining({ id: 1, name: "Slackers", prefs: { avgKegs: "7" } })]);
+    expect("whereCol" in ops[0]).toBe(false); // the whole (one-row) table
+  });
+
+  it("sends every row of a batch with the same keys", () => {
+    // save_shared inserts a column list rather than `select *`, so that every
+    // column the caller omits keeps its DEFAULT. It takes the UNION of the
+    // rows' keys — reading them off row 0 dropped a price that only the second
+    // row carried, silently, which a real Postgres caught and the fake could
+    // not. Uniform keys here mean that safety net is never load-bearing.
+    const ops = buildOps("adj", [
+      { n: "Honey", q: 18, u: "lbs" },
+      { n: "Coffee", q: 5, u: "lbs", cpu: 12.5, sku: "X1" },
+    ]);
+    const keys = ops[0].rows.map((r) => Object.keys(r).sort().join(","));
+    expect(new Set(keys).size).toBe(1);
   });
 });
 
