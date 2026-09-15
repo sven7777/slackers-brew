@@ -57,7 +57,7 @@ src/
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
-supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0017)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0018)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
@@ -304,7 +304,7 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
-**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`. ⚠️ `tab` is a persisted INDEX into `tabNames`, so inserting a tab renumbers the ones after it — adding Analytics at 3 moved Settings from 3 to 4, and a stored `tab` lands somewhere new exactly once. Harmless because every panel is rendered on an explicit `tab===n`, so an index off the end shows nothing rather than crashing; append rather than insert if that one-time jump ever matters.
+**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). ⚠️ **It also DEBOUNCES the async path** (`SAVE_DEBOUNCE_MS` 500 ms idle, `SAVE_MAX_WAIT_MS` 2 s cap): every input in the app is `onChange`, and coalescing only happened while a save was already in flight, so typing `4250` into one hop weight rewrote all 18 recipes four times. The debounce is the async path's ALONE — a localStorage save is one synchronous `setItem` that cannot half-write, so delaying it would buy nothing and cost the guarantee that the local path stays synchronous — and it is paired with a **flush on unmount and on `pagehide`/hidden**, without which a debounce just trades a loss window for a slower one. Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`. ⚠️ `tab` is a persisted INDEX into `tabNames`, so inserting a tab renumbers the ones after it — adding Analytics at 3 moved Settings from 3 to 4, and a stored `tab` lands somewhere new exactly once. Harmless because every panel is rendered on an explicit `tab===n`, so an index off the end shows nothing rather than crashing; append rather than insert if that one-time jump ever matters.
 
 ⚠️ **The cost denominator is SPLIT BY CHANNEL, and pour loss is the taproom's alone.**
 `settings.costs.wholesaleGalPerYear` is gallons invoiced out as kegs in a year; the taproom share
@@ -334,9 +334,44 @@ computed at 3.7%, an equation that did not add up on its own screen.
 ⚠️ **A long-open tab is stale, and a stale save used to be able to delete data.** The app reads each key once on mount and never refetches — no polling, no realtime — so a tab open since before an edit shows the data as of the moment it opened (2026-08-27: a tab predating an import was still offering the old recipe list, and the two imported recipes looked lost). The display was the harmless half: every save is a whole-list delete-then-insert, so editing anything in that tab would have written the old list over the new recipes and deleted them. Two members share one database; this needs two windows, not a day-old tab. Two mechanisms, in [src/lib/freshness.js](src/lib/freshness.js) and migration 0014:
 
 - **Say so.** On tab focus (and on becoming visible), `repo.staleKeys()` asks the backend which loaded keys have moved, and [StaleDataBanner](src/components/StaleDataBanner.jsx) offers a reload. It **reports, never refetches** — silently swapping the data under an open editor would throw away whatever is half-typed.
-- **Refuse the write.** `data_versions` holds one counter per shared key. A writer claims its slot with a compare-and-swap (`update … where key = $1 and version = $expected`) and touches data rows only if that matched, so a losing writer never reaches the delete. A refusal raises `StaleWriteError` ([src/lib/staleWrite.js](src/lib/staleWrite.js)), which SaveErrorBanner renders with **Reload instead of Retry** — retrying a stale write is precisely the overwrite being prevented. It is a compare-and-swap, not a lock: a crash between claim and insert leaves the version bumped and the data half-written, exactly as a crash mid-save does today.
+- **Refuse the write.** `data_versions` holds one counter per shared key. A writer claims its slot with a compare-and-swap (`update … where key = $1 and version = $expected`) and touches data rows only if that matched, so a losing writer never reaches the delete. A refusal raises `StaleWriteError` ([src/lib/staleWrite.js](src/lib/staleWrite.js)), which SaveErrorBanner renders with **Reload instead of Retry** — retrying a stale write is precisely the overwrite being prevented. It is a compare-and-swap, not a lock — but claim and write are now ONE TRANSACTION (below), so it can no longer leave the version bumped with the data half-written.
 
 The localStorage backend implements the same `staleKeys()` (two tabs share one origin's storage; there the stored string *is* the version) but has no CAS — a local save can't fail, and that path stays synchronous.
+
+⚠️ **A save is ONE TRANSACTION, and the claim rides inside it** (`save_shared`,
+migration 0018). Every shared key is written as delete-then-insert, and that used
+to be four sequential calls from the browser with the CAS as a fifth — *between
+the DELETE and the INSERT the table is EMPTY*, so a dropped connection, a closed
+laptop or a 502 right there lost the catalog, with the ~13:03Z nightly dump as
+the only net. The RPC takes a list of `{table, whereCol/whereVal, rows}` ops and
+claims, deletes and inserts in one plpgsql transaction: all of it lands or none
+of it does. Four rules that are easy to undo:
+- ⚠️ **The claim must stay in the transaction with the writes it authorises.**
+  A claim that commits while its writes roll back leaves every other tab stale
+  against a version that never wrote anything — the opposite of what 0014 built.
+- **The function is GENERIC and the row shapes stay in JavaScript.** It knows
+  nothing about recipes or prices. A second copy of the shapes in SQL is exactly
+  the `SETTINGS_PREFS` trap (a field added on one side and forgotten on the other
+  writes a silent null), and those shapes change every few weeks. `buildOps()` in
+  supabaseBackend.js is the pure, tested half; the transaction is the fixed half.
+- **`recipes.id` is generated CLIENT-SIDE** (`newId()`), so the ingredient and
+  schedule rows can name their parent without a round trip back for the inserted
+  ids — which would put a gap back in the middle of the write. A recipe's id has
+  never been stable across saves anyway; the unique key is `ord`.
+- **Ops apply in order and insert only the columns the caller sent**, so a
+  parent table is refilled before its children and every column left out keeps
+  its DEFAULT (`insert … select *` would write an explicit NULL into the next
+  NOT NULL DEFAULT column anybody adds). ⚠️ That column list is the **union of
+  every row's keys**, not the first row's: reading it off row 0 was tried, and a
+  batch whose second row carried a price the first lacked inserted it with the
+  price DROPPED — no error, no row count to notice it by. A real Postgres caught
+  that and the JS fake could not. `buildOps()` emits uniform keys anyway, so the
+  union is a net, never something to rely on.
+
+⚠️ It grants no authority a member doesn't already have (every table in its
+whitelist is writable through PostgREST under the same policies, and it is
+SECURITY INVOKER so RLS still applies to each statement) — but it is the single
+write path for all shared data, so a bug in it breaks every save in the app.
 
 **Crash containment.** [ErrorBoundary](src/components/ErrorBoundary.jsx) wraps the tab panel in App.jsx (keyed by `tab`, so switching tabs clears a crashed panel and the nav — which sits outside it — is always usable) and the whole tree in main.jsx. Three white screens have shipped, each a *different* unguarded read (a missing recipe array, a column prod hadn't migrated yet, a stale `selR` indexing past the end of the list), so the guard is deliberately generic rather than another targeted null check. Keep it that way: prefer fixing the class of failure over adding the next specific check.
 
