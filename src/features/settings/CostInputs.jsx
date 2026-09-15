@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { OVERHEAD_FIELDS, annualCapacity, annualLabor, annualVolume, costInputs, defCosts, missingInputs, overheadHint, overheadLabel } from "../../lib/overhead";
+import { wholesaleHint, wholesaleLabel } from "../../lib/kegPricing";
+import { ORDER_FEE_FIELDS, orderFeeHint, orderFeeLabel, orderFees } from "../../lib/orderCost";
 import { parseNum } from "../../lib/overhead";
 import { article, deductions, pourFor, servingsOf } from "../../lib/menuPricing";
 import PriceInput from "../../components/PriceInput";
@@ -57,6 +59,7 @@ export default function CostInputs({ settings, setSettings }) {
   const stored = settings?.costs || {};
   const c = costInputs(settings);
   const missing = missingInputs(settings);
+  const fees = orderFees(settings);
 
   const setCost = (key, value) =>
     setSettings((p) => ({ ...p, costs: { ...(p.costs || {}), [key]: value } }));
@@ -114,6 +117,15 @@ export default function CostInputs({ settings, setSettings }) {
     const size = servingsOf(settings).find((s) => s.oz === housePour.oz);
     return deductions({ settings, price: size?.price ?? null, oz: housePour.oz });
   }, [settings, housePour]);
+
+  // Resolved through costInputs() for the same reason `setServing` is: the
+  // first edit to a list still on the shipped sizes must write the whole list
+  // rather than one orphaned row.
+  const setKegSize = (i, patch) =>
+    setSettings((p) => {
+      const list = costInputs(p).kegSizes.map((k, idx) => (idx === i ? { ...k, ...patch } : k));
+      return { ...p, costs: { ...(p.costs || {}), kegSizes: list } };
+    });
 
   const num = (key, extra = {}) => ({
     id: `cost-${key}`,
@@ -195,12 +207,38 @@ export default function CostInputs({ settings, setSettings }) {
             <Num {...num("linePct")} text="Draft line & foam" width={70} suffix="%" />
             <Num {...num("compsPct")} text="Comps & staff pours" width={70} suffix="%" />
           </div>
+          {/* ⚠️ The rate quoted here must be the one actually APPLIED. Once a
+              keg figure is entered, pints sold uses the blended `channelKeep`,
+              not `lossToPourPct` — printing "less 4.9%" beside a figure that
+              took 3.7% is an equation that does not add up on its own screen,
+              which is the thing cogs.js's line-item rule exists to prevent. */}
           <p style={basis}>
             {Math.round(v.pintsPackaged).toLocaleString()} pints packaged less{" "}
-            {v.lossToPourPct.toFixed(1)}% ={" "}
+            {((1 - v.channelKeep) * 100).toFixed(1)}%{v.retailGal != null && " blended"} ={" "}
             <strong>{Math.round(v.pintsSold).toLocaleString()} pints sold</strong> a year (≈{" "}
             {Math.round(v.pintsSold / 12).toLocaleString()} a month).
           </p>
+          {/* ⚠️ The split, printed because it is derived rather than entered and
+              a brewery should be able to check the arithmetic it is being costed
+              on. The reconciliation is also the fastest way to catch a wrong
+              batches-per-year, which is the denominator for everything. */}
+          {v.retailGal != null ? (
+            <p style={basis}>
+              Of {Math.round(v.packagedGal).toLocaleString()} gal packaged,{" "}
+              <strong>{Math.round(v.retailGal).toLocaleString()} gal ({v.retailSharePct.toFixed(0)}%)</strong>{" "}
+              pours here and {Math.round(v.wholesaleGal).toLocaleString()} gal goes out as kegs. ⚠️{" "}
+              <strong>Only the taproom share carries this loss</strong> — a keg leaves full and the
+              account eats that foam — so your fixed costs spread over{" "}
+              {((1 - v.channelKeep) * 100).toFixed(1)}% loss rather than {v.lossToPourPct.toFixed(1)}%.
+              The keg figure is set under <strong>Wholesale</strong> below.
+            </p>
+          ) : (
+            <p style={basis}>
+              That assumes every drop pours here. If you sell kegs to accounts, enter the gallons
+              under <strong>Wholesale</strong> below — kegs leave full and take none of this loss,
+              so counting them as taproom beer overstates every cost per pint.
+            </p>
+          )}
         </div>
       </div>
 
@@ -321,6 +359,112 @@ export default function CostInputs({ settings, setSettings }) {
       </div>
 
       <div style={card}>
+        <div style={hdr}>📦 Wholesale</div>
+        <div style={{ padding: 16 }}>
+          <p style={note}>
+            Kegs sold to accounts. ⚠️ <strong>A keg is not a large serving size</strong> — it is a
+            sale for <strong>resale</strong>, so no sales tax comes off it, it is invoiced rather
+            than swiped so no card fee does either, and it leaves the building full so none of the
+            taproom's pour loss applies. Excise still does, on the full barrel. You self-distribute,
+            so there is no distributor margin: the price here is what the account is invoiced and
+            what you collect. This is the <strong>house</strong> price list —{" "}
+            <strong>what a given beer goes out at is a property of that beer</strong> and is set on
+            its row in <strong>Analytics ▸ Pricing ▸ Wholesale</strong>, the same way its pour size is.
+          </p>
+          {c.kegSizes.map((k, i) => (
+            <div key={k.key ?? i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <input style={{ ...inp, width: 110, textAlign: "left" }} value={k.label ?? ""}
+                aria-label={`Keg size ${i + 1} name`}
+                onChange={(e) => setKegSize(i, { label: e.target.value })} />
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>price $</span>
+              <PriceInput value={parseNum(k.price)} style={{ width: 78 }}
+                aria-label={`Keg size ${i + 1} house price`}
+                onCommit={(v) => setKegSize(i, { price: v === "" ? null : v })} />
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>empty keg $</span>
+              <PriceInput value={parseNum(k.kegCost)} style={{ width: 78 }}
+                aria-label={`Keg size ${i + 1} empty keg cost`}
+                onCommit={(v) => setKegSize(i, { kegCost: v === "" ? null : v })} />
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                {parseNum(k.bbl) == null ? "" : `${parseNum(k.bbl).toFixed(3)} bbl`}
+              </span>
+            </div>
+          ))}
+
+          <div style={{ ...row, marginTop: 14 }}>
+            <Num {...num("kegDeliveryPerKeg")} text={wholesaleLabel("kegDeliveryPerKeg")}
+              hint={wholesaleHint("kegDeliveryPerKeg")} prefix="$" width={90}
+              unconfirmed={parseNum(stored.kegDeliveryPerKeg) == null} />
+            <Num {...num("kegLossPct")} text={wholesaleLabel("kegLossPct")}
+              hint={wholesaleHint("kegLossPct")} suffix="%" width={70}
+              unconfirmed={parseNum(stored.kegLossPct) == null} />
+            <Num {...num("kegDepositPerKeg", { placeholder: "" })} text="Deposit per keg" prefix="$" width={90}
+              hint="the account's money, held against the keg coming back — not revenue, and in no margin" />
+            <Num {...num("wholesaleOverheadPct")} text="Overhead absorbed" suffix="%" width={70}
+              hint="share of taproom overhead a wholesale barrel carries" />
+            <Num {...num("wholesaleTargetMarginPct")} text="Target margin" suffix="%" width={70}
+              hint="on net revenue against DIRECT cost — industry draft benchmark is 40–60%" />
+          </div>
+
+          <div style={{ ...row, marginTop: 4 }}>
+            <Num {...num("wholesaleGalPerYear", { placeholder: "" })} text="Sold to accounts"
+              suffix="gal/yr" width={90}
+              hint="gallons invoiced out as kegs in a year — you know this one exactly" />
+          </div>
+          {v.wholesaleOverflow ? (
+            <p style={{ ...basis, color: "#b45309" }}>
+              ⚠️ That is more than the {Math.round(v.packagedGal).toLocaleString()} gal you package
+              in a year, so it is being ignored and everything treated as taproom beer. If the keg
+              figure is right, <strong>batches per year</strong> is what to check — it is the
+              denominator for every cost in the app.
+            </p>
+          ) : v.wholesaleGal != null ? (
+            <p style={basis}>
+              {Math.round(v.wholesaleGal).toLocaleString()} gal is{" "}
+              <strong>{Math.round(v.wholesaleGal / 15.5)} half barrels a year</strong> (
+              {v.wholesaleSharePct.toFixed(0)}% of what you package), leaving{" "}
+              {Math.round(v.retailGal).toLocaleString()} gal for the taproom. ⚠️ This is not just a
+              statistic: kegs take none of the taproom's pour loss, so entering it spreads your
+              fixed costs over more sellable beer and lowers every cost per pint.
+            </p>
+          ) : null}
+
+          <p style={{ ...basis, marginTop: 16, marginBottom: 4, fontWeight: 600, color: "#475569" }}>
+            What the account sees
+          </p>
+          <div style={row}>
+            <Num {...num("accountRetailPint")} text="Their retail price" prefix="$" width={80}
+              hint="what a bar charges for a pour of your beer — a dearer beer sells higher, so set those on the beer's own row too" />
+            <Num {...num("accountPourOz")} text="Their pour" suffix="oz" width={64}
+              hint="high-ABV beers go in smaller glasses — set those on the beer's own row" />
+            <Num {...num("accountLossPct")} text="Their keg loss" suffix="%" width={64}
+              hint="tapping, line purge, foam and buybacks — ~20% is the industry rule of thumb, far more than your own" />
+            <Num {...num("accountPourCostPct")} text="Their target pour cost" suffix="%" width={64}
+              hint="craft bar 20–26%, neighbourhood bar 22–28%" />
+          </div>
+          <p style={basis}>
+            ⚠️ <strong>These four are the only inputs in the app that can say a price is too HIGH.</strong>{" "}
+            Every other figure is a floor built up from your costs, and cost-plus alone will happily arrive at
+            a keg nobody buys. A bar works backwards from its own pour cost — what it can retail your beer for,
+            less the fifth of every keg that never reaches a paying glass — so that is what sets the ceiling on
+            what you can charge. These two are the brewery-wide defaults; <strong>pour size and retail price
+            both belong to the beer</strong> and are set per beer in{" "}
+            <strong>Analytics ▸ Pricing ▸ Wholesale</strong>, because a dear beer is poured smaller AND sold
+            higher. Setting only one gets you half way: a $250 half barrel at 12 oz is still 27% pour cost
+            against a $7 pint and only clears at $8.
+          </p>
+          <p style={basis}>
+            Delivery and keg loss are <strong>yours</strong> because you self-distribute, and both are
+            left out of every figure until they are entered rather than counted as zero. ⚠️{" "}
+            <strong>Overhead absorbed</strong> is the judgement call on this screen: at 100% a keg is
+            charged the same share of rent and payroll as a barrel poured at the bar, which no keg
+            price can clear — a barrel nets roughly five times more poured than kegged. That is why
+            the wholesale view prices against the <strong>fill floor</strong> (ingredients, labor and
+            the deductions above) and prints the absorbed figure greyed out beside it.
+          </p>
+        </div>
+      </div>
+
+      <div style={card}>
         <div style={hdr}>🧾 Price Deductions</div>
         <div style={{ padding: 16 }}>
           <p style={note}>
@@ -374,6 +518,40 @@ export default function CostInputs({ settings, setSettings }) {
                 + {cents(preview.card)} card + {cents(preview.excise)} excise ={" "}
                 <strong>{cents(preview.net)}</strong> reaching the brewery.
                 {c.permitType !== "mb" && " No gross receipts tax on this permit."}</>}
+          </p>
+        </div>
+      </div>
+
+      {/* ⚠️ These are what the VENDOR adds to an order — the other direction
+          from every card above, which is what comes off a price we charge. They
+          sit under `settings.costs` anyway, for the reason overhead.js gives:
+          one nested object is one entry in SETTINGS_PREFS forever. */}
+      <div style={card}>
+        <div style={hdr}>🚚 Order Fees</div>
+        <div style={{ padding: 16 }}>
+          <p style={note}>
+            What BSG adds under the subtotal on an ingredient order. Each is a{" "}
+            <strong>flat amount per order</strong>, not a rate — on a real invoice they came to
+            about 15% of a $1,200 order, so an estimate without them is not close. A line left{" "}
+            <strong>blank is unknown, not free</strong>: it's named on the Order Calculator and
+            the total there prints as a floor. Enter <strong>0</strong> for anything you're never
+            charged. No sales tax line — ingredients for resale are mostly exempt, and one invoice
+            showed a tax amount without showing the rule behind it.
+          </p>
+          <div style={{ ...row, alignItems: "flex-start" }}>
+            {ORDER_FEE_FIELDS.map(([key, text]) => (
+              <Num key={key} {...num(key)} text={text} hint={orderFeeHint(key)} width={96} prefix="$"
+                unconfirmed={fees.missing.includes(key)} />
+            ))}
+          </div>
+          <p style={basis}>
+            {fees.missing.length > 0
+              ? <>{fees.missing.length} of {ORDER_FEE_FIELDS.length} not entered
+                ({fees.missing.map(orderFeeLabel).join(", ")}) — the Order Calculator adds{" "}
+                <strong>{cents(fees.total)}+</strong> to an order until they are.</>
+              : <>Every order carries <strong>{cents(fees.total)}</strong> on top of the
+                ingredients. Freight is the movable one: BSG bills it per shipment, so one large
+                order pays it once where two small ones pay it twice.</>}
           </p>
         </div>
       </div>

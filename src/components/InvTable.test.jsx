@@ -108,3 +108,32 @@ describe('InvTable product linking', () => {
     expect(onLink).toHaveBeenCalledWith('adj', { n: 'Candi Sugar, Dark', q: 0, u: 'lbs', sku: 'AZZZ1771' });
   });
 });
+
+describe('InvTable ordering', () => {
+  const shelf = [
+    { n: 'Munich', q: 1 },
+    { n: 'CTZ', q: 2 },
+    { n: 'Crystal 80', q: 3 },
+    { n: 'Cascade', q: 4 },
+    { n: 'Crystal 8', q: 5 },
+  ];
+
+  const names = () =>
+    Array.from(document.querySelectorAll('tbody tr td:first-child'))
+      .map(td => td.textContent.trim());
+
+  it('lists rows alphabetically, case-insensitive and numeric-aware', () => {
+    render(<InvTable {...props} items={shelf} setter={vi.fn()} setInvCost={vi.fn()} />);
+    expect(names()).toEqual(['Cascade', 'Crystal 8', 'Crystal 80', 'CTZ', 'Munich']);
+  });
+
+  // The display sort must not change which row an edit addresses: every edit
+  // still goes through the row's index in the STORED array.
+  it('still edits the right stored row after sorting', () => {
+    let rows = shelf;
+    const setter = (fn) => { rows = fn(rows); };
+    render(<InvTable {...props} items={shelf} setter={setter} setInvCost={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('On hand, Cascade'), { target: { value: '9' } });
+    expect(rows[3]).toEqual({ n: 'Cascade', q: 9 });
+  });
+});

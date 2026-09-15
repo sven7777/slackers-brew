@@ -53,7 +53,19 @@ either way.
     average keg yield when one is set.
 - **Order Calculator** — select recipes (single or double batch) and get a
   computed order summary: how much you need, how much you have, and how much to
-  order. Malts also roll up into 55 lb bag counts.
+  order. Malts also roll up into 55 lb bag counts. Below that, the **estimated
+  cost** of the order: what you need turned into the packs you actually buy —
+  40 lbs of a malt is one 55 lb sack and costs a whole sack — with two
+  ingredient names that are one vendor product merged into a single line. An
+  ingredient with no price is listed and left out rather than costed at $0, so
+  the subtotal reads as the floor it is. **Copy for email** puts the whole order
+  on the clipboard as plain text, a pack count and a pack size per line. Under the
+  goods it adds what the vendor charges on top — liftgate, pallet charges, fuel
+  surcharge and freight, entered once under Settings ▸ Order Fees — in the same
+  order an invoice prints them, so the two can be read side by side. A fee left
+  blank counts as unknown rather than free, and the total says so. There's no
+  sales tax line: ingredients bought for resale are mostly exempt, so an
+  invoice's tax is usually a few dollars on something incidental.
 - **Analytics** — three views of the whole book. **Beers** costs every beer side by
   side: batch total, cost per bbl, per keg and per 16 oz pint, sortable by any of
   them, with brewery-wide averages and the cheapest and dearest beer per barrel.
@@ -80,12 +92,36 @@ either way.
   the point, since one price for a 12 oz and a 16 oz makes the pint the cheapest
   beer on the menu by volume — recommends a price for a target margin, and prices
   every beer at *its own* pour, because a 9% tripel poured at 8 oz is a property
-  of that beer and is set on its row.
+  of that beer and is set on its row. A **Taproom | Wholesale** switch prices the
+  other channel: kegs (1/6, 1/4 and 1/2 BBL) sold to accounts. A keg is not a big
+  serving size — it's a sale for resale, so no sales tax comes off it, it's
+  invoiced rather than swiped so no card fee does either, and it leaves the
+  building full so none of the taproom's pour loss applies. What's left is excise,
+  delivery and the kegs that never come back. Because wholesale can't carry a
+  taproom's rent — a barrel nets roughly five times more poured than kegged — the
+  view leads with the **fill floor** (ingredients, labor and those deductions) and
+  greys out the absorbed figure, and a comparison row prices one packaged barrel
+  both ways. Each beer's own wholesale price lives on that beer, per size, so a
+  beer that goes out dearer only on half barrels sets just that one. Two price
+  guides sit beside each other: a **suggested** price (cost-plus at your target
+  margin on direct cost, the basis the industry's 40–60% draft benchmark uses)
+  and a **ceiling** — the most an account could pay and still hit their own pour
+  cost, worked back from what they retail your beer for less the fifth of every
+  keg that never reaches a paying glass. They're shown together because at a
+  small brewery's cost per barrel the first often exceeds the second, which is
+  the one thing a cost-plus number alone can never tell you. The account's pour
+  size and retail price both belong to the beer, since a dear beer is poured
+  smaller and sold higher — and the ceiling needs both, because a $250 keg at
+  12 oz is still 27% pour cost against a $7 pint and only works at $8.
 - **Settings** — brewery identity (name, tagline, logo), the default batch
   volume that drives costing — post-boil yield plus the average kegs a batch
   packages, which is where the brewhouse loss % comes from — the serving sizes and board
   prices the Pricing view works from, operating costs (production, taproom
-  losses, labor, monthly overhead and what comes off a retail price), ingredient
+  losses — including how many gallons a year go out as kegs, since those leave
+  the building full and take none of that loss — labor, monthly
+  overhead and what comes off a retail price), the
+  wholesale keg price list (house prices, delivery, keg loss, deposit and how
+  much overhead a wholesale barrel should carry), ingredient
   pricing (upload the
   vendor's PDF price list, see exactly which prices would change, then apply —
   the spot hop list is read too, from its text when it has one and by OCR when

@@ -98,7 +98,7 @@ export default function App() {
       <ErrorBoundary key={tab}>
         {tab===0 && <InventoryTab malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj} setInvCost={setInvCost} adopt={adoptIngredient} link={linkIngredient}/>}
         {tab===1 && <RecipesTab recs={recs} setRecs={setRecs} selR={selR} setSelR={setSelR} malts={malts} hops={hops} yeast={yeast} adj={adj} setInvCost={setInvCost} settings={settings} adopt={adoptIngredient} initialView={recipeView}/>}
-        {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj}/>}
+        {tab===2 && <OrderTab orders={orders} setOrders={setOrders} recs={recs} malts={malts} hops={hops} yeast={yeast} adj={adj} settings={settings}/>}
         {tab===3 && <AnalyticsTab recs={recs} setRecs={setRecs} malts={malts} hops={hops} yeast={yeast} adj={adj} settings={settings} setSettings={setSettings} openRecipeCost={openRecipeCost}/>}
         {tab===4 && <SettingsTab settings={settings} setSettings={setSettings} malts={malts} setMalts={setMalts} hops={hops} setHops={setHops} yeast={yeast} setYeast={setYeast} adj={adj} setAdj={setAdj}/>}
       </ErrorBoundary>
