@@ -40,9 +40,14 @@ src/
                 #   — incl. hopCatalog.js (the spot hop list as catalog rows)
                 #   — incl. recipeRows.js (the one "add a row to a recipe")
                 #   — incl. inventoryValue.js (stock on hand × its price)
+                #   — incl. orderCost.js (the order in PACKS, priced, + the
+                #   plain-text list to paste into the vendor email)
                 #   — incl. analytics.js (every recipe costed, side by side)
                 #   — incl. menuPricing.js (the PRICE model, above overhead.js's
                 #   cost model; NOT pricing.js, which converts vendor packs)
+                #   — incl. kegPricing.js (the same PRICE model for the OTHER
+                #   channel: kegs to accounts, where none of menuPricing's
+                #   deductions apply)
                 #   — incl. the price-list pipeline: pdfText (pdf.js, lazy) →
                 #   pdfLines → parsePriceList → priceChanges → applyPrices,
                 #   and, off the same parse, catalog → catalogChanges (the
@@ -52,7 +57,7 @@ src/
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
-supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0017)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0019)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
@@ -85,12 +90,61 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   (`rmBtn`, which deletes a recipe ingredient), and archiving promises the
   opposite
 - **Recipes** — pick a recipe from one dropdown, then a segmented sub-nav (local state, not persisted) switches between four views of it:
-  - **Everything a brewer scans for a name is alphabetical**, via the one comparator in [src/lib/sortNames.js](src/lib/sortNames.js) (`Intl.Collator`, case-insensitive + numeric, so `Cascade` precedes `CTZ` and `Crystal 8` precedes `Crystal 80`): the recipe picker here and on the Order Calculator, every ingredient table and its Add picker in the Edit view, the cellar-schedule action picker, and the Cost view's line items. The ingredient sorts are **display-only** — `sortedWithIndex()` hands back each row's index in the STORED array, and every edit still addresses that, because the stored order is what the printable sheets group by stage and time. What stays in process order stays that way: the schedule ROWS (day order), the Brew Sheet's additions (stage, then descending time), the Cellar Sheet's boxes.
+  - **Everything a brewer scans for a name is alphabetical**, via the one comparator in [src/lib/sortNames.js](src/lib/sortNames.js) (`Intl.Collator`, case-insensitive + numeric, so `Cascade` precedes `CTZ` and `Crystal 8` precedes `Crystal 80`): the Inventory tab's four shelf tables, the recipe picker here and on the Order Calculator, every ingredient table and its Add picker in the Edit view, the cellar-schedule action picker, and the Cost view's line items. The ingredient sorts are **display-only** — `sortedWithIndex()` hands back each row's index in the STORED array, and every edit still addresses that, because the stored order is what the printable sheets group by stage and time. What stays in process order stays that way: the schedule ROWS (day order), the Brew Sheet's additions (stage, then descending time), the Cellar Sheet's boxes.
   - **Edit** — recipe header (name, style, target OG/FG/ABV, mash + ferm temp) then the ingredient lists; add/remove ingredients (the Add picker offers the BREWERY'S OWN inventory, archived rows included — it used to offer `defaults.js`, which meant an adopted ingredient could never reach a recipe — with `Browse catalog…` as its last entry); edit the per-recipe cellar schedule; reset to preset; import a BeerSmith `.bsmx` ([ImportBeerSmith.jsx](src/features/recipes/ImportBeerSmith.jsx)). Reset/Import live here only. Name is free text, style comes from [StyleSelect](src/components/StyleSelect.jsx); an empty name renders as `(untitled)` in the picker so a mid-edit recipe stays selectable.
   - **Brew Sheet** — printable brew-day sheet (staged additions, mash, water salts; single/double batch) — [BrewSheetPanel.jsx](src/features/recipes/BrewSheetPanel.jsx)
   - **Cellar Sheet** — printable (**portrait** US Letter — it hangs on a clipboard on the fermenter) post-brew cellar log; enter a brew date and the recipe's day-offset schedule auto-fills every dated box (cold crash, bung, dry hop, rouse, transfer, carb, keg) plus yeast / dry-hop / cellar additions. Dry hop prints **one block per charge** (Dry Hop 1/2/3), each hop dated from its own charge's scheduled day. Scheduled steps follow the Brew Sheet's **Target | Actual** convention (computed date → Target, blank Actual for the brew-day record); the raw schedule is the source for those dates and is not itself printed. **Misc. Additions print their stage and an Added tick box**: each row shows the addition's cellar stage under its name (when in the process it goes in — a name and an amount alone didn't say whether that was primary or transfer), a Target date where the stage maps to a scheduled step, and an empty box the cellar crew marks to confirm it actually went in — [CellarPanel.jsx](src/features/recipes/CellarPanel.jsx)
   - **Cost** — ingredient COGS for the recipe: batch total, cost/bbl, cost/keg, cost per 16 oz pint, per-category subtotals, and an inline-editable cost per unit for each ingredient — [CostPanel.jsx](src/features/recipes/CostPanel.jsx)
-- **Order Calculator** — select recipes (single/double batch) → computed order summary
+- **Order Calculator** — select recipes (single/double batch) → computed order summary,
+  then what it will **cost** and the list to paste into the vendor email
+  ([orderCost.js](src/lib/orderCost.js) + [OrderEstimate.jsx](src/features/order/OrderEstimate.jsx)).
+  ⚠️ **This is a different arithmetic from COGS, in two ways that `computeOrder()` is right
+  not to do.** **You buy whole PACKS**: 40 lbs of Munich is one 55 lb sack and costs a whole
+  sack, so the rounding up is the feature — `inventory.cpu` is per lb/oz/pack (exactly right
+  for costing a batch, exactly wrong for an order) and is converted back UP to a pack price
+  here. And **the SKU is what you order, not the name**: `computeOrder()` aggregates by
+  ingredient NAME and deliberately stops there, because a brew sheet distinguishes Midnight
+  Wheat from Carafa Special III — the vendor does not, they are one sack under `MWEY1067`,
+  and 30 lbs of each is TWO bags of one thing rather than one bag of each. Lines merge by
+  `skuFor()` (curated map, then the row's own `sku`), never by walking `products.js`, which
+  has never heard of an adopted ingredient. ⚠️ `orderPack` is **not** `packQty`/`packUnit`:
+  the latter is the pack a PRICE applies to, which for every malt and hop on the vendor's
+  list is one pound, and conflating them orders 55 bags of Munich. A product whose pack
+  can't be read is printed with its raw quantity and no count — never sized at a guess.
+  cogs.js's honesty rule carries over: an unpriced ingredient is listed, left out, and the
+  subtotal prints `+`. **Copy for email** is plain text (it pastes into any mail client;
+  anything richer needs `text/html` on the clipboard) in Derek's own shape — pack count,
+  name, pack size, in his section order (malts, yeast, hops, adjuncts). The pack price
+  carries applyPrices.js's cent rounding (~$0.28 on a sack, ~$0.88 on an 11 lb hop box).
+
+  ⚠️ **What the VENDOR adds is five FLAT per-order lines, and the invoice is what settles
+  that** (`ORDER_FEE_FIELDS` in orderCost.js, playing the same one-list role
+  `OVERHEAD_FIELDS` and `WHOLESALE_FIELDS` do): liftgate, pallet charges, fuel surcharge,
+  freight — printed in the invoice's own order, under the goods, so the estimate can be read
+  against a real one. On Derek's (2026-09-14) they are **$177.75 against $1,205.72 of
+  goods**, so an ingredients-only estimate is ~13% under the bill. The one that
+  sounds like a rate and is not is the **fuel surcharge**: $5.25 on $1,205.72 is 0.435%,
+  which is no published rate — it tracks the freight line, and modelling it as a percentage
+  of the subtotal would have looked right on this invoice and drifted on every other. ⚠️
+  **A blank fee is UNKNOWN, not zero** — named on the card, and `totalFloor` prints `+` —
+  while an explicit **0** is a confirmed "never charged". ⚠️ `floor` (an unpriced
+  ingredient) and `totalFloor` (that, or a missing fee) are kept **separate**, because the
+  two gaps are fixed on different screens by different acts: one is an import that hasn't
+  run, the other a Settings field nobody has filled. ⚠️ The amounts are **never committed**
+  — same rule as vendor prices, same reason; `defCosts` ships them null and tests use
+  fabricated numbers.
+
+  ⚠️ **There is deliberately NO sales-tax line, and the reason is the interesting part.** The
+  invoice carries one ($1.15) and flags pallet + freight with a `T`, but 8.25% of that
+  $147.50 is $12.17, and nothing else on the page divides cleanly either — $1.15 is 0.78% of
+  the flagged lines, 9.2% of the pallet charge, and implies a $13.94 base at the Texas rate.
+  One invoice revealed the AMOUNT and not the RULE, and a flat "typical tax" field would have
+  been a number with no basis sitting in a column where every other figure has one — on a
+  screen whose whole argument is that it says where each figure comes from. Ingredients
+  bought for resale are mostly exempt and tax is not normally part of an order, so the
+  estimate is a few dollars light rather than wrong in kind (Derek's call, 2026-09-14).
+  **Bring it back as a rate × a per-line taxable flag if BSG ever says what the `T` taxes —
+  never as a flat amount**
 - **Analytics** — three views of the whole book, behind a segmented sub-nav
   ([AnalyticsTab.jsx](src/features/analytics/AnalyticsTab.jsx) is the shell; local
   state, like the Recipes tab's). It computes `costAllRecipes()` ONCE and hands it to
@@ -155,6 +209,72 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   confident green profit beside a cost with no rent in it is the `+` convention failing in
   the one place where it would flatter rather than alarm.
 
+  ⚠️ **CHANNEL is the axis, not size.** A `Taproom | Wholesale` toggle at the top of the
+  view prices kegs to accounts ([kegPricing.js](src/lib/kegPricing.js) +
+  [WholesalePanel.jsx](src/features/analytics/WholesalePanel.jsx)). It is a sibling module
+  rather than three more rows in `servings` because **a keg is not a large serving size**
+  and every one of menuPricing's deductions is wrong on it: a keg to a licensed account is
+  a sale for **resale** (no sales tax at all, so the basis question below simply does not
+  arise), it is **invoiced rather than swiped** (no card fee), and it **leaves the building
+  full** — the account eats the foam, so no pour loss. That last one is a trap in both
+  directions, since `pourKeep()` is also what spreads excise per ounce: a keg priced as a
+  serving carries ~5% more excise than it owes. And `servings` feeds `pourFor()`, so a
+  1/2 BBL on the board would make a beer able to "pour" a half barrel. Slackers
+  **self-distributes** (Derek, 2026-09-11), so there is no distributor margin line; if that
+  changes it belongs in `kegDeductions()` beside excise. Four more rules:
+  **The denominator is PACKAGED barrels, not sold pints** — `costPerBbl()` divides
+  `stack.annual` by `packagedBbl` rather than multiplying `perPint` by 248, which would
+  charge the account's foam to the brewery twice and amplify a rounded per-pint figure by
+  248 besides. **The emphasis is INVERTED from the taproom board**: there the absorbed
+  figure leads, here the DIRECT one does, because wholesale cannot carry a taproom's rent
+  and never could — one barrel nets ~5× more poured than kegged ($1,813 vs $321 on the
+  local numbers), so a keg asked to absorb its full share would have to invoice at ~$714.
+  Hence `wholesaleOverheadPct` is a **field, not an assumption** (defaulting to 100, the
+  allocation that cannot flatter), and the view prices against the **fill floor** with the
+  absorbed figure greyed out beside it. **The price belongs to the BEER** — Derek prices
+  beers differently from one another, so a beer's own price lives on
+  `recipe.process.kegPrices` (per size, free-form JSONB, no migration) exactly as `pourOz`
+  does, and falls back to the house list in `settings.costs.kegSizes` **per size**. ⚠️ That
+  per-beer `PriceInput` is **keyed by size as well as by beer**: PriceInput holds the
+  keystrokes while focused, so without the key React reuses the instance across a size
+  switch and a half-barrel draft sits on top of the sixtel's house price — the row's
+  arithmetic right and the number in the box wrong. And a **deposit is a liability, not
+  revenue**: it prints on the price list and is in no margin on the screen.
+
+  ⚠️ **A DEAR BEER IS POURED SMALLER AND SOLD HIGHER, and the ceiling needs BOTH.** The
+  account's pour size (`recipe.process.accountPourOz`) and its retail price
+  (`recipe.process.accountRetailPint`) are per-beer, resolved by `accountPourFor()` /
+  `accountRetailFor()` over the brewery-wide defaults — the same `process` arrangement
+  `pourOz` and `kegPrices` use. ⚠️ Neither is the same as `pourFor()`, which is the size WE
+  pour at: a beer can be 16 oz here and 12 oz at an account. Slackers' IPAs and specialty
+  beers go into smaller glasses at accounts and invoice at $220–250 against a $160 base tier
+  (Derek, 2026-09-11). Fixing only the pour gets the model HALF right and still flags a fair
+  price: $250 at 12 oz is 27% pour cost against a $7 pint and only clears at $8. Its own test
+  caught that — don't collapse either field back into settings.
+
+  ⚠️ **Every other figure in the wholesale view is a FLOOR; the account ceiling is the only
+  thing that can say a price is too HIGH.** `accountEconomics()` is the bar's side of the
+  deal — what they can retail the beer for, less the ~20% of a keg that never reaches a
+  paying glass (tapping, line purge, cloudy first pours, buybacks — **far** larger than the
+  brewery's own ~5% `pourKeep`, and using the brewery's figure would overstate what the bar
+  gets by fifteen points), against their target pour cost. Published targets: craft bar
+  20–26%, neighbourhood/sports bar 22–28%, a brewery's own taproom 15–22%. A brewery pricing
+  off cost alone will arrive at a keg nobody buys, honestly and by arithmetic. ⚠️ **The
+  cost-plus `suggested` price is therefore printed as a PAIR with `ceiling`, never alone**,
+  and `squeezed` marks where the first exceeds the second. `wholesaleTargetMarginPct`
+  (default 45) is on NET revenue against **DIRECT** cost — a **different basis** from
+  `targetMarginPct`, which the board solves against absorbed, so the two numbers are not
+  comparable. 45 is the low end of the industry's 40–60% draft gross-margin band and is
+  **still optimistic here**: that benchmark comes from breweries with volume to spread
+  production labor thin, and on a 3.5 BBL brewhouse at ~40 batches/yr direct cost lands near
+  $270/bbl where a regional's is under $110. On the local numbers a 1/2 BBL solves to
+  **$264.75 against a $173.25 ceiling** — the squeeze is the NORMAL case at this scale, not
+  an error, and it is the one thing a cost-plus column alone could never tell you. ⚠️ The
+  price-list table is **ten columns** and lives in an `overflowX: auto` wrapper at
+  `minWidth: 920` (820 still let "1/6 BBL" and "Fill floor" wrap); the card is
+  `overflow: hidden`, so without it a narrow window slices columns off silently — #88 and
+  #90 both shipped exactly that, and jsdom has no layout to catch it.
+
   ⚠️ **The tax basis is asked, not assumed, and it is the single biggest input on the
   screen.** `costs.taxBasis` (`included`/`added`) decides whether an $8.00 board price is
   $8.00 the customer pays or $8.66 — worth $0.61 at 8.25%, which is more than a pint's
@@ -174,18 +294,102 @@ When adding features, keep extending this structure (pure logic → `lib/` with 
   comes back ~2¢ short of its own target and is nudged a cent at a time until it actually
   clears. Its own test caught that; don't simplify it back to the algebra
 - **Settings** — brewery identity (name, tagline, emoji/logo icon), batch volume (default post-boil yield + **average kegs per batch**, which back-solves the brewhouse loss % that drives cost/bbl and cost/keg — same field and same algebra as a recipe's own Avg yield, so the app asks for kegs everywhere and never for a percentage), ingredient price import (upload the vendor's **PDF price list** or a prepared JSON file, review the old → new change set *and what it does to the vendor catalog*, then apply), **operating costs** ([CostInputs.jsx](src/features/settings/CostInputs.jsx) — production/capacity, taproom losses, production labor, monthly overhead and price deductions, all under the single `settings.costs` object; it and Analytics ▸ Overhead read the one `OVERHEAD_FIELDS` list in overhead.js, so a line cannot be called "Austin Energy" where it is entered and "electric" where it is totalled — the list also carries the per-field HINT, because ⚠️ `fohPayroll` is the one input whose meaning its name doesn't give: it is **front of house ONLY**, and a figure that included the brewer and cellar hours double-counted them against `annualLabor()` and read a pint as costing $7.94 when it cost $7.15), **the board** (serving sizes, their prices, the house pour and the target margin the
-  Pricing view solves for), and data backup (export/import all app data as JSON)
+  Pricing view solves for), **wholesale** (the house keg price list, what an empty keg
+  costs, delivery, keg loss, deposit, and the overhead share a wholesale barrel carries —
+  `WHOLESALE_FIELDS` in kegPricing.js plays the same one-list role `OVERHEAD_FIELDS` does),
+  **order fees** (what BSG adds under an ingredient order's subtotal — `ORDER_FEE_FIELDS` in
+  orderCost.js, the third list of that shape; ⚠️ blank means unknown and is flagged amber,
+  an explicit 0 means never charged; ⚠️ no tax line, deliberately — see above), and data
+  backup (export/import all app data as JSON)
 
 The Brew Sheet / Cellar Sheet / Cost panels take the selected `recipe` as a prop (the shared `selR` picker drives all four views); each owns only its own control (batch toggle / brew date / batch toggle). Cost additionally receives the inventory arrays and a `setInvCost` callback, because ingredient prices live on inventory rows, not on recipes — editing a price in one recipe's Cost view changes it everywhere, which the panel states explicitly. `setInvCost` **creates the inventory row when none matches the name**: a recipe can reference an ingredient inventory has never had (seeded recipes did exactly that with Whirlfloc), and the old map-and-match silently wrote nothing, so the price field just refused input. Migration 0009 backfills those rows in prod generically, from `recipe_ingredients`.
 
-**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`. ⚠️ `tab` is a persisted INDEX into `tabNames`, so inserting a tab renumbers the ones after it — adding Analytics at 3 moved Settings from 3 to 4, and a stored `tab` lands somewhere new exactly once. Harmless because every panel is rendered on an explicit `tab===n`, so an index off the end shows nothing rather than crashing; append rather than insert if that one-time jump ever matters.
+**Persistence** flows through a single seam, [src/lib/repo.js](src/lib/repo.js) (`load`/`save`): the app (via the `usePersistentState` hook) never touches a backend directly. The default backend is localStorage ([src/lib/storage.js](src/lib/storage.js)); when Supabase env vars are present, [src/main.jsx](src/main.jsx) calls `setBackend(createSupabaseBackend(...))` at startup and wraps the app in [LoginGate](src/features/auth/LoginGate.jsx) so all queries run authenticated. The hook is async-aware (returns `[val, setVal, {loading, error}]`) since the Supabase path is networked; the localStorage path stays synchronous. The hook also serializes saves per key (chained, latest-value-wins): a backend save is a whole-list delete-then-insert, and two saves in flight at once can interleave and duplicate rows (this doubled the recipes on 2026-07-14; a unique index on `recipes.ord`, migration 0006, now makes a recurrence fail loudly). ⚠️ **It also DEBOUNCES the async path** (`SAVE_DEBOUNCE_MS` 500 ms idle, `SAVE_MAX_WAIT_MS` 2 s cap): every input in the app is `onChange`, and coalescing only happened while a save was already in flight, so typing `4250` into one hop weight rewrote all 18 recipes four times. The debounce is the async path's ALONE — a localStorage save is one synchronous `setItem` that cannot half-write, so delaying it would buy nothing and cost the guarantee that the local path stays synchronous — and it is paired with a **flush on unmount and on `pagehide`/hidden**, without which a debounce just trades a loss window for a slower one. Because that index turns a race into a *rejected* write, failed saves must be visible: the hook reports them to [src/lib/saveStatus.js](src/lib/saveStatus.js), a tiny module-level store that [SaveErrorBanner](src/components/SaveErrorBanner.jsx) renders (one row per key, with a Retry that re-enters the same save chain and writes the newest value — never the stale one that failed). A save that only reached `console.error` would leave an unsaved edit sitting on screen looking stored. localStorage keys are prefixed `slackers_brew_` and JSON-stringified: `tab`, `malts`, `hops`, `yeast`, `adj`, `selR`, `orders`, `recipes`, `settings`. ⚠️ `tab` is a persisted INDEX into `tabNames`, so inserting a tab renumbers the ones after it — adding Analytics at 3 moved Settings from 3 to 4, and a stored `tab` lands somewhere new exactly once. Harmless because every panel is rendered on an explicit `tab===n`, so an index off the end shows nothing rather than crashing; append rather than insert if that one-time jump ever matters.
+
+⚠️ **The cost denominator is SPLIT BY CHANNEL, and pour loss is the taproom's alone.**
+`settings.costs.wholesaleGalPerYear` is gallons invoiced out as kegs in a year; the taproom share
+is derived as the remainder, never entered as a percentage (the `avgKegs` principle: ask for the
+measurement, back-solve the ratio). ⚠️ It asks for the **wholesale** side because that is the
+number a brewery knows exactly — it is invoiced keg by keg and sits on the books, where taproom
+volume is a POS report about pours. Slackers is ~1,000 gal to accounts (Derek, 2026-09-11): 65
+half barrels a year over five accounts, one each per month, and 25% of what it packages. The
+field shipped asking for the TAPROOM figure and his 1,000 gal was read as that, which inverted
+the split and made 40 batches/yr look impossible — an inversion that is invisible in the number
+itself and only shows up when the remainder is printed. `annualVolume()` returns **`channelKeep`**, the blended survival rate
+over all packaged beer, and both it and `costStack()` divide by that rather than `pourKeep()`.
+Applying `pourKeep` to everything charged the taproom's line purge and comps to beer that never
+touched a tap and shrank the denominator every fixed cost is spread over. ⚠️ `pourKeep()` itself
+is unchanged and still correct where it is used — a taproom OUNCE really does carry the taproom's
+foam, so menuPricing's excise-per-ounce keeps using it. A retail figure above everything packaged
+is a typo, not a mix: rejected back to all-retail with `retailOverflow`, the way `batchVolume()`
+rejects a yield larger than the boil. Null means all-retail, so an unset value changes nothing.
+⚠️ When `costStack()`'s `volumeBbl` overrides the modelled volume for the capacity curve,
+`channelKeep` is **held constant** — the curve scales at today's channel mix rather than silently
+becoming all-taproom at 300 bbl. And ⚠️ the Settings card prints the derived split and the
+blended rate, because reconciling it is what catches both a wrong `batchesPerYear` (the
+denominator for every cost in the app) and a channel figure entered on the wrong side. The
+blended rate has to be the one actually APPLIED: the basis line said "less 4.9%" beside a figure
+computed at 3.7%, an equation that did not add up on its own screen.
 
 ⚠️ **A long-open tab is stale, and a stale save used to be able to delete data.** The app reads each key once on mount and never refetches — no polling, no realtime — so a tab open since before an edit shows the data as of the moment it opened (2026-08-27: a tab predating an import was still offering the old recipe list, and the two imported recipes looked lost). The display was the harmless half: every save is a whole-list delete-then-insert, so editing anything in that tab would have written the old list over the new recipes and deleted them. Two members share one database; this needs two windows, not a day-old tab. Two mechanisms, in [src/lib/freshness.js](src/lib/freshness.js) and migration 0014:
 
 - **Say so.** On tab focus (and on becoming visible), `repo.staleKeys()` asks the backend which loaded keys have moved, and [StaleDataBanner](src/components/StaleDataBanner.jsx) offers a reload. It **reports, never refetches** — silently swapping the data under an open editor would throw away whatever is half-typed.
-- **Refuse the write.** `data_versions` holds one counter per shared key. A writer claims its slot with a compare-and-swap (`update … where key = $1 and version = $expected`) and touches data rows only if that matched, so a losing writer never reaches the delete. A refusal raises `StaleWriteError` ([src/lib/staleWrite.js](src/lib/staleWrite.js)), which SaveErrorBanner renders with **Reload instead of Retry** — retrying a stale write is precisely the overwrite being prevented. It is a compare-and-swap, not a lock: a crash between claim and insert leaves the version bumped and the data half-written, exactly as a crash mid-save does today.
+- **Refuse the write.** `data_versions` holds one counter per shared key. A writer claims its slot with a compare-and-swap (`update … where key = $1 and version = $expected`) and touches data rows only if that matched, so a losing writer never reaches the delete. A refusal raises `StaleWriteError` ([src/lib/staleWrite.js](src/lib/staleWrite.js)), which SaveErrorBanner renders with **Reload instead of Retry** — retrying a stale write is precisely the overwrite being prevented. It is a compare-and-swap, not a lock — but claim and write are now ONE TRANSACTION (below), so it can no longer leave the version bumped with the data half-written.
 
 The localStorage backend implements the same `staleKeys()` (two tabs share one origin's storage; there the stored string *is* the version) but has no CAS — a local save can't fail, and that path stays synchronous.
+
+⚠️ **A save is ONE TRANSACTION, and the claim rides inside it** (`save_shared`,
+migration 0018). Every shared key is written as delete-then-insert, and that used
+to be four sequential calls from the browser with the CAS as a fifth — *between
+the DELETE and the INSERT the table is EMPTY*, so a dropped connection, a closed
+laptop or a 502 right there lost the catalog, with the ~13:03Z nightly dump as
+the only net. The RPC takes a list of `{table, whereCol/whereVal, rows}` ops and
+claims, deletes and inserts in one plpgsql transaction: all of it lands or none
+of it does. Four rules that are easy to undo:
+- ⚠️ **The claim must stay in the transaction with the writes it authorises.**
+  A claim that commits while its writes roll back leaves every other tab stale
+  against a version that never wrote anything — the opposite of what 0014 built.
+- **The function is GENERIC and the row shapes stay in JavaScript.** It knows
+  nothing about recipes or prices. A second copy of the shapes in SQL is exactly
+  the `SETTINGS_PREFS` trap (a field added on one side and forgotten on the other
+  writes a silent null), and those shapes change every few weeks. `buildOps()` in
+  supabaseBackend.js is the pure, tested half; the transaction is the fixed half.
+- **`recipes.id` is generated CLIENT-SIDE** (`newId()`), so the ingredient and
+  schedule rows can name their parent without a round trip back for the inserted
+  ids — which would put a gap back in the middle of the write. A recipe's id has
+  never been stable across saves anyway; the unique key is `ord`.
+- **Ops apply in order and insert only the columns the caller sent**, so a
+  parent table is refilled before its children and every column left out keeps
+  its DEFAULT (`insert … select *` would write an explicit NULL into the next
+  NOT NULL DEFAULT column anybody adds). ⚠️ That column list is the **union of
+  every row's keys**, not the first row's: reading it off row 0 was tried, and a
+  batch whose second row carried a price the first lacked inserted it with the
+  price DROPPED — no error, no row count to notice it by. A real Postgres caught
+  that and the JS fake could not. `buildOps()` emits uniform keys anyway, so the
+  union is a net, never something to rely on.
+
+⚠️ It grants no authority a member doesn't already have (every table in its
+whitelist is writable through PostgREST under the same policies, and it is
+SECURITY INVOKER so RLS still applies to each statement) — but it is the single
+write path for all shared data, so a bug in it breaks every save in the app.
+
+⚠️ **A whole-table DELETE needs a WHERE clause the PLANNER cannot fold away**
+(migration 0019). Supabase preloads the `safeupdate` extension for the
+authenticated role, which refuses an unqualified `DELETE` at execution time —
+`DELETE requires a WHERE clause`. Stock Postgres has no such rule, so 0018
+shipped `delete from public.%I`, passed a full local run against a real
+PostgreSQL 17, and then failed on the first real settings save in prod. The
+inventory ops were fine because they already filter on `category`. And the fix
+is **not** `where true`: measured with `explain (costs off)`, `where true`,
+`where id is not null` and `where ctid is not null` are all constant-folded to
+no qual at all, which is precisely the state safeupdate rejects. `ctid <>
+'(0,0)'` keeps a Filter, is generic (a system column on every table, so no
+per-table primary key name or type), and is always true of a live row since item
+pointers are 1-based. The code 0018 replaced had the same workaround from the
+other side — `.neq("id", ZERO_UUID)`, commented "supabase-js refuses an
+unfiltered delete"; the refusal is the DATABASE's, and deleting that filter
+deleted the workaround. **A local Postgres is necessary and not sufficient: it
+cannot see anything Supabase adds on top.**
 
 **Crash containment.** [ErrorBoundary](src/components/ErrorBoundary.jsx) wraps the tab panel in App.jsx (keyed by `tab`, so switching tabs clears a crashed panel and the nav — which sits outside it — is always usable) and the whole tree in main.jsx. Three white screens have shipped, each a *different* unguarded read (a missing recipe array, a column prod hadn't migrated yet, a stale `selR` indexing past the end of the list), so the guard is deliberately generic rather than another targeted null check. Keep it that way: prefer fixing the class of failure over adding the next specific check.
 
@@ -403,7 +607,7 @@ Vitest + React Testing Library (jsdom). Tests are co-located with source (`*.tes
 
 - **Persist the roadmap to memory by default.** When we make a significant decision, finish a work chunk, or define the next step, save it to project memory so it survives across sessions — keep the relevant roadmap file (e.g. `data-layer-roadmap.md`) current rather than relying on the session todo list (which is ephemeral). Update or prune stale entries instead of duplicating.
 - **Branch → PR workflow.** `main` is protected; land all changes through a PR that passes CI (lint + test + build + CodeQL). Branch prefixes: `feat/`, `fix/`, `chore/`.
-- **CodeRabbit reviews PRs, advisory only.** A GitHub App (not a workflow) configured by [.coderabbit.yaml](.coderabbit.yaml); free on public repos. Its value is *independence* — nearly all code here is written by the same model that reviews it — so expect it on generic footguns (unguarded reads, the cause of all three white screens) and NOT on what this repo actually gets wrong: the 442px table budget, rounding direction, crop-year column geometry, CAS staleness. ⚠️ **It must never gate a merge**: merging runs `supabase db push` against prod and deploys, so the gate stays CI. `request_changes_workflow` is pinned false — don't add its commit status to branch protection. The config disables its bundled eslint/biome/oxc (`npm run lint` is the one lint authority; a second linter reports non-violations, and noise is what gets a reviewer ignored) while keeping secret scanning on, since the never-commit-a-price rule is only as good as its last diff. `CLAUDE.md` is registered as its code guidelines, which is what stops this file's deliberate decisions reading as bugs; `path_instructions` cover migrations, the money code, `products.js` and the table widths. Config is read from the **PR head branch**, so a change to it applies to its own PR.
+- **CodeRabbit reviewed PRs, advisory only — ⚠️ OFF since 2026-09-14.** The free-public-repo grant turned out to be a **trial**, not a tier: it expired and the App now wants a card, so `gh pr checks` reports `Review skipped: manual review required for this OSS repository`. That is the expired-trial state — not an outage, and not the deliberate skip on `Bump` titles. **Ignore it** (Derek's call) and don't wait on it; CI was always the gate. [.coderabbit.yaml](.coderabbit.yaml) and this entry stay for if it is ever paid for. Its value was *independence* — nearly all code here is written by the same model that reviews it — so expect it on generic footguns (unguarded reads, the cause of all three white screens) and NOT on what this repo actually gets wrong: the 442px table budget, rounding direction, crop-year column geometry, CAS staleness. ⚠️ **It must never gate a merge**: merging runs `supabase db push` against prod and deploys, so the gate stays CI. `request_changes_workflow` is pinned false — don't add its commit status to branch protection. The config disables its bundled eslint/biome/oxc (`npm run lint` is the one lint authority; a second linter reports non-violations, and noise is what gets a reviewer ignored) while keeping secret scanning on, since the never-commit-a-price rule is only as good as its last diff. `CLAUDE.md` is registered as its code guidelines, which is what stops this file's deliberate decisions reading as bugs; `path_instructions` cover migrations, the money code, `products.js` and the table widths. Config is read from the **PR head branch**, so a change to it applies to its own PR.
 - **Nightly DB backups.** [.github/workflows/backup.yml](.github/workflows/backup.yml) dumps the live Supabase DB every night into the private `slackers-brew-backups` repo (commit-on-change, so its git log is a daily changelog of the data; restore notes in that repo's README). The free tier has no built-in backups — this is the safety net for prod data.
 - **Merge = migrated + deployed.** [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs on every push to `main`: it applies any new Supabase migrations (`supabase db push`; no-op when none), then builds the SPA and sftp-uploads `dist/` to DreamHost (brew.slackersbrewing.com). No manual SQL Editor runs or hand deploys. Secrets it uses: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `DREAMHOST_SSH_KEY` (see [supabase/README.md](supabase/README.md)).
 

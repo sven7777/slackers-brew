@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import PriceInput from "../../components/PriceInput";
 import SortableTh from "../../components/SortableTh";
 import { costInputs, costStack, overheadLabel } from "../../lib/overhead";
 import {
   OZ_PER_PINT, article, priceBeers, priceBoard, servingsOf, sortPricedBeers,
 } from "../../lib/menuPricing";
-import { card, hdr, cell, num, th, inp, statBox, statLabel, statValue, statNote } from "../../styles";
+import WholesalePanel from "./WholesalePanel";
+import { card, hdr, cell, num, th, inp, statBox, statLabel, statValue, statNote, segWrap, segBtn } from "../../styles";
 
 // Analytics ▸ Pricing: what a beer is sold for, against what it costs.
 //
@@ -36,6 +37,19 @@ import { card, hdr, cell, num, th, inp, statBox, statLabel, statValue, statNote 
 //   Pour size belongs to the BEER. Red Panda pours 8 oz because it is a 9%
 //   tripel, so the control that sets it sits on Red Panda's row and writes to
 //   the recipe — not to a list of exceptions in settings.
+//
+// ⚠️ CHANNEL is the axis, not size. The Wholesale half of this view prices kegs
+// to accounts, and it is a sibling rather than three more rows on the board
+// because every deduction differs: a keg to a licensed retailer is a sale for
+// RESALE (no sales tax at all, so the basis question above simply does not
+// arise), it is invoiced rather than swiped (no card fee), and it leaves the
+// building full (the account eats the foam, so no pour loss — which also means
+// its excise must not be divided by `pourKeep()`). Putting a 1/2 BBL in
+// `servings` would have applied all three, and made a beer able to "pour" a half
+// barrel besides. The two live under one toggle rather than in separate views
+// because the comparison that matters — one packaged barrel, poured or kegged —
+// needs both channels reading one `costStack()`, which is computed here once and
+// handed down.
 
 const money = (n) => (n == null ? "—" : `$${n.toFixed(2)}`);
 const signed = (n) => (n == null ? "—" : `${n < 0 ? "−" : ""}$${Math.abs(n).toFixed(2)}`);
@@ -69,7 +83,13 @@ const BEER_COLUMNS = [
   { key: "recommended", label: "To hit target", align: "right" },
 ];
 
+const CHANNELS = [
+  { key: "taproom", label: "Taproom" },
+  { key: "wholesale", label: "Wholesale" },
+];
+
 export default function PricingPanel({ settings, setSettings, recs, setRecs, rows, ingredientCostPerBbl }) {
+  const [channel, setChannel] = useState("taproom");
   const [sort, setSort] = useState({ key: "profit", dir: "asc" });
 
   const c = useMemo(() => costInputs(settings), [settings]);
@@ -79,6 +99,13 @@ export default function PricingPanel({ settings, setSettings, recs, setRecs, row
   );
   const board = useMemo(() => priceBoard({ settings, stack }), [settings, stack]);
   const beers = useMemo(() => priceBeers({ settings, rows, recs }), [settings, rows, recs]);
+
+  // One beer's stack, built the same way `priceBeers()` builds it internally, so
+  // the wholesale view cannot arrive at a different cost for the same beer.
+  const stackFor = useCallback(
+    (perBbl) => costStack({ settings, ingredientCostPerBbl: perBbl }),
+    [settings]
+  );
 
   const sortedBeers = useMemo(() => sortPricedBeers(beers, sort.key, sort.dir), [beers, sort]);
 
@@ -121,8 +148,34 @@ export default function PricingPanel({ settings, setSettings, recs, setRecs, row
 
   const sizes = servingsOf(settings);
 
+  // The channel switch. Rendered in both branches rather than wrapping the body,
+  // so the taproom layout below is untouched by the split.
+  const nav = (
+    <div style={segWrap}>
+      {CHANNELS.map((ch) => (
+        <button key={ch.key} style={segBtn(channel === ch.key)} onClick={() => setChannel(ch.key)}>
+          {ch.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // ⚠️ `stack` and `house` are handed DOWN rather than recomputed there. The
+  // cost basis has to be one object across both channels or the comparison the
+  // wholesale view draws between them is between two different breweries.
+  if (channel === "wholesale") {
+    return (
+      <div>
+        {nav}
+        <WholesalePanel settings={settings} setSettings={setSettings} recs={recs} setRecs={setRecs}
+          rows={rows} stack={stack} stackFor={stackFor} taproomServing={house} />
+      </div>
+    );
+  }
+
   return (
     <div>
+      {nav}
       {!stack.complete && (
         <div style={{ ...card, borderColor: "#fbbf24", background: "#fffbeb" }}>
           <div style={{ padding: "10px 14px", fontSize: 13, color: "#92400e" }}>

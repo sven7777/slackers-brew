@@ -117,6 +117,28 @@ export const defCosts = {
   linePct: 3,  // draft line + foam
   compsPct: 2, // comps, staff pours, tasters
 
+  // Gallons sold to OUTSIDE ACCOUNTS in a year. The taproom share is the
+  // remainder, and the split is derived rather than entered as a percentage —
+  // the `avgKegs` principle: ask for the measurement, back-solve the ratio.
+  //
+  // ⚠️ It asks for the WHOLESALE side, not the taproom side, because that is the
+  // number a brewery knows exactly: it is invoiced, keg by keg, and sits on the
+  // books. Taproom volume is a POS report about pours. Slackers is ~1,000 gal to
+  // accounts (Derek, 2026-09-11) — about 64 half barrels a year across five
+  // accounts, or one a month each. ⚠️ The first version of this field asked for
+  // the taproom figure and I read his 1,000 gal as that, which inverted the
+  // whole split and made 40 batches/yr look impossible; ask for the side the
+  // brewery invoices.
+  //
+  // It exists because POUR LOSS IS THE TAPROOM'S ALONE. Line purge, foam and
+  // comps happen on our own draft lines; a keg leaves the building full and the
+  // account eats that loss. Applying `pourKeep()` to all packaged beer — which
+  // is what happened before this field — charges the taproom's foam to beer that
+  // never touched a tap, and shrinks the denominator every fixed cost is spread
+  // over. Null means "assume it all goes through the taps", the old behaviour,
+  // so an unset value changes nothing.
+  wholesaleGalPerYear: null,
+
   // ── Production labor (direct) ──
   brewerRate: 12.0,
   brewerHrsWeek: 20, // stated 18–22
@@ -134,6 +156,21 @@ export const defCosts = {
   insurance: null,
   otherFixed: null,
   fohPayroll: null,
+
+  // ── What the vendor adds to an ingredient order ──
+  //
+  // ⚠️ Blank on purpose, and blank means UNKNOWN, not free. These are real
+  // amounts off a real BSG invoice and must never be committed (public repo,
+  // same rule as vendor prices) — they are entered in Settings ▸ Order Fees and
+  // live only in the private database. See ORDER_FEE_FIELDS in orderCost.js for
+  // why each is a flat per-order amount rather than a rate.
+  liftgateFee: null,
+  palletFee: null,
+  fuelSurcharge: null,
+  freightFee: null,
+  // ⚠️ No sales tax field on purpose — see the note above ORDER_FEE_FIELDS.
+  // One invoice showed a tax line but not the rule behind it, and ingredients
+  // bought for resale are mostly exempt.
 
   // ── Deductions from retail price ──
   cardPct: 3.0,
@@ -180,6 +217,118 @@ export const defCosts = {
   ],
   // The size a beer pours at unless its own recipe says otherwise.
   defaultServing: "pint",
+
+  // ── Wholesale: kegs sold to accounts ──
+  //
+  // ⚠️ A keg is NOT a large serving size, which is why these live in their own
+  // list rather than in `servings` above. Four things differ, and all four are
+  // in the taproom arithmetic that `servings` feeds:
+  //
+  //   * Sales tax does not apply. A keg to a licensed account is a sale for
+  //     RESALE — the bar collects tax from its own customers. Running a $180
+  //     keg through `deductionFactors()` would print $14.85 of tax nobody owes.
+  //   * Neither does the card fee. Accounts pay on invoice, not a swipe.
+  //   * `pourKeep()` is the TAPROOM's loss. Line purge and comps happen on our
+  //     draft lines; a keg leaves the building full and the account eats that
+  //     foam. Since pourKeep is what spreads excise per ounce, a keg priced as a
+  //     serving would carry ~5% more excise than it actually owes.
+  //   * `pourFor()` reads `servings` as candidate POUR sizes — a beer could end
+  //     up "pouring" a half barrel.
+  //
+  // Slackers self-distributes (Derek, 2026-09-11), so there is no distributor
+  // margin line: the price entered here is the price the account is invoiced
+  // and the brewery collects all of it.
+  //
+  // `price` is the HOUSE price list — what a beer sells for unless that beer
+  // says otherwise. A beer's own price lives on `recipe.process.kegPrices`,
+  // the same way its pour size lives on `process.pourOz`: Beachbomber going out
+  // dearer than the Kölsch is a fact about Beachbomber, not an exception list
+  // inside the pricing code.
+  //
+  // `bbl` is exact, not a rounded gallon figure — it is the denominator of every
+  // per-barrel number on the screen.
+  // ✅ The 1/2 BBL price is Slackers' real base-tier price (Derek, 2026-09-11:
+  // $160 for the lightest beers, $220-250 for IPAs and specialty), the same way
+  // the 150 gal / 33% volume figures and `taxBasis: "added"` are his real
+  // numbers rather than generic ones. The house list is the BASE tier; the
+  // dearer beers carry their own price on their own row.
+  //
+  // The sixtel and quarter stay null because he sells mostly half barrels and
+  // has not quoted them — an unpriced size is one not on the list yet, and
+  // guessing one would be inventing a price the brewery never set.
+  kegSizes: [
+    { key: "sixtel", label: "1/6 BBL", bbl: 1 / 6, price: null, kegCost: null },
+    { key: "quarter", label: "1/4 BBL", bbl: 1 / 4, price: null, kegCost: null },
+    { key: "halfbbl", label: "1/2 BBL", bbl: 1 / 2, price: 160, kegCost: null },
+  ],
+  // What it costs to get one keg to an account. Null until confirmed: a
+  // brewery that has not entered it does not deliver for free, so it is named
+  // and left out rather than silently zeroed.
+  kegDeliveryPerKeg: null,
+  // Share of kegs that never come back, per fill. With `kegCost` above this is
+  // the shrinkage charged against each keg sold — a real cost of the channel
+  // that has no taproom equivalent at all.
+  kegLossPct: null,
+  // A deposit is the account's money held against the keg's return. It is a
+  // LIABILITY, not revenue, and is excluded from every margin on the screen; it
+  // is stored only so the printed price list can carry it.
+  kegDepositPerKeg: null,
+  // How much of the taproom's overhead a wholesale barrel should absorb.
+  //
+  // ⚠️ Defaults to 100 — charging wholesale its full share — because the
+  // conservative allocation is the one that cannot flatter. Whether rent on a
+  // taproom belongs on a keg going out the door is a real judgement and it is
+  // the brewery's to make, so it is a field rather than an assumption. At 0 the
+  // absorbed figure collapses onto the direct one and the screen says so.
+  wholesaleOverheadPct: 100,
+
+  // Gross margin to solve a suggested keg price for, on NET revenue against
+  // DIRECT cost.
+  //
+  // ⚠️ A DIFFERENT BASIS from `targetMarginPct` above, which the taproom board
+  // solves against ABSORBED cost — do not read the two numbers as comparable.
+  // The basis here is the one the industry benchmark is quoted on: craft
+  // breweries run roughly 40–60% gross margin on draft/keg against COGS, versus
+  // ~75% on taproom, and COGS in that figure is ingredients plus direct
+  // production labor. Absorbed would be meaningless here, since no keg price
+  // clears it.
+  //
+  // ⚠️ 45 is the LOW end of that band on purpose, and it is still optimistic at
+  // Slackers' scale. The 40–60% benchmark comes from breweries with enough
+  // volume to spread production labor thin; on a 3.5 BBL brewhouse at ~40
+  // batches a year, labor alone is over $150/bbl and direct cost lands near
+  // $270/bbl where a regional brewery's is under $110. Solving for 50% against
+  // that produces a price no account in Texas would pay. The suggested-price
+  // column is therefore printed BESIDE the account ceiling rather than on its
+  // own, and the panel says outright when the two have crossed.
+  wholesaleTargetMarginPct: 45,
+
+  // ── What the ACCOUNT sees ──
+  //
+  // The real ceiling on a keg price is not the brewery's cost at all — it is
+  // whether the bar can retail the beer and still hit its own pour cost. These
+  // four inputs are the bar's side of the deal, and they are the only reason
+  // the app can say a price is too HIGH rather than only too low.
+  //
+  // Defaults are the published craft-bar norms: a ~20% keg yield loss at the
+  // account (foam, line purge, the cloudy first pours, buybacks — larger than a
+  // brewery's own pour loss because it includes tapping and cleaning waste), a
+  // 20–26% target pour cost for a craft bar, and a $7.00 Texas craft pint.
+  //
+  // ⚠️ `accountPourOz` is the BREWERY-WIDE default only. Which size a given beer
+  // is poured at by an account is a property of THAT BEER — Derek's high-ABV
+  // IPAs and specialty beers go into smaller glasses (2026-09-11) — and it lives
+  // on `recipe.process.accountPourOz`, exactly as the taproom's `pourOz` does.
+  // It is load-bearing, not a detail: a $250 half barrel poured at 16 oz puts an
+  // account at ~32% pour cost, which no bar accepts, and at 12 oz it is ~24%,
+  // which is fine. Without the per-beer override the app would flag every
+  // specialty keg as priced above the ceiling when it is not. It is also most of
+  // why a published list like Reformation's can charge $225 for its 12 oz series
+  // against $175 for its 16 oz one.
+  accountRetailPint: 7.0,
+  accountPourOz: 16,
+  accountLossPct: 20,
+  accountPourCostPct: 25,
   // Target margin on NET revenue, absorbed basis — what the recommended price
   // is solved for.
   targetMarginPct: 20,
@@ -267,7 +416,24 @@ export function annualVolume({ settings } = {}) {
   const pintsPackaged = packagedBbl * PINTS_PER_BBL;
 
   const keep = pourKeep(settings);
-  const pintsSold = pintsPackaged * keep;
+
+  // ⚠️ THE DENOMINATOR IS SPLIT BY CHANNEL. Retail gallons suffer pour loss;
+  // wholesale gallons do not. `channelKeep` is the blended survival rate over
+  // ALL packaged beer, and it is what every fixed cost is spread over.
+  //
+  // A retail figure larger than everything packaged is a typo, not a channel
+  // mix — rejected back to all-retail with a flag, the same way `batchVolume()`
+  // rejects a yield larger than the boil. Costing must never divide by beer the
+  // brewery did not make.
+  const wholesaleGal = c.wholesaleGalPerYear;
+  const wholesaleOverflow = wholesaleGal != null && packagedGal > 0 && wholesaleGal > packagedGal;
+  const splitKnown = wholesaleGal != null && packagedGal > 0 && !wholesaleOverflow;
+  const retailGal = splitKnown ? packagedGal - wholesaleGal : null;
+  const channelKeep = splitKnown
+    ? (retailGal * keep + wholesaleGal) / packagedGal
+    : keep;
+
+  const pintsSold = pintsPackaged * channelKeep;
 
   return {
     batches,
@@ -286,6 +452,16 @@ export function annualVolume({ settings } = {}) {
     pintsSold,
     soldBbl: pintsSold / PINTS_PER_BBL,
     lossToPourPct: (1 - keep) * 100,
+    // The channel split, for the panels that print it.
+    retailGal,
+    wholesaleGal: splitKnown ? wholesaleGal : null,
+    retailSharePct: splitKnown ? (retailGal / packagedGal) * 100 : null,
+    wholesaleSharePct: splitKnown ? (wholesaleGal / packagedGal) * 100 : null,
+    // Blended over both channels; equals pourKeep when the split is unknown.
+    channelKeep,
+    // The wholesale figure exceeds everything packaged — reported so the panel
+    // can say so rather than silently ignoring the input.
+    wholesaleOverflow,
   };
 }
 
@@ -384,7 +560,11 @@ export function costStack({ settings, ingredientCostPerBbl = null, volumeBbl = n
   // Scale to an arbitrary volume for the capacity curve, keeping the same pour
   // losses so pints SOLD stays the denominator at every point on it.
   const packagedBbl = volumeBbl != null ? volumeBbl : v.packagedBbl;
-  const pintsSold = packagedBbl * PINTS_PER_BBL * pourKeep(settings);
+  // ⚠️ `channelKeep`, not `pourKeep` — wholesale barrels suffer no pour loss.
+  // Held constant when `volumeBbl` overrides the modelled volume, so the
+  // capacity curve scales at today's channel mix rather than silently becoming
+  // all-taproom at 300 bbl.
+  const pintsSold = packagedBbl * PINTS_PER_BBL * v.channelKeep;
 
   const labor = annualLabor({ settings });
   const overhead = annualOverhead({ settings });

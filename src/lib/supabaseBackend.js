@@ -15,21 +15,28 @@
 // that default back over real data. Throwing routes it to the hook's error
 // state, which suppresses the save.
 //
-// KNOWN LIMITATION: the app saves a whole array per change, so save() replaces
-// every row for that key (delete-then-insert). Same-client saves are
-// serialized by usePersistentState (two in flight at once interleaved their
-// delete/insert phases and doubled the recipes on 2026-07-14; a unique index
-// on recipes.ord now makes that fail loudly instead). Two brewers editing
-// different ingredients in the same window can still clobber each other —
-// eliminating that needs per-field writes at the app layer, a later step.
+// Every save replaces all the rows behind its key (delete-then-insert), and it
+// goes to the database as ONE transaction — the `save_shared` RPC from
+// migration 0018, which claims the key's data_versions slot and rewrites its
+// rows together or does neither. Before that it was four sequential round trips
+// with the table EMPTY between two of them, so an interrupted save could leave
+// no catalog at all. There is no longer a middle to be interrupted in.
+//
+// Two other protections stack on top and are still needed:
+//   - Same-client saves are SERIALIZED and DEBOUNCED by usePersistentState. Two
+//     in flight at once interleaved their delete/insert phases and doubled the
+//     recipes on 2026-07-14; a unique index on recipes.ord now makes that fail
+//     loudly instead.
+//   - A stale tab is REFUSED by the version claim (migration 0014).
+//
+// KNOWN LIMITATION: two brewers editing different ingredients in the same
+// window can still clobber each other — the loser's whole list wins or loses as
+// one. Eliminating that needs per-field writes at the app layer, a later step.
 // Rows (not one JSON blob) are the prerequisite for that; this lays the
 // groundwork.
 
 import { localStorageBackend } from "./storage";
 import { StaleWriteError } from "./staleWrite";
-
-// supabase-js refuses an unfiltered delete; this matches every real (uuid) row.
-const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
 // key -> inventory.category. `adj` rows additionally carry a unit.
 const CATEGORY = { malts: "malt", hops: "hop", yeast: "yeast", adj: "adj" };
@@ -90,43 +97,32 @@ export function createSupabaseBackend(client, localBackend = localStorageBackend
     return loadInventory(client, CATEGORY[key], key === "adj", fallback);
   }
 
-  // Claim the right to rewrite this key: bump the version only if it still
-  // holds the value this tab last saw. No match means somebody else wrote in
-  // the meantime, and the caller must not touch a single data row.
-  async function claim(key) {
-    const expected = seen.has(key) ? seen.get(key) : (await readVersions())[key] ?? 0;
-    const { data, error } = await client
-      .from("data_versions")
-      .update({ version: expected + 1, updated_at: new Date().toISOString() })
-      .eq("key", key)
-      .eq("version", expected)
-      .select("version");
-    if (error) throw error;
-    if (data?.length) {
-      seen.set(key, expected + 1);
-      return;
-    }
-    // No row matched. Either the key has no version row at all (a database that
-    // predates migration 0014, or a key added since) — in which case create it
-    // and carry on, since there is no history to be stale against — or the
-    // version moved, which is the refusal this whole mechanism exists for.
-    const { data: existing, error: readErr } = await client
-      .from("data_versions").select("version").eq("key", key).maybeSingle();
-    if (readErr) throw readErr;
-    if (existing) throw new StaleWriteError(key);
-    const { error: insErr } = await client
-      .from("data_versions").insert({ key, version: 1 });
-    if (insErr) throw insErr;
-    seen.set(key, 1);
-  }
-
+  // One save, one transaction, one round trip.
+  //
+  // The version claim and the rows it authorises go to the database together
+  // (migration 0018): every shared key is written as delete-then-insert, and a
+  // save that could be interrupted between those two halves is a save that can
+  // empty a table and leave it that way. The client's job is now only to say
+  // WHICH rows — `buildOps` — and the database's is to make them all land or
+  // none of them.
+  //
+  // `seen` still advances on success, because the version this write produced
+  // is the one this tab is now current against; a refusal leaves it alone so a
+  // reload is the only way forward, which is what StaleWriteError tells the
+  // banner to offer.
   async function save(key, value) {
     if (!SHARED_KEYS.has(key)) return localBackend.save(key, value);
-    await claim(key);
-    if (key === "recipes") return saveRecipes(client, value);
-    if (key === "settings") return saveSettings(client, value);
-    if (key === "catalog") return saveCatalog(client, value);
-    return saveInventory(client, CATEGORY[key], value);
+    const expected = seen.has(key) ? seen.get(key) : (await readVersions())[key] ?? 0;
+    const { data, error } = await client.rpc("save_shared", {
+      p_key: key,
+      p_expected: expected,
+      p_ops: buildOps(key, value),
+    });
+    if (error) {
+      if (isStaleRefusal(error)) throw new StaleWriteError(key);
+      throw error;
+    }
+    seen.set(key, Number(data));
   }
 
   // Which of the keys this tab is showing have moved on the server since it
@@ -142,6 +138,46 @@ export function createSupabaseBackend(client, localBackend = localStorageBackend
 
   return { load, save, staleKeys };
 }
+
+// --- the write plan --------------------------------------------------------
+//
+// A key's value becomes a list of ops, each "empty this table (or this slice of
+// it) and put these rows in it", applied in order inside one transaction by
+// save_shared. Ordering is load-bearing for recipes: the parent table is
+// refilled before the children that reference it.
+//
+// These builders are pure, which is the point of the split — the row shapes
+// change every few weeks and are the thing worth testing, while the transaction
+// is fixed and lives in SQL.
+export function buildOps(key, value) {
+  if (key === "recipes") return recipeOps(value);
+  if (key === "settings") return [{ table: "settings", rows: [settingsRow(value)] }];
+  if (key === "catalog") return [{ table: "products", rows: catalogRows(value) }];
+  return [{
+    table: "inventory",
+    whereCol: "category",
+    whereVal: CATEGORY[key],
+    rows: inventoryRows(CATEGORY[key], value),
+  }];
+}
+
+// `raise exception 'stale_write'` from save_shared. PostgREST hands plpgsql's
+// RAISE back as P0001 with the message intact; match the message rather than
+// the code, since every other guard in the function raises P0001 too.
+function isStaleRefusal(error) {
+  return typeof error?.message === "string" && error.message.includes("stale_write");
+}
+
+// Recipe ids are generated HERE so recipe_ingredients and recipe_schedule rows
+// can name their parent without a round trip back for the inserted ids — which
+// is what would put a gap in the middle of the transaction again. A recipe's id
+// has never been stable across saves anyway (the unique key is `ord`).
+const newId = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
 
 // --- inventory (malts/hops/yeast/adj) -------------------------------------
 
@@ -173,11 +209,8 @@ async function loadInventory(client, category, withUnit, fallback) {
   }));
 }
 
-async function saveInventory(client, category, items) {
-  const del = await client.from("inventory").delete().eq("category", category);
-  if (del.error) throw del.error;
-  if (!items || items.length === 0) return;
-  const rows = items.map((it, i) => ({
+function inventoryRows(category, items) {
+  return (items ?? []).map((it, i) => ({
     category,
     name: it.n,
     qty: it.q,
@@ -189,8 +222,6 @@ async function saveInventory(client, category, items) {
     price_effective: it.pricedAt ?? null,
     archived: it.archived === true,
   }));
-  const { error } = await client.from("inventory").insert(rows);
-  if (error) throw error;
 }
 
 // --- catalog (the whole vendor range, in `products`) -----------------------
@@ -227,11 +258,8 @@ async function loadCatalog(client, fallback) {
   }));
 }
 
-async function saveCatalog(client, entries) {
-  const del = await client.from("products").delete().neq("id", ZERO_UUID);
-  if (del.error) throw del.error;
-  if (!entries || entries.length === 0) return;
-  const rows = entries.map((e) => ({
+function catalogRows(entries) {
+  return (entries ?? []).map((e) => ({
     sku: e.sku,
     name: e.name,
     vendor: e.vendor ?? null,
@@ -246,8 +274,6 @@ async function saveCatalog(client, entries) {
     source: e.source ?? null,
     effective: e.effective ?? null,
   }));
-  const { error } = await client.from("products").insert(rows);
-  if (error) throw error;
 }
 
 // --- settings (single row) -------------------------------------------------
@@ -270,20 +296,19 @@ async function loadSettings(client, fallback) {
   return out;
 }
 
-async function saveSettings(client, s) {
+function settingsRow(s) {
   const prefs = {};
   for (const k of SETTINGS_PREFS) {
     if (s?.[k] != null && s[k] !== "") prefs[k] = s[k];
   }
-  const { error } = await client.from("settings").upsert({
+  return {
     id: 1,
-    name: s.name ?? null,
-    tagline: s.tagline ?? null,
-    emoji: s.emoji ?? null,
-    logo: s.logo ?? null,
+    name: s?.name ?? null,
+    tagline: s?.tagline ?? null,
+    emoji: s?.emoji ?? null,
+    logo: s?.logo ?? null,
     prefs,
-  });
-  if (error) throw error;
+  };
 }
 
 // --- recipes (header + ingredient rows) ------------------------------------
@@ -348,53 +373,38 @@ function tupleToColumns(category, tuple) {
   }
 }
 
-async function saveRecipes(client, recipes) {
-  // Delete every recipe; recipe_ingredients cascade away with their parent.
-  const del = await client.from("recipes").delete().neq("id", ZERO_UUID);
-  if (del.error) throw del.error;
-  if (!recipes || recipes.length === 0) return;
+function recipeOps(recipes) {
+  const ids = (recipes ?? []).map(() => newId());
 
-  const recRows = recipes.map((r, i) => ({
+  const recRows = (recipes ?? []).map((r, i) => ({
+    id: ids[i],
     name: r.n, style: r.s ?? null,
     og: r.og ?? null, fg: r.fg ?? null, abv: r.abv ?? null,
     mash_temp: r.mt ?? null, ferm_temp: r.ft ?? null, process: r.process ?? null,
     ord: i,
   }));
-  const { data: inserted, error: e1 } = await client
-    .from("recipes")
-    .insert(recRows)
-    .select("id,ord");
-  if (e1) throw e1;
 
-  // Map back by ord (not array position) so reordered insert results still link.
-  const idByOrd = new Map(inserted.map((r) => [r.ord, r.id]));
   const ingRows = [];
-  recipes.forEach((r, i) => {
-    const recipeId = idByOrd.get(i);
+  const schedRows = [];
+  (recipes ?? []).forEach((r, i) => {
     for (const [field, category] of RECIPE_FIELDS) {
       (r[field] ?? []).forEach((tuple, j) => {
         ingRows.push({
-          recipe_id: recipeId, category, name: tuple[0], qty: tuple[1],
+          recipe_id: ids[i], category, name: tuple[0], qty: tuple[1],
           ...tupleToColumns(category, tuple), ord: j,
         });
       });
     }
-  });
-  if (ingRows.length) {
-    const { error: e2 } = await client.from("recipe_ingredients").insert(ingRows);
-    if (e2) throw e2;
-  }
-
-  // Cellar schedule rows (recipe_schedule cascaded away with their parent above).
-  const schedRows = [];
-  recipes.forEach((r, i) => {
-    const recipeId = idByOrd.get(i);
     (r.sc ?? []).forEach(([day, action], j) => {
-      schedRows.push({ recipe_id: recipeId, day, action, ord: j });
+      schedRows.push({ recipe_id: ids[i], day, action, ord: j });
     });
   });
-  if (schedRows.length) {
-    const { error: e3 } = await client.from("recipe_schedule").insert(schedRows);
-    if (e3) throw e3;
-  }
+
+  // Recipes first: the children reference them, and emptying `recipes` cascades
+  // both child tables away before their own op refills them.
+  return [
+    { table: "recipes", rows: recRows },
+    { table: "recipe_ingredients", rows: ingRows },
+    { table: "recipe_schedule", rows: schedRows },
+  ];
 }
