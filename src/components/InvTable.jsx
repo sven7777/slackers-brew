@@ -3,6 +3,7 @@ import PriceInput from "./PriceInput";
 import { rowValue } from "../lib/inventoryValue";
 import { isArchived } from "../lib/archive";
 import { isLinkable, productSku } from "../lib/adopt";
+import { compareNames } from "../lib/sortNames";
 
 // Update one inventory row's quantity by index.
 const updInv = (setter, i, val) =>
@@ -70,9 +71,14 @@ export default function InvTable({ items, setter, unit, category, setInvCost, co
   // address every edit by that index — exactly the rule the alphabetical sorts
   // keep (see sortNames.js `sortedWithIndex`). Filtering first and using the
   // position on screen would write the wrong row the moment anything is hidden.
+  // Alphabetical, like every other list a brewer scans for a name (see
+  // sortNames.js) — the stored order here is whatever `defaults.js` happened to
+  // list plus every adopted row appended to the end, which is no order at all
+  // on a 55-row shelf.
   const rows = items
     .map((it, index) => ({ it, index }))
-    .filter(({ it }) => showArchived || !isArchived(it));
+    .filter(({ it }) => showArchived || !isArchived(it))
+    .sort((a, b) => compareNames(a.it.n, b.it.n));
 
   return (
     <div style={{overflowX:'auto'}}>
