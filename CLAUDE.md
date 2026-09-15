@@ -361,8 +361,12 @@ of it does. Four rules that are easy to undo:
 - **Ops apply in order and insert only the columns the caller sent**, so a
   parent table is refilled before its children and every column left out keeps
   its DEFAULT (`insert … select *` would write an explicit NULL into the next
-  NOT NULL DEFAULT column anybody adds). Every row in one op therefore has to
-  carry the SAME keys — the column list is read off the first row.
+  NOT NULL DEFAULT column anybody adds). ⚠️ That column list is the **union of
+  every row's keys**, not the first row's: reading it off row 0 was tried, and a
+  batch whose second row carried a price the first lacked inserted it with the
+  price DROPPED — no error, no row count to notice it by. A real Postgres caught
+  that and the JS fake could not. `buildOps()` emits uniform keys anyway, so the
+  union is a net, never something to rely on.
 
 ⚠️ It grants no authority a member doesn't already have (every table in its
 whitelist is writable through PostgREST under the same policies, and it is

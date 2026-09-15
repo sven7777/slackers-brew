@@ -77,8 +77,18 @@ begin
     if exists (select 1 from data_versions where key = p_key) then
       raise exception 'stale_write' using detail = p_key;
     end if;
+    -- ON CONFLICT rather than a bare insert: two tabs saving a brand-new key
+    -- can both pass the EXISTS above, and the loser would then fail on the
+    -- primary key — an error the client does not recognise as staleness, so
+    -- SaveErrorBanner would offer Retry where it must offer Reload. Losing the
+    -- race IS being stale, so say so. (A concurrent uncommitted insert blocks
+    -- here until it commits, and then returns no row, which is the same path.)
     insert into data_versions (key, version) values (p_key, 1)
+    on conflict (key) do nothing
     returning version into claimed;
+    if claimed is null then
+      raise exception 'stale_write' using detail = p_key;
+    end if;
   end if;
 
   -- 2. Apply each op in order. Ops are ordered by the caller, which is how a
