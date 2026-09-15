@@ -43,7 +43,11 @@ const beerRow = (name) => beerLink(name).closest("tr");
 // ⚠️ SortableTh appends " ▲"/" ▼" to the ACTIVE column's label, so a header is
 // matched by prefix — an exact name silently stops matching the moment that
 // column becomes the one being sorted on.
-const header = (label) => within(table()).getByRole("button", { name: new RegExp(`^${label.replace(/[$/]/g, "\\$&")}`) });
+// A function matcher rather than a built regex: "$ / bbl" is full of regex
+// metacharacters, and escaping them by hand is both noise and a thing to get
+// wrong (CodeQL flagged exactly that on the first version).
+const header = (label) => within(table())
+  .getByRole("button", { name: (name) => name.startsWith(label) });
 const beerNames = () => [...table().querySelectorAll("tbody tr")]
   .map((r) => r.querySelector("button").textContent);
 const tile = (label) => screen.getByText(label).parentElement;
