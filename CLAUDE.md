@@ -57,7 +57,7 @@ src/
   styles.js     # shared inline-style objects
   App.jsx       # shell: state wiring, settings-driven header, tab routing
 scripts/        # offline generators (gen-styles.mjs — see beerStyles.js below)
-supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0018)
+supabase/       # schema.sql, seed_recipes.sql, migrations/ (0001–0019)
 ```
 
 When adding features, keep extending this structure (pure logic → `lib/` with unit tests; reusable UI → `components/`; a tab → `features/`). Do not let logic accumulate back in App.jsx.
@@ -372,6 +372,24 @@ of it does. Four rules that are easy to undo:
 whitelist is writable through PostgREST under the same policies, and it is
 SECURITY INVOKER so RLS still applies to each statement) — but it is the single
 write path for all shared data, so a bug in it breaks every save in the app.
+
+⚠️ **A whole-table DELETE needs a WHERE clause the PLANNER cannot fold away**
+(migration 0019). Supabase preloads the `safeupdate` extension for the
+authenticated role, which refuses an unqualified `DELETE` at execution time —
+`DELETE requires a WHERE clause`. Stock Postgres has no such rule, so 0018
+shipped `delete from public.%I`, passed a full local run against a real
+PostgreSQL 17, and then failed on the first real settings save in prod. The
+inventory ops were fine because they already filter on `category`. And the fix
+is **not** `where true`: measured with `explain (costs off)`, `where true`,
+`where id is not null` and `where ctid is not null` are all constant-folded to
+no qual at all, which is precisely the state safeupdate rejects. `ctid <>
+'(0,0)'` keeps a Filter, is generic (a system column on every table, so no
+per-table primary key name or type), and is always true of a live row since item
+pointers are 1-based. The code 0018 replaced had the same workaround from the
+other side — `.neq("id", ZERO_UUID)`, commented "supabase-js refuses an
+unfiltered delete"; the refusal is the DATABASE's, and deleting that filter
+deleted the workaround. **A local Postgres is necessary and not sufficient: it
+cannot see anything Supabase adds on top.**
 
 **Crash containment.** [ErrorBoundary](src/components/ErrorBoundary.jsx) wraps the tab panel in App.jsx (keyed by `tab`, so switching tabs clears a crashed panel and the nav — which sits outside it — is always usable) and the whole tree in main.jsx. Three white screens have shipped, each a *different* unguarded read (a missing recipe array, a column prod hadn't migrated yet, a stale `selR` indexing past the end of the list), so the guard is deliberately generic rather than another targeted null check. Keep it that way: prefer fixing the class of failure over adding the next specific check.
 
