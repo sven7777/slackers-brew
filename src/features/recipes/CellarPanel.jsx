@@ -123,7 +123,7 @@ function CellarSheetPage({ sheet }) {
 
       {/* Two-column body (portrait) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
-        {/* Col 1 — Yeast, Cold Crash, Bung, Temp Raising, Dry Hop, Transfer/Carb */}
+        {/* Col 1 — Yeast, Misc. Additions, Temp Raising, Bung, Cold Crash, Dry Hop, Rousing */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={sheetBox}>
             <div style={sectTitle}>Yeast</div>
@@ -133,6 +133,39 @@ function CellarSheetPage({ sheet }) {
               <LabeledRow label="Time of Pitch" />
               <LabeledRow label="Gen / Type" value={sheet.yeast.length ? sheet.yeast.map((x) => x.name).join(", ") : undefined} />
             </tbody></table>
+          </div>
+
+          {/* Misc. Additions — every line says WHEN in the process it goes in
+              (the stage, under the name), carries the schedule's date where one
+              pins it down, and ends in an ADDED box the cellar crew ticks or
+              initials. A name and an amount alone left them with nothing to
+              record against: no way to tell a pending addition from a done one.
+              It sits under Yeast because the first of these go in at pitch. */}
+          <div style={sheetBox}>
+            <div style={sectTitle}>Misc. Additions</div>
+            <table style={{ ...tbl, tableLayout: "fixed" }}>
+              <colgroup><col /><col style={{ width: 46 }} /><col style={{ width: 58 }} /><col style={{ width: 44 }} /></colgroup>
+              <thead><tr>
+                <th style={miniTh}>Type / When</th>
+                <th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
+                <th style={taTh}>Target</th>
+                <th style={taTh}>Added</th>
+              </tr></thead>
+              <tbody>
+                {sheet.misc.map((m, i) => (
+                  <tr key={i}>
+                    <td style={{ ...miniTd, verticalAlign: "bottom" }}>
+                      {m.name}
+                      {m.stageLabel && <div style={stageSub}>{m.stageLabel}</div>}
+                    </td>
+                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700, verticalAlign: "bottom" }}>{m.qty} {m.unit}</td>
+                    <td style={taCell}><span style={m.date ? taVal : { ...taVal, color: "#cbd5e1" }}>{m.date || " "}</span></td>
+                    <td style={{ ...taCell, textAlign: "center" }}><span style={taVal}><span style={checkBox} /></span></td>
+                  </tr>
+                ))}
+                {sheet.misc.length === 0 && <tr><td style={{ ...blank, fontStyle: "italic" }} colSpan={4}>None.</td></tr>}
+              </tbody>
+            </table>
           </div>
 
           {/* Temp Raising is a hand-written step (no recipe/BeerSmith source yet). */}
@@ -197,37 +230,6 @@ function CellarSheetPage({ sheet }) {
           <TABox title="Rousing" empty="No rouse."
             rows={sheet.rouse.map((d) => ({ label: "Rouse", target: d }))} />
 
-          {/* Misc. Additions — every line says WHEN in the process it goes in
-              (the stage, under the name), carries the schedule's date where one
-              pins it down, and ends in an ADDED box the cellar crew ticks or
-              initials. A name and an amount alone left them with nothing to
-              record against: no way to tell a pending addition from a done one. */}
-          <div style={sheetBox}>
-            <div style={sectTitle}>Misc. Additions</div>
-            <table style={{ ...tbl, tableLayout: "fixed" }}>
-              <colgroup><col /><col style={{ width: 46 }} /><col style={{ width: 58 }} /><col style={{ width: 44 }} /></colgroup>
-              <thead><tr>
-                <th style={miniTh}>Type / When</th>
-                <th style={{ ...miniTh, textAlign: "right" }}>Amt</th>
-                <th style={taTh}>Target</th>
-                <th style={taTh}>Added</th>
-              </tr></thead>
-              <tbody>
-                {sheet.misc.map((m, i) => (
-                  <tr key={i}>
-                    <td style={{ ...miniTd, verticalAlign: "bottom" }}>
-                      {m.name}
-                      {m.stageLabel && <div style={stageSub}>{m.stageLabel}</div>}
-                    </td>
-                    <td style={{ ...miniTd, textAlign: "right", fontWeight: 700, verticalAlign: "bottom" }}>{m.qty} {m.unit}</td>
-                    <td style={taCell}><span style={m.date ? taVal : { ...taVal, color: "#cbd5e1" }}>{m.date || " "}</span></td>
-                    <td style={{ ...taCell, textAlign: "center" }}><span style={taVal}><span style={checkBox} /></span></td>
-                  </tr>
-                ))}
-                {sheet.misc.length === 0 && <tr><td style={{ ...blank, fontStyle: "italic" }} colSpan={4}>None.</td></tr>}
-              </tbody>
-            </table>
-          </div>
         </div>
 
         {/* Col 2 — Gravity Log, Blow Offs, Transfer/Carb, Packaging */}
