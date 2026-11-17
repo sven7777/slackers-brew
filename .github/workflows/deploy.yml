@@ -34,9 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Pinned, not `latest`: CLI 3.x flipped `db push` to target the LOCAL
+      # database by default, and an unpinned upgrade broke the deploy silently.
       - uses: supabase/setup-cli@v3
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Link Supabase project
         run: supabase link --project-ref oqmalafznazxqtzbapnu
@@ -49,7 +51,7 @@ jobs:
           done
 
       - name: Apply migrations
-        run: supabase db push
+        run: supabase db push --remote
 
   deploy:
     runs-on: ubuntu-latest
