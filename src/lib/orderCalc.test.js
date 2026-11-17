@@ -57,6 +57,16 @@ describe('computeOrder', () => {
     expect(res.malts.find(m => m.n === 'Munich')).toMatchObject({ need: 20, have: 5, order: 15 });
   });
 
+  it('rounds quantities to 2 decimals (no float noise like 9.899999999999999)', () => {
+    const res = computeOrder({
+      orders: [{ sel: true, dbl: false }],
+      recs: [{ m: [['Flaked Wheat', 65]], h: [['Citra', 0.1], ['Citra', 0.2]], y: [], a: [] }],
+      malts: [{ n: 'Flaked Wheat', q: 55.1 }], hops: [{ n: 'Citra', q: 0.123 }], yeast: [], adj: [],
+    });
+    expect(res.malts[0]).toMatchObject({ need: 65, have: 55.1, order: 9.9 });
+    expect(res.hops[0]).toMatchObject({ need: 0.3, have: 0.12, order: 0.18 });
+  });
+
   it('carries the adjunct unit through from inventory', () => {
     const inv = { malts: [], hops: [], yeast: [], adj: [{ n: 'Lactose', q: 2, u: 'lbs' }] };
     const res = calc([{ sel: true, dbl: false }, { sel: false, dbl: false }], inv);

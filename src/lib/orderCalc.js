@@ -10,6 +10,8 @@
 //   malts/hops/yeast/adj — inventory [{n, q, u?}]
 //
 // Returns { malts, hops, yeast, adj } arrays.
+const round2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
+
 export function computeOrder({ orders, recs, malts, hops, yeast, adj }) {
   const need = { malts: {}, hops: {}, yeast: {}, adj: {} };
   orders.forEach((o, i) => {
@@ -27,11 +29,17 @@ export function computeOrder({ orders, recs, malts, hops, yeast, adj }) {
   hops.forEach(i => inv.hops[i.n] = i.q);
   yeast.forEach(i => inv.yeast[i.n] = i.q);
   adj.forEach(i => inv.adj[i.n] = i.q);
+  // Quantities are rounded to 2 decimals: binary floats make 65 - 55.1 come out
+  // as 9.899999999999999, which printed verbatim on the Order Calculator.
+  const row = (cat, n, q) => {
+    const h = inv[cat][n] || 0;
+    return { n, need: round2(q), have: round2(h), order: round2(Math.max(0, q - h)) };
+  };
   const res = { malts: [], hops: [], yeast: [], adj: [] };
-  Object.entries(need.malts).forEach(([n, q]) => { const h = inv.malts[n] || 0; res.malts.push({ n, need: q, have: h, order: Math.max(0, q - h) }); });
-  Object.entries(need.hops).forEach(([n, q]) => { const h = inv.hops[n] || 0; res.hops.push({ n, need: q, have: h, order: Math.max(0, q - h) }); });
-  Object.entries(need.yeast).forEach(([n, q]) => { const h = inv.yeast[n] || 0; res.yeast.push({ n, need: q, have: h, order: Math.max(0, q - h) }); });
-  Object.entries(need.adj).forEach(([n, q]) => { const h = inv.adj[n] || 0; const u = adj.find(a => a.n === n)?.u || ''; res.adj.push({ n, need: q, have: h, order: Math.max(0, q - h), u }); });
+  ['malts', 'hops', 'yeast'].forEach(cat => {
+    Object.entries(need[cat]).forEach(([n, q]) => { res[cat].push(row(cat, n, q)); });
+  });
+  Object.entries(need.adj).forEach(([n, q]) => { const u = adj.find(a => a.n === n)?.u || ''; res.adj.push({ ...row('adj', n, q), u }); });
   return res;
 }
 
